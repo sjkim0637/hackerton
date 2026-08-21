@@ -1,0 +1,141 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from geoalchemy2.elements import WKTElement
+from sqlalchemy import select
+
+from app.config import get_settings
+from app.database import SessionLocal
+from app.models import (
+    POI,
+    Campaign,
+    CampaignSchedule,
+    Content,
+    GeoZone,
+    Moment,
+    SpatialPlacement,
+    User,
+)
+
+DEMO_ZONE_ID = uuid.UUID("00000000-0000-4000-8000-000000000101")
+DEMO_USER_IDS = [
+    uuid.UUID("00000000-0000-4000-8000-000000000201"),
+    uuid.UUID("00000000-0000-4000-8000-000000000202"),
+    uuid.UUID("00000000-0000-4000-8000-000000000203"),
+]
+
+
+def seed() -> None:
+    settings = get_settings()
+    with SessionLocal() as db:
+        if db.scalar(select(GeoZone.id).where(GeoZone.id == DEMO_ZONE_ID)):
+            print("Seed data already exists")
+            return
+
+        users = [
+            User(id=user_id, display_name=f"Demo User {index}", email=f"demo{index}@example.com")
+            for index, user_id in enumerate(DEMO_USER_IDS, start=1)
+        ]
+        zone = GeoZone(
+            id=DEMO_ZONE_ID,
+            name="Seoul Demo Zone",
+            description="Geo-Time AR development zone near Seoul City Hall",
+            center_point=WKTElement("POINT(126.9780 37.5665)", srid=4326),
+            radius_m=500.0,
+        )
+        poi = POI(
+            id=uuid.UUID("00000000-0000-4000-8000-000000000301"),
+            geo_zone_id=zone.id,
+            name="Demo Plaza",
+            poi_type="plaza",
+            location=WKTElement("POINT(126.9780 37.5665)", srid=4326),
+            metadata_={"coordinate_frame": "zone_local_ar_x_east_y_up_minus_z_north"},
+        )
+        db.add_all([*users, zone, poi])
+        db.flush()
+
+        now = datetime.now(UTC)
+        moments: list[Moment] = []
+        for index in range(8):
+            content = Content(
+                id=uuid.UUID(f"00000000-0000-4000-8000-{401 + index:012d}"),
+                content_type="image",
+                title=f"Demo Moment {index + 1}",
+                object_key="demo/placeholder.svg",
+                public_url=(
+                    f"{settings.minio_public_endpoint}/{settings.minio_bucket}/"
+                    "demo/placeholder.svg"
+                ),
+                mime_type="image/svg+xml",
+                metadata_={"placeholder": True},
+            )
+            placement = SpatialPlacement(
+                id=uuid.UUID(f"00000000-0000-4000-8000-{501 + index:012d}"),
+                geo_zone_id=zone.id,
+                poi_id=poi.id,
+                local_x=float((index % 3) * 2 - 2),
+                local_y=1.4,
+                local_z=float(-3 - index),
+                max_visible_distance_m=30.0,
+                view_cone_degrees=80.0,
+            )
+            moment = Moment(
+                id=uuid.UUID(f"00000000-0000-4000-8000-{601 + index:012d}"),
+                geo_zone_id=zone.id,
+                poi_id=poi.id,
+                content_id=content.id,
+                placement_id=placement.id,
+                recorded_at=now - timedelta(days=365 * (7 - index)),
+                created_by=users[index % len(users)].id,
+                rendering_metadata={"billboard": True},
+            )
+            db.add_all([content, placement])
+            moments.append(moment)
+        db.add_all(moments)
+
+        campaign_content = Content(
+            id=uuid.UUID("00000000-0000-4000-8000-000000000701"),
+            content_type="image",
+            title="Demo Campaign Object",
+            object_key="demo/placeholder.svg",
+            public_url=(
+                f"{settings.minio_public_endpoint}/{settings.minio_bucket}/"
+                "demo/placeholder.svg"
+            ),
+            mime_type="image/svg+xml",
+            metadata_={"placeholder": True},
+        )
+        campaign_placement = SpatialPlacement(
+            id=uuid.UUID("00000000-0000-4000-8000-000000000702"),
+            geo_zone_id=zone.id,
+            poi_id=poi.id,
+            local_x=0.0,
+            local_y=1.0,
+            local_z=-5.0,
+            max_visible_distance_m=20.0,
+            view_cone_degrees=60.0,
+        )
+        campaign = Campaign(
+            id=uuid.UUID("00000000-0000-4000-8000-000000000703"),
+            brand="Geo-Time Demo",
+            title="Active Demo Campaign",
+            content_id=campaign_content.id,
+            geo_zone_id=zone.id,
+            placement_id=campaign_placement.id,
+        )
+        schedule = CampaignSchedule(
+            id=uuid.UUID("00000000-0000-4000-8000-000000000704"),
+            campaign_id=campaign.id,
+            geo_zone_id=zone.id,
+            start_at=now - timedelta(days=30),
+            end_at=now + timedelta(days=365),
+            priority=100,
+            status="active",
+        )
+        db.add_all([campaign_content, campaign_placement, campaign, schedule])
+        db.commit()
+        print("Seed data created")
+
+
+if __name__ == "__main__":
+    seed()
