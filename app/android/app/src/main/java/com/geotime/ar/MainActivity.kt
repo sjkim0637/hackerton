@@ -31,6 +31,8 @@ class MainActivity : Activity() {
     private var installRequested = false
     private var currentZoneId: String? = null
     private var selectedYear = 2026
+    private var demoPreviewEnabled = false
+    private lateinit var previewButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,8 +118,18 @@ class MainActivity : Activity() {
                         currentZoneId = null
                     } else {
                         currentZoneId = zone.id
-                        zoneLabel.text = "현재 장소: ${zone.name} · ${zone.distanceM.toInt()}m"
-                        loadCandidates(zone.id)
+                        val isInside = zone.distanceM <= zone.radiusM
+                        zoneLabel.text = if (isInside) {
+                            "현재 장소: ${zone.name} · Zone 내부"
+                        } else {
+                            "${zone.name}까지 ${zone.distanceM.toInt()}m · ${zone.radiusM.toInt()}m 이내 접근 필요"
+                        }
+                        if (isInside || demoPreviewEnabled) {
+                            loadCandidates(zone.id)
+                        } else {
+                            arView.updateCandidates(emptyList())
+                            timeLabel.text = "GeoZone 밖 · 실제 콘텐츠 숨김"
+                        }
                     }
                 }.onFailure { zoneLabel.text = "Backend 연결 실패: ${it.message}" }
             }
@@ -186,12 +198,21 @@ class MainActivity : Activity() {
             text = "위치·콘텐츠 다시 조회"
             setOnClickListener { loadZoneAndCandidates() }
         }
+        previewButton = Button(this).apply {
+            text = "Demo 미리보기 켜기"
+            setOnClickListener {
+                demoPreviewEnabled = !demoPreviewEnabled
+                text = if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기"
+                loadZoneAndCandidates()
+            }
+        }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(16))
             setBackgroundColor(0xB3111827.toInt())
             addView(timeLabel)
             addView(slider)
+            addView(previewButton)
             addView(reload)
         }
         root.addView(

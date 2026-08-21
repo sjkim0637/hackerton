@@ -99,8 +99,14 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val projection = FloatArray(16)
             camera.getViewMatrix(view, 0)
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
-            visible.forEach { item -> anchors[item.candidate.id]?.let { markerRenderer.draw(it, view, projection) } }
-            onTrackingUpdate?.invoke("6DoF 추적 · 표시 ${visible.size}/${candidates.size}")
+            visible.forEach { item ->
+                anchors[item.candidate.id]?.let {
+                    markerRenderer.draw(it, item.candidate.title, view, projection)
+                }
+            }
+            val nearest = visible.minByOrNull { it.distanceM }
+            val detail = nearest?.let { " · ${it.candidate.title} ${"%.1f".format(it.distanceM)}m" }.orEmpty()
+            onTrackingUpdate?.invoke("6DoF 추적 · 표시 ${visible.size}/${candidates.size}$detail")
         } catch (error: Exception) {
             onTrackingUpdate?.invoke("AR 오류: ${error.message}")
         }

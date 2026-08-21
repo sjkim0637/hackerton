@@ -11,7 +11,12 @@ import java.time.Instant
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-data class NearbyZone(val id: String, val name: String, val distanceM: Double)
+data class NearbyZone(
+    val id: String,
+    val name: String,
+    val distanceM: Double,
+    val radiusM: Double,
+)
 
 class GeoTimeApiClient(
     private val baseUrl: String,
@@ -28,7 +33,12 @@ class GeoTimeApiClient(
             )
             val zones = JSONArray(response)
             if (zones.length() == 0) null else zones.getJSONObject(0).let {
-                NearbyZone(it.getString("id"), it.getString("name"), it.getDouble("distance_m"))
+                NearbyZone(
+                    id = it.getString("id"),
+                    name = it.getString("name"),
+                    distanceM = it.getDouble("distance_m"),
+                    radiusM = it.getDouble("radius_m"),
+                )
             }
         }.also(onResult)
     }
@@ -86,4 +96,3 @@ class GeoTimeApiClient(
         }
     }
 }
-
