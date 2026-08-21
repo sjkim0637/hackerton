@@ -31,7 +31,22 @@ temp/
 
 # 일반적인 Build 및 검사 결과
 build/
+**/build/
 dist/
 out/
 coverage/
 .cache/
+
+# Geo-Time AR Workstream 개발 결과
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.iml
+.gradle/
+local.properties
+captures/
