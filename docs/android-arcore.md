@@ -26,7 +26,7 @@ adb reverse tcp:8000 tcp:8000
 adb install -r .\app\android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-`10.0.2.2`는 Android Emulator에서 Host PC를 가리킨다. USB 기기에서는 `adb reverse` 또는 PC의 LAN IP를 사용한다.
+개발용 APK는 `127.0.0.1:8000`을 사용하므로 USB 기기나 Emulator에서 `adb reverse`를 먼저 실행한다. 무선 설치에서는 PC의 LAN IP로 `API_BASE_URL`을 변경해야 한다.
 
 ## 알려진 공간 정합 제약
 
