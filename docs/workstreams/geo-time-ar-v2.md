@@ -144,6 +144,7 @@ TBD
 - `9ba3fb2` fix(android): 조작 안내를 동작별 Coach Mark로 변경
 - `cb44c34` chore(android): Backend 바인딩 전용 작업 추가
 - `d9f661d` fix(android): Glass 재생을 3DoF 정면 스크린으로 변경
+- `a31e5fa` fix(android): 고정 좌표 대신 마지막 GPS 기록 사용
 
 ## Updated
 
