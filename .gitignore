@@ -5,7 +5,8 @@ Desktop.ini
 
 # IDE와 편집기 개인 설정
 .idea/
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 *.swp
 *.swo
 *~
