@@ -61,6 +61,7 @@ class MainActivity : Activity() {
     private lateinit var zoneLabel: TextView
     private lateinit var trackingLabel: TextView
     private lateinit var markerHint: TextView
+    private lateinit var coachHint: TextView
     private lateinit var demoButton: Button
     private lateinit var modeButton: Button
     private lateinit var playerOverlay: FrameLayout
@@ -93,7 +94,6 @@ class MainActivity : Activity() {
     private var lastDwellSecond = -1
     private var contentCenterPose: HeadPose? = null
     private var lookAwayStartedAtMs = 0L
-    private var guideShownThisRun = false
     private val finishPreview = Runnable { showPlaybackConfirmation() }
     private val hidePlaybackDate = Runnable {
         playbackDate.animate().alpha(0f).setDuration(220).start()
@@ -118,7 +118,6 @@ class MainActivity : Activity() {
         ensureArSession()
         arView.onResume()
         loadZoneAndMoments()
-        maybeShowFirstGuide()
     }
 
     override fun onPause() {
@@ -211,6 +210,8 @@ class MainActivity : Activity() {
                         } else {
                             clearMomentStacks()
                             markerHint.text = "현재 장소에 가까이 가면 시간 기록이 나타납니다"
+                            markerHint.visibility = View.VISIBLE
+                            coachHint.visibility = View.GONE
                         }
                     }
                 }.onFailure {
@@ -223,6 +224,8 @@ class MainActivity : Activity() {
 
     private fun loadMomentStacks(zoneId: String) {
         markerHint.text = "이 장소의 시간 기록 조회 중…"
+        markerHint.visibility = View.VISIBLE
+        coachHint.visibility = View.GONE
         apiClient.loadTimeline(zoneId) { result ->
             runOnUiThread {
                 result.onSuccess { moments ->
@@ -230,14 +233,18 @@ class MainActivity : Activity() {
                     stacksByMarkerId.clear()
                     stacks.associateByTo(stacksByMarkerId, MomentStack::id)
                     arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
-                    markerHint.text = if (stacks.isEmpty()) {
-                        "이 장소에는 아직 시간 기록이 없습니다"
+                    if (stacks.isEmpty()) {
+                        markerHint.text = "이 장소에는 아직 시간 기록이 없습니다"
+                        markerHint.visibility = View.VISIBLE
+                        coachHint.visibility = View.GONE
                     } else {
-                        worldGuideText()
+                        markerHint.visibility = View.GONE
+                        showCoach(worldGuideText())
                     }
                 }.onFailure {
                     clearMomentStacks()
                     markerHint.text = "시간 기록 조회 실패: ${it.message}"
+                    markerHint.visibility = View.VISIBLE
                 }
             }
         }
@@ -262,7 +269,7 @@ class MainActivity : Activity() {
                 if (moved < dp(24)) {
                     val stack = arView.focusedCandidateId()?.let(stacksByMarkerId::get)
                     if (stack == null) {
-                        markerHint.text = "마커가 화면 중앙에 보일 때 터치해 주세요"
+                        showCoach("마커를 화면 중앙에 맞춘 뒤 터치해 주세요")
                     } else {
                         beginPreview(stack)
                     }
@@ -276,6 +283,7 @@ class MainActivity : Activity() {
 
     private fun beginPreview(stack: MomentStack) {
         resetGlassDwell()
+        coachHint.visibility = View.GONE
         selectedStack = stack
         selectedMomentIndex = 0
         experienceState = ExperienceState.PREVIEW
@@ -346,8 +354,9 @@ class MainActivity : Activity() {
         } else {
             "← 최근 · 좌우로 넘기기 · 과거 →  ·  아래로 내려 AR 복귀"
         }
-        playbackHint.visibility = View.VISIBLE
-        if (experienceMode == ExperienceMode.PHONE) {
+        val showGuides = preferences().getBoolean(PREF_SHOW_GUIDES, true)
+        playbackHint.visibility = if (showGuides) View.VISIBLE else View.GONE
+        if (showGuides && experienceMode == ExperienceMode.PHONE) {
             playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
         }
     }
@@ -426,7 +435,7 @@ class MainActivity : Activity() {
         experienceState = ExperienceState.WORLD_SCAN
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         resetGlassInteraction()
-        markerHint.text = worldGuideText()
+        showCoach(worldGuideText())
     }
 
     private fun processGlassFrame(markerId: String?, pose: HeadPose, timestampMs: Long) {
@@ -449,7 +458,7 @@ class MainActivity : Activity() {
     private fun processGlassDwell(markerId: String?, timestampMs: Long) {
         if (markerId == null || markerId !in stacksByMarkerId) {
             resetGlassDwell()
-            markerHint.text = "GLASS · 마커를 화면 중앙에 맞춰 주세요"
+            showCoach("GLASS · 마커를 화면 중앙에 맞춰 주세요")
             return
         }
         if (markerId != glassFocusedMarkerId) {
@@ -461,7 +470,7 @@ class MainActivity : Activity() {
         val remainingSeconds = ((GLASS_DWELL_MS - elapsedMs).coerceAtLeast(0L) + 999L) / 1_000L
         if (remainingSeconds.toInt() != lastDwellSecond) {
             lastDwellSecond = remainingSeconds.toInt()
-            markerHint.text = "GLASS · 응시 유지 ${remainingSeconds}초"
+            showCoach("GLASS · 응시 유지 ${remainingSeconds}초")
         }
         if (elapsedMs >= GLASS_DWELL_MS) {
             stacksByMarkerId[markerId]?.let(::beginPreview)
@@ -493,6 +502,9 @@ class MainActivity : Activity() {
                 player.play()
                 playbackHint.text = glassContentGuideText()
                 playbackHint.alpha = 1f
+                playbackHint.visibility = if (
+                    preferences().getBoolean(PREF_SHOW_GUIDES, true)
+                ) View.VISIBLE else View.GONE
             }
             lookAwayStartedAtMs = 0L
         }
@@ -511,25 +523,22 @@ class MainActivity : Activity() {
         } else {
             "Phone → Glass 데모"
         }
-        markerHint.text = worldGuideText()
-        if (preferences().getBoolean(PREF_SHOW_GUIDES, true)) showModeGuide()
+        showCoach(worldGuideText())
     }
 
     private fun showSettings() {
         val guideSwitch = Switch(this).apply {
-            text = "모드 전환 시 조작 안내 표시"
+            text = "동작별 조작 안내 표시"
             textSize = 16f
             isChecked = preferences().getBoolean(PREF_SHOW_GUIDES, true)
             setPadding(dp(8), dp(10), dp(8), dp(10))
             setOnCheckedChangeListener { _, enabled ->
                 preferences().edit().putBoolean(PREF_SHOW_GUIDES, enabled).apply()
+                refreshGuideVisibility()
             }
         }
-        val guideButton = actionButton("현재 모드 조작 안내 다시 보기") {
-            showModeGuide()
-        }
         val note = TextView(this).apply {
-            text = "끄면 모드 전환 안내 팝업만 숨겨집니다. 설정에서 언제든 안내를 다시 볼 수 있습니다."
+            text = "끄면 현재 동작에 맞춰 표시되는 조작 안내를 숨깁니다. 조회 상태와 오류 메시지는 계속 표시됩니다."
             setTextColor(0xFF4B5563.toInt())
             textSize = 13f
             setPadding(dp(8), dp(4), dp(8), dp(8))
@@ -539,7 +548,6 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(4), dp(16), dp(4))
             addView(guideSwitch, LinearLayout.LayoutParams(-1, -2))
             addView(note, LinearLayout.LayoutParams(-1, -2))
-            addView(guideButton, LinearLayout.LayoutParams(-1, -2))
         }
         AlertDialog.Builder(this)
             .setTitle("Geo-Time AR 설정")
@@ -548,37 +556,36 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun maybeShowFirstGuide() {
-        if (!preferences().getBoolean(PREF_SHOW_GUIDES, true)) return
-        if (guideShownThisRun || preferences().getBoolean(PREF_GUIDE_SEEN, false)) return
-        guideShownThisRun = true
-        mainHandler.postDelayed({
-            if (!isFinishing) showModeGuide(markAsSeen = true)
-        }, 700L)
+    private fun showCoach(message: String) {
+        if (!preferences().getBoolean(PREF_SHOW_GUIDES, true)) {
+            coachHint.visibility = View.GONE
+            return
+        }
+        coachHint.animate().cancel()
+        coachHint.text = message
+        coachHint.alpha = 1f
+        coachHint.visibility = View.VISIBLE
     }
 
-    private fun showModeGuide(markAsSeen: Boolean = false) {
-        val isGlass = experienceMode == ExperienceMode.GLASS_DEMO
-        val title = if (isGlass) "Glass 데모 조작 안내" else "Phone 조작 안내"
-        val message = if (isGlass) {
-            "이 모드는 실제 Glass 앱이 아니라 폰을 머리처럼 움직이는 UX 시뮬레이션입니다.\n\n" +
-                "• 마커 중앙 응시 5초: 미리보기\n" +
-                "• 상하 끄덕임: 재생\n" +
-                "• 좌우 고개 왕복: 취소 또는 기록 이동\n" +
-                "• 고개를 멀리 돌려 1.5초 유지: AR 복귀"
-        } else {
-            "• 마커 터치: 5초 미리보기\n" +
-                "• 화면 승인: 콘텐츠 집중 재생\n" +
-                "• 좌우 Swipe: 이전·다음 기록\n" +
-                "• 아래 Swipe: AR 복귀"
+    private fun refreshGuideVisibility() {
+        if (!preferences().getBoolean(PREF_SHOW_GUIDES, true)) {
+            coachHint.visibility = View.GONE
+            if (experienceState == ExperienceState.FULLSCREEN) playbackHint.visibility = View.GONE
+            return
         }
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("확인") { _, _ ->
-                if (markAsSeen) preferences().edit().putBoolean(PREF_GUIDE_SEEN, true).apply()
+        when (experienceState) {
+            ExperienceState.WORLD_SCAN -> showCoach(worldGuideText())
+            ExperienceState.FULLSCREEN -> {
+                playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+                    glassContentGuideText()
+                } else {
+                    "← 최근 · 좌우로 넘기기 · 과거 →  ·  아래로 내려 AR 복귀"
+                }
+                playbackHint.alpha = 1f
+                playbackHint.visibility = View.VISIBLE
             }
-            .show()
+            ExperienceState.PREVIEW, ExperienceState.CONFIRM -> Unit
+        }
     }
 
     private fun preferences() = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
@@ -636,6 +643,13 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(9), dp(14), dp(9))
             background = pillBackground(0xB3111827.toInt(), dp(20).toFloat())
         }
+        coachHint = overlayText("").apply {
+            gravity = Gravity.CENTER
+            textSize = 14f
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            background = pillBackground(0xD9A16207.toInt(), dp(20).toFloat())
+            visibility = View.GONE
+        }
 
         root = FrameLayout(this)
         root.addView(arView, FrameLayout.LayoutParams(-1, -1))
@@ -662,6 +676,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(8), dp(12), dp(14))
             addView(markerHint)
+            addView(coachHint)
             addView(LinearLayout(this@MainActivity).apply {
                 gravity = Gravity.CENTER
                 addView(modeButton)
@@ -778,7 +793,6 @@ class MainActivity : Activity() {
         private const val GLASS_LOOK_AWAY_DEGREES = 38f
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
-        private const val PREF_GUIDE_SEEN = "guide_seen"
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }
