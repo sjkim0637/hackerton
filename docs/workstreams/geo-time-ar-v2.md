@@ -112,6 +112,7 @@ TBD
 - 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
 - 주변 GeoZone 조회는 Android가 제공하는 최근 GPS 기록을 사용하며 앱에 위치를 별도 저장하거나 임의의 기본 좌표로 대체하지 않는다.
 - RTK는 ARCore를 대체하지 않고 절대 위치 기준을 보강하는 선택지로 검증한다.
+- `SM-S908N` 야외 실측에서는 L1/L5 신호를 수신했지만 유효 ADR이 0개라 내장 Carrier Phase RTK를 사용할 수 없다.
 - 기존 저장소의 기술 선택은 아직 다른 Workstream과 비교·검토되지 않았다.
 
 ## Next

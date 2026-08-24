@@ -68,6 +68,8 @@ RTK GNSS를 붙일 수 있지만 ARCore의 6DoF Tracking을 대체하지 않는�
 
 Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase와 다중 주파수 같은 세부 항목 지원은 Chipset별로 다르다. 1차 검증은 Phone 내장 GNSS의 L1/L5, ADR 유효 상태, Reset과 Cycle Slip을 실시간으로 측정한다. 측정 품질이 충분하면 내장 Carrier Phase와 NTRIP 보정정보를 결합하고, 품질이 부족할 때 외장 RTK 수신기를 대안으로 검토한다. 진단값과 위치 좌표는 현재 Session 화면에만 사용하고 앱이나 서버에 별도로 저장하지 않는다.
 
+2026-08-24 야외 실측에서 `SM-S908N`은 42 Epoch 동안 29개 신호(L1/E1 26개, L5/E5a 3개)를 수신했지만 유효 ADR은 0개였다. Reset과 Cycle Slip도 0개인 것은 안정적이라는 뜻이 아니라 ADR 자체가 제공되지 않았기 때문이다. 따라서 이 기기의 현재 Firmware와 Android API 조합에서는 내장 Carrier Phase RTK 경로를 채택하지 않는다. 외장 RTK 수신기를 연결하거나 ADR을 실제로 제공하는 다른 Target 기기를 선정해야 한다.
+
 - [Android Raw GNSS Measurements 공식 안내](https://developer.android.com/develop/sensors-and-location/sensors/gnss)
 - [ARCore Geospatial API 공식 안내](https://developers.google.com/ar/develop/geospatial)
 - [ARCore Geospatial Mode 정확도 설명](https://developers.google.com/ar/reference/java/com/google/ar/core/Config.GeospatialMode)

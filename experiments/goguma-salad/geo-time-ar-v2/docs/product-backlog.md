@@ -87,7 +87,8 @@ Android GPS
 - [ ] 외장 RTK GNSS 수신기와 Android 연결 방식(Bluetooth, USB, Vendor SDK) 검증
 - [ ] NTRIP 보정정보 공급망과 현장 통신 안정성 검증
 - [x] Phone 내장 GNSS의 L1/L5·ADR와 Cycle Slip 진단
-- [ ] 진단 결과를 바탕으로 Phone 내장 Carrier Phase RTK 가능 여부 결정
+- [x] `SM-S908N` 야외 진단 결과 내장 ADR 미제공 확인
+- [ ] ADR 제공이 확인된 다른 Phone 또는 Glass 후보 기기 비교
 - [ ] RTK Fix 상태, 수평·수직 정확도와 측정 시각을 현재 Session에서 관리
 - [ ] RTK 절대 위치와 ARCore의 연속 6DoF Pose를 결합하는 좌표 변환 계층 설계
 - [ ] GNSS Antenna와 Camera 사이 Offset, 기기 방향, 높이 Calibration
