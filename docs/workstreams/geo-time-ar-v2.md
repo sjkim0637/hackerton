@@ -131,6 +131,7 @@ TBD
 - `2de87d5` feat(android): Glass 데모 제스처 모드 구현
 - `76f0d6f` fix(android): Phone 전체화면 닫기 버튼 추가 — 이후 `d6a6a2b`로 대체
 - `d6a6a2b` fix(android): AR 배경을 유지하는 Phone 재생 화면 적용
+- `eb27be1` fix(android): Glass 시선 종료와 화면 유지 적용
 
 ## Updated
 
