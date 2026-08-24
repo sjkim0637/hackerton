@@ -281,7 +281,7 @@ Active Campaign 조건:
 - [ ] Placeholder 이미지 또는 3D Object 렌더링
 - [ ] Camera Screen 작성
 - [ ] 현재 GeoZone과 Moment 개수 표시
-- [ ] Time Slider 작성
+- [x] 실제 Moment 시점만 이동하는 Reality Rewind Gesture와 Moment Snap 작성
 - [ ] Moment Preview 작성
 - [ ] 활성 Campaign Layer 표시
 - [ ] Tracking 손실과 Session 오류 처리

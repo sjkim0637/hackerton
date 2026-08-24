@@ -24,7 +24,9 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - MinIO Bucket 및 Placeholder Asset
 - GeoZone 근접 검색, Moment Timeline, Active Campaign, 통합 후보 조회
 - 거리와 Camera View Cone 기반 6DoF 가시성 선택
-- Kotlin Android 앱, ARCore Session, Camera 배경, Anchor Marker, 시간 Slider
+- Kotlin Android 앱, ARCore Session, Camera 배경, Anchor Marker
+- 실제 Moment 시점만 이동하는 `Reality Rewind` Swipe와 `Moment Snap`
+- Snap 햅틱, 날짜 표시, AR 콘텐츠 Fade 전환, `NOW` 빠른 복귀
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 

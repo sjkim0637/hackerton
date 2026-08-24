@@ -23,3 +23,14 @@ Geo + Time
 ## 지속 좌표와 세션 좌표
 
 ARCore 원시 Pose는 앱 세션마다 달라질 수 있다. DB에는 안정적인 Zone/Geospatial/Cloud Anchor 좌표만 저장하고, 기기에서 현재 세션 좌표로 변환한다.
+
+## 시간 탐색 UX
+
+사용자가 날짜 범위를 고르는 방식보다 같은 현실 공간의 시간을 직접 되감는 경험을 우선한다.
+
+- Android App의 Timeline은 `NOW`와 실제 Moment 시점으로 구성한다.
+- 빈 날짜는 건너뛰고 Moment가 존재하는 시점에만 Snap한다.
+- Camera 화면과 공간 Anchor는 유지하고 시간에 해당하는 콘텐츠만 전환한다.
+- 스마트폰에서는 좌우 Rewind Gesture, 향후 AR Glass에서는 Gesture·Voice를 같은 시간 이동 명령에 연결한다.
+
+핵심 원칙은 “Feed를 넘기는 것이 아니라 같은 현실 공간의 시간을 되감는다”이다.

@@ -39,7 +39,8 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - GeoZone 근접 검색과 시간 기반 콘텐츠 후보 조회
 - Moment와 Campaign 도메인 분리
 - PostGIS, Migration, Seed를 포함한 Backend Prototype
-- Android ARCore Session, Anchor Marker, 시간 Slider Prototype
+- Android ARCore Session과 Anchor Marker Prototype
+- 실제 Moment 시점만 이동하는 Reality Rewind Gesture와 Moment Snap
 - 거리와 Camera View Cone 기반 가시성 선택
 - 재현 가능한 로컬 실행, 자동 테스트 및 관련 설계 문서
 - 기존 로컬 Git Commit 이력의 공식 Branch 이전
@@ -62,6 +63,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 
 - 후보 조회와 최종 가시성 선택을 분리한다.
 - Backend는 `Geo + Time`, Android는 6DoF 공간 맥락을 중심으로 검증한다.
+- 날짜 Slider 대신 Camera 화면의 좌우 Rewind Gesture를 사용하고 실제 Moment 시점에만 Snap한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
 
 ## Dependencies
@@ -84,7 +86,8 @@ TBD
 
 - Ruff: 통과
 - Backend Pytest: 15개 통과
-- Android `testDebugUnitTest assembleDebug`: 통과
+- Android Unit Test 4개와 `assembleDebug`: 통과
+- Reality Rewind Timeline 정렬·경계 이동 Test와 Debug APK Build: 통과
 - Docker Compose 설정 검사: 통과
 - Docker Smoke Test: Docker Desktop Engine이 꺼져 있어 이번 확인에서는 미실행
 - ARCore 실기기: 검증 필요
@@ -92,13 +95,14 @@ TBD
 ## Known Issues
 
 - ARCore 지원 실기기에서 Camera와 Anchor의 최종 실행 검증이 남아 있다.
+- 연결된 Android 기기나 Emulator가 없어 Reality Rewind 실제 Touch UX 검증이 남아 있다.
 - 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
 - 기존 저장소의 기술 선택은 아직 다른 Workstream과 비교·검토되지 않았다.
 
 ## Next
 
 1. Docker Desktop Engine을 실행한 뒤 Docker Smoke Test를 다시 수행한다.
-2. ARCore 지원 실기기에서 Camera, Tracking, Anchor를 검증한다.
+2. ARCore 지원 실기기에서 Camera, Tracking, Anchor와 Rewind Gesture를 검증한다.
 3. Zone-local 좌표와 실제 현장 좌표의 정합 방식을 비교한다.
 4. 재사용하거나 통합할 후보 기능을 Commit 단위로 정리한다.
 
@@ -111,6 +115,7 @@ TBD
 - `4d0d99e` → `83f565c` fix: route android debug api through adb reverse
 - `508424c` → `7bfb9c9` feat: gate spatial content by geozone proximity
 - `b430c3d` refactor: isolate Geo-Time AR experiment workspace
+- `79e0b0e` feat(android): 실제 Moment를 넘기는 리와인드 제스처 구현
 
 ## Updated
 
