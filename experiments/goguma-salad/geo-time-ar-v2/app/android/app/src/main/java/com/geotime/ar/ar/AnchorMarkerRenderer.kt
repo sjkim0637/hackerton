@@ -106,7 +106,7 @@ class AnchorMarkerRenderer {
             textAlign = Paint.Align.CENTER
             textSize = 34f
         }
-        canvas.drawText("6DoF spatial content", 384f, 335f, hint)
+        canvas.drawText("터치해서 시간 기록 보기", 384f, 335f, hint)
 
         val ids = IntArray(1)
         GLES20.glGenTextures(1, ids, 0)

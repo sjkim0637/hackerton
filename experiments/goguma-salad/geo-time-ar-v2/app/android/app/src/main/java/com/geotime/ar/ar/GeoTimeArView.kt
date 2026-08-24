@@ -22,6 +22,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     @Volatile private var arSession: Session? = null
     @Volatile private var candidates: List<SpatialCandidate> = emptyList()
     @Volatile private var contentAlpha = 1f
+    @Volatile private var focusedCandidateId: String? = null
     @Volatile var onTrackingUpdate: ((String) -> Unit)? = null
     private var viewportWidth = 1
     private var viewportHeight = 1
@@ -55,6 +56,8 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
         contentAlpha = alpha.coerceIn(0f, 1f)
     }
 
+    fun focusedCandidateId(): String? = focusedCandidateId
+
     fun detachAllAnchors() = queueEvent {
         anchors.values.forEach(Anchor::detach)
         anchors.clear()
@@ -82,6 +85,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             backgroundRenderer.draw(frame)
             val camera = frame.camera
             if (camera.trackingState != TrackingState.TRACKING) {
+                focusedCandidateId = null
                 onTrackingUpdate?.invoke("AR 추적 대기 중")
                 return
             }
@@ -93,6 +97,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
                 cameraForward = Vector3(-zAxis[0], -zAxis[1], -zAxis[2]),
                 candidates = candidates,
             )
+            focusedCandidateId = visible.firstOrNull()?.candidate?.id
             visible.forEach { item ->
                 anchors.getOrPut(item.candidate.id) {
                     val position = item.candidate.position
@@ -113,6 +118,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val detail = nearest?.let { " · ${it.candidate.title} ${"%.1f".format(it.distanceM)}m" }.orEmpty()
             onTrackingUpdate?.invoke("6DoF 추적 · 표시 ${visible.size}/${candidates.size}$detail")
         } catch (error: Exception) {
+            focusedCandidateId = null
             onTrackingUpdate?.invoke("AR 오류: ${error.message}")
         }
     }

@@ -95,11 +95,30 @@ class GeoTimeApiClient(
             buildList {
                 repeat(items.length()) { index ->
                     val item = items.getJSONObject(index)
+                    val content = item.getJSONObject("content")
+                    val placement = item.getJSONObject("placement")
                     add(
                         TimelineMoment(
                             id = item.getString("id"),
-                            title = item.getJSONObject("content").getString("title"),
+                            title = content.getString("title"),
                             recordedAt = Instant.parse(item.getString("recorded_at")),
+                            poiId = item.optString("poi_id").takeUnless {
+                                it.isBlank() || it == "null"
+                            },
+                            mediaUrl = content.optString("public_url").takeUnless {
+                                it.isBlank() || it == "null"
+                            },
+                            mimeType = content.optString("mime_type").takeUnless {
+                                it.isBlank() || it == "null"
+                            },
+                            position = Vector3(
+                                placement.getDouble("local_x").toFloat(),
+                                placement.getDouble("local_y").toFloat(),
+                                placement.getDouble("local_z").toFloat(),
+                            ),
+                            minDistanceM = placement.getDouble("min_visible_distance_m").toFloat(),
+                            maxDistanceM = placement.getDouble("max_visible_distance_m").toFloat(),
+                            viewConeDegrees = placement.getDouble("view_cone_degrees").toFloat(),
                         )
                     )
                 }

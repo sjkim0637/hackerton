@@ -40,5 +40,7 @@ android {
 
 dependencies {
     implementation("com.google.ar:core:1.54.0")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-ui:1.10.1")
     testImplementation("junit:junit:4.13.2")
 }

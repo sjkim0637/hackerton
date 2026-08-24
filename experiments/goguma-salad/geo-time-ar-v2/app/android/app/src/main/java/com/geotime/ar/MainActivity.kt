@@ -1,7 +1,6 @@
 package com.geotime.ar
 
 import android.Manifest
-import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -9,7 +8,10 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -19,50 +21,67 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.geotime.ar.ar.GeoTimeArView
 import com.geotime.ar.network.GeoTimeApiClient
-import com.geotime.ar.spatial.SpatialSourceType
-import com.geotime.ar.time.RewindStop
-import com.geotime.ar.time.RewindTimeline
+import com.geotime.ar.time.MomentStack
+import com.geotime.ar.time.TimelineMoment
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Session
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
+private enum class PhoneExperienceState {
+    WORLD_SCAN,
+    PREVIEW,
+    CONFIRM,
+    FULLSCREEN,
+}
+
 class MainActivity : Activity() {
+    private lateinit var root: FrameLayout
     private lateinit var arView: GeoTimeArView
     private lateinit var zoneLabel: TextView
     private lateinit var trackingLabel: TextView
-    private lateinit var timeLabel: TextView
-    private lateinit var gestureHint: TextView
-    private lateinit var nowButton: Button
-    private lateinit var previewButton: Button
+    private lateinit var markerHint: TextView
+    private lateinit var demoButton: Button
+    private lateinit var playerOverlay: FrameLayout
+    private lateinit var playerView: PlayerView
+    private lateinit var promptPanel: LinearLayout
+    private lateinit var playbackDate: TextView
+    private lateinit var playbackHint: TextView
+    private lateinit var player: ExoPlayer
+
     private val apiClient = GeoTimeApiClient(BuildConfig.API_BASE_URL)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
         .withZone(ZoneId.systemDefault())
+    private val stacksByMarkerId = mutableMapOf<String, MomentStack>()
     private var arSession: Session? = null
     private var installRequested = false
-    private var currentZoneId: String? = null
     private var demoPreviewEnabled = false
-    private var timeline = RewindTimeline.empty()
-    private var selectedStopIndex = 0
-    private var gestureStartX = 0f
-    private var gestureStartY = 0f
-    private var contentAlpha = 1f
-    private var contentAnimator: ValueAnimator? = null
-    private var candidateRequestVersion = 0
-    private val hideTimeLabel = Runnable {
-        if (selectedStopIndex != 0) {
-            timeLabel.animate().alpha(0f).setDuration(260).start()
-        }
+    private var experienceState = PhoneExperienceState.WORLD_SCAN
+    private var selectedStack: MomentStack? = null
+    private var selectedMomentIndex = 0
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private val finishPreview = Runnable { showPlaybackConfirmation() }
+    private val hidePlaybackDate = Runnable {
+        playbackDate.animate().alpha(0f).setDuration(220).start()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
+        player = ExoPlayer.Builder(this).build().also {
+            playerView.player = it
+            it.repeatMode = Player.REPEAT_MODE_ONE
+        }
     }
 
     override fun onResume() {
@@ -73,21 +92,32 @@ class MainActivity : Activity() {
         }
         ensureArSession()
         arView.onResume()
-        loadZoneAndTimeline()
+        loadZoneAndMoments()
     }
 
     override fun onPause() {
+        player.pause()
         arView.onPause()
         arSession?.pause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        contentAnimator?.cancel()
+        mainHandler.removeCallbacksAndMessages(null)
+        player.release()
         arView.detachAllAnchors()
         arSession?.close()
         apiClient.close()
         super.onDestroy()
+    }
+
+    @Deprecated("Android 시스템 뒤로가기 호환")
+    override fun onBackPressed() {
+        if (experienceState != PhoneExperienceState.WORLD_SCAN) {
+            exitContent()
+        } else {
+            super.onBackPressed()
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -132,7 +162,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loadZoneAndTimeline() {
+    private fun loadZoneAndMoments() {
         val location = lastKnownLocation()
         val latitude = location?.latitude ?: 37.5665
         val longitude = location?.longitude ?: 126.9780
@@ -142,185 +172,205 @@ class MainActivity : Activity() {
                 result.onSuccess { zone ->
                     if (zone == null) {
                         zoneLabel.text = "주변 GeoZone 없음"
-                        clearTimeline()
+                        clearMomentStacks()
                     } else {
-                        currentZoneId = zone.id
                         val isInside = zone.distanceM <= zone.radiusM
                         zoneLabel.text = if (isInside) {
                             "현재 장소: ${zone.name} · Zone 내부"
                         } else {
-                            "${zone.name}까지 ${zone.distanceM.toInt()}m · ${zone.radiusM.toInt()}m 이내 접근 필요"
+                            "${zone.name}까지 ${zone.distanceM.toInt()}m · 접근 필요"
                         }
                         if (isInside || demoPreviewEnabled) {
-                            loadTimeline(zone.id)
+                            loadMomentStacks(zone.id)
                         } else {
-                            clearTimeline()
-                            timeLabel.text = "GeoZone 밖"
-                            timeLabel.alpha = 1f
+                            clearMomentStacks()
+                            markerHint.text = "현재 장소에 가까이 가면 시간 기록이 나타납니다"
                         }
                     }
                 }.onFailure {
                     zoneLabel.text = "Backend 연결 실패: ${it.message}"
-                    clearTimeline()
+                    clearMomentStacks()
                 }
             }
         }
     }
 
-    private fun loadTimeline(zoneId: String) {
-        timeLabel.removeCallbacks(hideTimeLabel)
-        timeLabel.text = "시간 흔적 조회 중…"
-        timeLabel.alpha = 1f
+    private fun loadMomentStacks(zoneId: String) {
+        markerHint.text = "이 장소의 시간 기록 조회 중…"
         apiClient.loadTimeline(zoneId) { result ->
             runOnUiThread {
                 result.onSuccess { moments ->
-                    timeline = RewindTimeline.from(moments.filter { it.recordedAt <= Instant.now() })
-                    selectedStopIndex = 0
-                    showTimeState(RewindStop.Now, transient = false)
-                    loadCandidatesForSelectedStop()
-                    if (timeline.stops.size > 1) showGestureGuide()
-                }.onFailure {
-                    clearTimeline()
-                    timeLabel.text = "Timeline 조회 실패: ${it.message}"
-                    timeLabel.alpha = 1f
-                }
-            }
-        }
-    }
-
-    private fun clearTimeline() {
-        candidateRequestVersion += 1
-        currentZoneId = null
-        timeline = RewindTimeline.empty()
-        selectedStopIndex = 0
-        arView.updateCandidates(emptyList())
-        nowButton.visibility = View.GONE
-        setContentAlpha(1f)
-    }
-
-    private fun loadCandidatesForSelectedStop() {
-        val zoneId = currentZoneId ?: return
-        val stop = timeline.stopAt(selectedStopIndex)
-        val at = when (stop) {
-            RewindStop.Now -> Instant.now()
-            is RewindStop.Moment -> stop.value.recordedAt
-        }
-        val requestVersion = ++candidateRequestVersion
-        apiClient.loadCandidates(zoneId, at) { result ->
-            runOnUiThread {
-                if (requestVersion != candidateRequestVersion) return@runOnUiThread
-                result.onSuccess { candidates ->
-                    val selectedCandidates = when (stop) {
-                        RewindStop.Now -> candidates.filter {
-                            it.sourceType == SpatialSourceType.CAMPAIGN
-                        }
-                        is RewindStop.Moment -> candidates.filter { it.id == stop.value.id }
+                    val stacks = MomentStack.group(moments)
+                    stacksByMarkerId.clear()
+                    stacks.associateByTo(stacksByMarkerId, MomentStack::id)
+                    arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
+                    markerHint.text = if (stacks.isEmpty()) {
+                        "이 장소에는 아직 시간 기록이 없습니다"
+                    } else {
+                        "시간 기록 마커를 터치해 미리보세요"
                     }
-                    arView.updateCandidates(selectedCandidates)
-                    animateContentIn()
                 }.onFailure {
-                    arView.updateCandidates(emptyList())
-                    animateContentIn()
-                    timeLabel.removeCallbacks(hideTimeLabel)
-                    timeLabel.text = "콘텐츠 조회 실패: ${it.message}"
-                    timeLabel.alpha = 1f
+                    clearMomentStacks()
+                    markerHint.text = "시간 기록 조회 실패: ${it.message}"
                 }
             }
         }
     }
 
-    private fun moveToStop(targetIndex: Int) {
-        if (targetIndex == selectedStopIndex) {
-            animateContentIn()
-            showTimeState(timeline.stopAt(selectedStopIndex), transient = false)
-            return
-        }
-        selectedStopIndex = targetIndex
-        arView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-        setContentAlpha(0f)
-        showTimeState(timeline.stopAt(selectedStopIndex), transient = true)
-        loadCandidatesForSelectedStop()
+    private fun clearMomentStacks() {
+        stacksByMarkerId.clear()
+        arView.updateCandidates(emptyList())
     }
 
-    private fun returnToNow() = moveToStop(0)
-
-    private fun handleRewindTouch(event: MotionEvent): Boolean {
+    private fun handleWorldTouch(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                gestureStartX = event.x
-                gestureStartY = event.y
-                contentAnimator?.cancel()
-                timeLabel.removeCallbacks(hideTimeLabel)
-                showTimeState(timeline.stopAt(selectedStopIndex), transient = false)
+                touchStartX = event.x
+                touchStartY = event.y
                 return true
             }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = event.x - gestureStartX
-                val dy = event.y - gestureStartY
-                if (abs(dx) > abs(dy) && abs(dx) > dp(12)) {
-                    val targetIndex = previewIndex(dx)
-                    val progress = (abs(dx) / dp(140).toFloat()).coerceIn(0f, 1f)
-                    setContentAlpha(1f - progress * 0.9f)
-                    showTimeState(timeline.stopAt(targetIndex), transient = false)
+            MotionEvent.ACTION_UP -> {
+                val moved = abs(event.x - touchStartX) + abs(event.y - touchStartY)
+                if (moved < dp(24)) {
+                    val stack = arView.focusedCandidateId()?.let(stacksByMarkerId::get)
+                    if (stack == null) {
+                        markerHint.text = "마커가 화면 중앙에 보일 때 터치해 주세요"
+                    } else {
+                        beginPreview(stack)
+                    }
                 }
                 return true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                val dx = event.x - gestureStartX
-                val dy = event.y - gestureStartY
-                val isHorizontalSwipe = abs(dx) >= dp(72) && abs(dx) > abs(dy) * 1.2f
-                if (event.actionMasked == MotionEvent.ACTION_UP && isHorizontalSwipe) {
-                    moveToStop(previewIndex(dx))
-                } else {
-                    showTimeState(timeline.stopAt(selectedStopIndex), transient = false)
-                    animateContentIn()
+            MotionEvent.ACTION_CANCEL -> return true
+        }
+        return true
+    }
+
+    private fun beginPreview(stack: MomentStack) {
+        selectedStack = stack
+        selectedMomentIndex = 0
+        experienceState = PhoneExperienceState.PREVIEW
+        playerOverlay.visibility = View.VISIBLE
+        playerOverlay.setBackgroundColor(0x66000000)
+        promptPanel.visibility = View.GONE
+        playbackDate.visibility = View.GONE
+        playbackHint.text = "5초 미리보기 · 소리 없음"
+        playbackHint.visibility = View.VISIBLE
+        playerView.useController = false
+        playerView.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(240),
+            Gravity.CENTER,
+        ).apply {
+            marginStart = dp(18)
+            marginEnd = dp(18)
+        }
+        playMoment(stack.momentAt(selectedMomentIndex), muted = true, restart = true)
+        mainHandler.removeCallbacks(finishPreview)
+        mainHandler.postDelayed(finishPreview, PREVIEW_DURATION_MS)
+    }
+
+    private fun showPlaybackConfirmation() {
+        if (experienceState != PhoneExperienceState.PREVIEW) return
+        experienceState = PhoneExperienceState.CONFIRM
+        player.pause()
+        playbackHint.visibility = View.GONE
+        promptPanel.visibility = View.VISIBLE
+        promptPanel.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+    }
+
+    private fun enterFullscreenPlayback() {
+        val stack = selectedStack ?: return
+        experienceState = PhoneExperienceState.FULLSCREEN
+        promptPanel.visibility = View.GONE
+        playerOverlay.setBackgroundColor(Color.BLACK)
+        playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
+        playerView.useController = false
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+        playMoment(stack.momentAt(selectedMomentIndex), muted = false, restart = true)
+        showMomentDate()
+        playbackHint.text = "← 최근 기록  ·  좌우로 넘기기  ·  과거 기록 →"
+        playbackHint.visibility = View.VISIBLE
+        playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
+    }
+
+    private fun handleContentTouch(event: MotionEvent): Boolean {
+        if (experienceState != PhoneExperienceState.FULLSCREEN) return true
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.x
+                touchStartY = event.y
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                val dx = event.x - touchStartX
+                val dy = event.y - touchStartY
+                when {
+                    dy > dp(90) && abs(dy) > abs(dx) * 1.2f -> exitContent()
+                    abs(dx) >= dp(72) && abs(dx) > abs(dy) * 1.2f -> moveContent(dx)
+                    abs(dx) + abs(dy) < dp(24) -> {
+                        if (player.isPlaying) player.pause() else player.play()
+                    }
                 }
                 return true
             }
+            MotionEvent.ACTION_CANCEL -> return true
         }
-        return false
+        return true
     }
 
-    private fun previewIndex(dx: Float): Int =
-        timeline.indexAfterHorizontalDrag(selectedStopIndex, dx)
-
-    private fun showTimeState(stop: RewindStop, transient: Boolean) {
-        timeLabel.animate().cancel()
-        timeLabel.removeCallbacks(hideTimeLabel)
-        timeLabel.text = when (stop) {
-            RewindStop.Now -> "NOW"
-            is RewindStop.Moment -> "${dateFormatter.format(stop.value.recordedAt)}  ·  ${stop.value.title}"
+    private fun moveContent(deltaX: Float) {
+        val stack = selectedStack ?: return
+        val nextIndex = stack.indexAfterHorizontalDrag(selectedMomentIndex, deltaX)
+        if (nextIndex == selectedMomentIndex) {
+            playerView.performHapticFeedback(HapticFeedbackConstants.REJECT)
+            return
         }
-        timeLabel.alpha = 1f
-        nowButton.visibility = if (stop === RewindStop.Now) View.GONE else View.VISIBLE
-        if (transient && stop is RewindStop.Moment) {
-            timeLabel.postDelayed(hideTimeLabel, 1_500)
-        }
+        selectedMomentIndex = nextIndex
+        playerView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        playMoment(stack.momentAt(selectedMomentIndex), muted = false, restart = true)
+        showMomentDate()
     }
 
-    private fun showGestureGuide() {
-        gestureHint.animate().cancel()
-        gestureHint.text = "화면을 오른쪽으로 당겨 이 장소의 시간을 되감으세요 →"
-        gestureHint.alpha = 1f
-        gestureHint.animate()
-            .alpha(0f)
-            .setStartDelay(3_200)
-            .setDuration(500)
-            .start()
-    }
-
-    private fun animateContentIn() {
-        contentAnimator?.cancel()
-        contentAnimator = ValueAnimator.ofFloat(contentAlpha, 1f).apply {
-            duration = 360
-            addUpdateListener { setContentAlpha(it.animatedValue as Float) }
-            start()
+    private fun playMoment(moment: TimelineMoment, muted: Boolean, restart: Boolean) {
+        val source = if (moment.mimeType?.startsWith("video/") == true && moment.mediaUrl != null) {
+            Uri.parse(moment.mediaUrl)
+        } else {
+            Uri.parse(DEMO_VIDEO_URL)
         }
+        player.volume = if (muted) 0f else 1f
+        if (restart) {
+            player.setMediaItem(MediaItem.fromUri(source))
+            player.prepare()
+        }
+        player.play()
     }
 
-    private fun setContentAlpha(alpha: Float) {
-        contentAlpha = alpha.coerceIn(0f, 1f)
-        arView.updateContentAlpha(contentAlpha)
+    private fun showMomentDate() {
+        val moment = selectedStack?.momentAt(selectedMomentIndex) ?: return
+        playbackDate.animate().cancel()
+        playbackDate.removeCallbacks(hidePlaybackDate)
+        playbackDate.text = "${dateFormatter.format(moment.recordedAt)}  ·  ${moment.title}"
+        playbackDate.visibility = View.VISIBLE
+        playbackDate.alpha = 1f
+        playbackDate.postDelayed(hidePlaybackDate, 1_800)
+    }
+
+    private fun exitContent() {
+        mainHandler.removeCallbacks(finishPreview)
+        playbackDate.removeCallbacks(hidePlaybackDate)
+        player.stop()
+        playerOverlay.visibility = View.GONE
+        playbackHint.alpha = 1f
+        selectedStack = null
+        selectedMomentIndex = 0
+        experienceState = PhoneExperienceState.WORLD_SCAN
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        markerHint.text = "시간 기록 마커를 터치해 미리보세요"
     }
 
     private fun lastKnownLocation(): Location? {
@@ -336,24 +386,18 @@ class MainActivity : Activity() {
     private fun buildUi() {
         arView = GeoTimeArView(this).apply {
             onTrackingUpdate = { status -> runOnUiThread { trackingLabel.text = status } }
-            setOnTouchListener { _, event -> handleRewindTouch(event) }
+            setOnTouchListener { _, event -> handleWorldTouch(event) }
         }
         zoneLabel = overlayText("현재 장소 확인 중")
         trackingLabel = overlayText("ARCore 준비 중")
-        timeLabel = overlayText("NOW").apply {
+        markerHint = overlayText("시간 기록을 불러오는 중…").apply {
             gravity = Gravity.CENTER
-            textSize = 22f
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(dp(18), dp(10), dp(18), dp(10))
-            background = pillBackground(0xB3111827.toInt(), dp(24).toFloat())
-        }
-        gestureHint = overlayText("").apply {
-            gravity = Gravity.CENTER
-            textSize = 13f
-            alpha = 0f
+            textSize = 14f
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            background = pillBackground(0xB3111827.toInt(), dp(20).toFloat())
         }
 
-        val root = FrameLayout(this)
+        root = FrameLayout(this)
         root.addView(arView, FrameLayout.LayoutParams(-1, -1))
 
         val top = LinearLayout(this).apply {
@@ -363,50 +407,94 @@ class MainActivity : Activity() {
             addView(zoneLabel)
             addView(trackingLabel)
         }
-        root.addView(
-            top,
-            FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP),
-        )
+        root.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
 
-        nowButton = actionButton("NOW로 돌아가기") { returnToNow() }.apply {
-            visibility = View.GONE
-        }
-        previewButton = actionButton("Demo 미리보기 켜기") {
+        demoButton = actionButton("Demo 미리보기 켜기") {
             demoPreviewEnabled = !demoPreviewEnabled
-            previewButton.text = if (demoPreviewEnabled) {
-                "Demo 미리보기 끄기"
-            } else {
-                "Demo 미리보기 켜기"
-            }
-            loadZoneAndTimeline()
+            demoButton.text = if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기"
+            loadZoneAndMoments()
         }
-        val reloadButton = actionButton("다시 조회") { loadZoneAndTimeline() }
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            addView(nowButton)
-            addView(previewButton)
-            addView(reloadButton)
-        }
+        val reloadButton = actionButton("다시 조회") { loadZoneAndMoments() }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(8), dp(12), dp(14))
-            addView(
-                timeLabel,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                )
-            )
-            addView(gestureHint, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(actions)
+            addView(markerHint)
+            addView(LinearLayout(this@MainActivity).apply {
+                gravity = Gravity.CENTER
+                addView(demoButton)
+                addView(reloadButton)
+            })
         }
-        root.addView(
-            bottom,
-            FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM),
-        )
+        root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+
+        buildPlayerOverlay()
+        root.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
+    }
+
+    private fun buildPlayerOverlay() {
+        playerOverlay = FrameLayout(this).apply {
+            visibility = View.GONE
+            isClickable = true
+        }
+        playerView = PlayerView(this).apply {
+            setBackgroundColor(Color.BLACK)
+            useController = false
+            setOnTouchListener { _, event -> handleContentTouch(event) }
+        }
+        playerOverlay.addView(playerView, FrameLayout.LayoutParams(-1, dp(240), Gravity.CENTER))
+
+        playbackDate = overlayText("").apply {
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            background = pillBackground(0xB3111827.toInt(), dp(20).toFloat())
+            visibility = View.GONE
+        }
+        playerOverlay.addView(
+            playbackDate,
+            FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = dp(36)
+            },
+        )
+
+        playbackHint = overlayText("").apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = pillBackground(0xB3111827.toInt(), dp(18).toFloat())
+        }
+        playerOverlay.addView(
+            playbackHint,
+            FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                bottomMargin = dp(28)
+            },
+        )
+
+        val promptText = overlayText("미리보기를 봤어요\n전체 영상을 재생할까요?").apply {
+            gravity = Gravity.CENTER
+            textSize = 17f
+            setTypeface(typeface, Typeface.BOLD)
+        }
+        val yesButton = actionButton("전체 영상 보기") { enterFullscreenPlayback() }
+        val noButton = actionButton("닫기") { exitContent() }
+        promptPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(22), dp(18), dp(22), dp(16))
+            background = pillBackground(0xF0111827.toInt(), dp(20).toFloat())
+            addView(promptText, LinearLayout.LayoutParams(-1, -2))
+            addView(LinearLayout(this@MainActivity).apply {
+                gravity = Gravity.CENTER
+                addView(noButton)
+                addView(yesButton)
+            })
+            visibility = View.GONE
+        }
+        playerOverlay.addView(
+            promptPanel,
+            FrameLayout.LayoutParams(-2, -2, Gravity.CENTER).apply { topMargin = dp(300) },
+        )
     }
 
     private fun actionButton(label: String, action: () -> Unit) = Button(this).apply {
@@ -435,4 +523,10 @@ class MainActivity : Activity() {
         checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    companion object {
+        private const val PREVIEW_DURATION_MS = 5_000L
+        private const val DEMO_VIDEO_URL =
+            "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
+    }
 }

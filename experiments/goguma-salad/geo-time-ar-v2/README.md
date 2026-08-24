@@ -25,8 +25,10 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - GeoZone 근접 검색, Moment Timeline, Active Campaign, 통합 후보 조회
 - 거리와 Camera View Cone 기반 6DoF 가시성 선택
 - Kotlin Android 앱, ARCore Session, Camera 배경, Anchor Marker
-- 실제 Moment 시점만 이동하는 `Reality Rewind` Swipe와 `Moment Snap`
-- Snap 햅틱, 날짜 표시, AR 콘텐츠 Fade 전환, `NOW` 빠른 복귀
+- 같은 장소의 Moment를 묶어 보여주는 `시간 기록 N개` AR Marker
+- Marker 터치 후 5초 무음 미리보기와 재생 확인
+- 전체화면 영상 감상과 좌우 Swipe 기반 이전·다음 Moment 이동
+- 재생 시점의 짧은 날짜 표시와 아래 Swipe·뒤로가기 기반 AR 복귀
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 

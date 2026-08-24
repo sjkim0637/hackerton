@@ -6,37 +6,38 @@
 powershell -ExecutionPolicy Bypass -File .\infra\scripts\android-build.ps1
 ```
 
-구성은 Android API 36, AGP 9.3, Gradle 9.5, ARCore SDK 1.54.0, Kotlin built-in 지원을 사용한다.
+구성은 Android API 36, AGP 9.3, Gradle 9.5, ARCore SDK 1.54.0, Media3 1.10.1, Kotlin built-in 지원을 사용한다.
 
 ## 실행 흐름
 
 1. Camera/Location 권한을 요청한다.
 2. ARCore 지원과 Google Play Services for AR 설치 상태를 확인한다.
 3. GPS로 nearby GeoZone을 조회한다.
-4. Timeline API에서 실제 Moment가 존재하는 시점을 최신순으로 조회한다.
-5. 사용자가 화면을 오른쪽으로 당기면 더 오래된 Moment, 왼쪽으로 밀면 `NOW` 방향으로 이동한다.
-6. Moment 시점을 통과할 때 햅틱과 날짜를 표시하고 해당 시점에 Snap한다.
-7. 선택한 Moment ID의 콘텐츠만 조회 결과에서 선택하고 Fade로 전환한다.
-8. 매 AR Frame에서 Camera Pose의 위치와 전방 벡터를 읽는다.
-9. 거리와 View Cone을 통과한 후보에 Anchor를 만든다.
-10. 카메라 배경 위에 Anchor Marker를 공간 투영해 표시한다.
+4. Timeline API의 Moment를 POI 기준 `Moment Stack`으로 묶는다.
+5. 매 AR Frame에서 Camera Pose의 위치와 전방 벡터를 읽는다.
+6. 거리와 View Cone을 통과한 Stack에 `시간 기록 N개` Anchor Marker를 표시한다.
+7. 사용자가 화면 중앙의 Marker를 터치하면 최신 Moment의 5초 무음 미리보기를 재생한다.
+8. 사용자가 화면에서 승인하면 Media3 Player를 전체화면으로 전환한다.
+9. 전체화면에서 좌우 Swipe로 같은 Stack의 이전·다음 Moment를 재생한다.
+10. 아래 Swipe나 뒤로가기로 Player를 닫고 기존 AR 탐색 화면으로 돌아온다.
 
-## Reality Rewind
+## Phone 콘텐츠 UX
 
-현재 UX는 날짜 범위를 고르는 Slider를 사용하지 않는다. Camera 화면 자체를 시간 탐색 면으로 사용한다.
+AR 탐색 화면에는 날짜 Timeline이나 Slider를 계속 노출하지 않는다. Marker는 특정 날짜가 아니라 해당 장소에 시간 기록이 있다는 사실만 알려준다.
 
 ```text
-오른쪽 Swipe → 더 오래된 Moment
-왼쪽 Swipe  → 현재에 가까운 Moment 또는 NOW
-Moment 통과  → 햅틱 + 날짜 표시 + Snap
-콘텐츠 전환  → 기존 Marker Fade-out 후 선택 Marker Fade-in
+Marker 터치       → 5초 무음 미리보기
+화면에서 승인     → 전체화면 재생
+오른쪽 Swipe      → 더 오래된 Moment
+왼쪽 Swipe        → 더 최근 Moment
+아래 Swipe/뒤로가기 → AR 탐색으로 복귀
 ```
 
-빈 날짜는 탐색 대상에서 제외한다. Timeline은 `NOW`와 실제 Moment 시점만 포함한다. `NOW`에서는 현재 활성 Campaign만 표시하고, 과거 시점에서는 선택한 Moment ID의 콘텐츠만 표시한다.
+날짜와 제목은 영상 재생을 시작하거나 다른 Moment로 이동할 때만 잠깐 표시한다. 현재 Seed Asset은 SVG이므로 Phone UX 데모에서는 Media3 공식 테스트 영상을 대체 재생한다. 실제 `video/*` Content URL이 제공되면 해당 영상을 우선 사용한다.
 
-오른쪽 방향은 다음 Feed로 넘기는 동작이 아니라 과거 시간층을 현재 화면으로 끌어당기는 의미로 사용한다.
+## Glass 확장 경계
 
-> Feed를 넘기는 것이 아니라 같은 현실 공간의 시간을 되감는다.
+Glass에서는 마커 응시, 끄덕임·고개 흔들기, 음성을 같은 콘텐츠 상태 흐름에 연결할 수 있다. 다만 Phone MVP에서는 Touch를 기본 입력으로 사용하며 Head Gesture를 강제하지 않는다. Glass 콘텐츠 집중 화면도 내부 6DoF 추적은 유지한다.
 
 ## 기기 연결
 
