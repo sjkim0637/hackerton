@@ -1,6 +1,6 @@
 # Geo-Time AR Workstream 개발 규칙
 
-이 문서는 `agent/goguma-salad/geo-time-ar-v2`에서만 적용되는 기술 규칙이다. 저장소 전체 협업 규칙은 루트 `AGENTS.md`가 우선한다.
+이 문서는 `agent/goguma-salad/geo-time-ar-v2`의 이 실험 폴더에서 추가로 적용되는 기술 규칙이다. 저장소 전체 협업 규칙은 [루트 AGENTS](../../../AGENTS.md)를 함께 따른다.
 
 - 후보 조회와 최종 가시성 선택을 분리한다.
 - Backend 후보 조회는 `Geo + Time`, Android 최종 가시성 선택은 6DoF 공간 맥락을 사용한다.

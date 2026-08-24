@@ -8,7 +8,13 @@ Visible Selection: Candidate Set + 6DoF Spatial Context
 Rendering: ARCore + Anchor
 ```
 
-이 문서는 `goguma-salad`의 Workstream 전용 실행 안내이다. 저장소 전체 협업 안내는 루트 `README.md`, 공통 작업 규칙은 루트 `AGENTS.md`를 따른다.
+이 문서는 `goguma-salad`의 Workstream 전용 실행 안내이다. 저장소 전체 협업 안내는 [루트 README](../../../README.md), 공통 작업 규칙은 [루트 AGENTS](../../../AGENTS.md)를 따른다.
+
+아래 명령은 Repository Root에서 이 실험 폴더로 이동한 뒤 실행한다.
+
+```powershell
+cd experiments\goguma-salad\geo-time-ar-v2
+```
 
 ## 현재 구현
 
@@ -85,17 +91,17 @@ adb reverse tcp:8000 tcp:8000
 
 ## Workstream 문서
 
-- [현재 상태](geo-time-ar-v2.md)
-- [개발 계획](geo-time-ar-v2-development-plan.md)
-- [원본 구축 지시문](geo-time-ar-v2-original-instructions.md)
-- [프로젝트 전용 개발 규칙](geo-time-ar-v2-engineering-rules.md)
-- [Architecture](../architecture.md)
-- [Data Model](../data-model.md)
-- [API](../api.md)
-- [Docker 개발](../docker-dev.md)
-- [Android/ARCore](../android-arcore.md)
-- [Platform 원칙](../platform-principles.md)
-- [기존 설계 결정](../decisions.md)
+- [현재 Workstream 상태](../../../docs/workstreams/geo-time-ar-v2.md)
+- [개발 계획](docs/development-plan.md)
+- [원본 구축 지시문](docs/original-instructions.md)
+- [프로젝트 전용 개발 규칙](AGENTS.md)
+- [Architecture](docs/architecture.md)
+- [Data Model](docs/data-model.md)
+- [API](docs/api.md)
+- [Docker 개발](docs/docker-dev.md)
+- [Android/ARCore](docs/android-arcore.md)
+- [Platform 원칙](docs/platform-principles.md)
+- [기존 설계 결정](docs/decisions.md)
 
 ## 현재 제약
 

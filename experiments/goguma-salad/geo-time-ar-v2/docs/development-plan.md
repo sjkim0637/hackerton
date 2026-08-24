@@ -1,6 +1,6 @@
 # Geo-Time AR Platform 초기 구축 개발 계획
 
-이 문서는 `geo-time-ar-v2-original-instructions.md`를 실제 개발 작업 단위로 정리한 체크리스트다.
+이 문서는 `original-instructions.md`를 실제 개발 작업 단위로 정리한 체크리스트다.
 
 ## 현재 구현 상태 (2026-08-21)
 

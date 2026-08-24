@@ -12,6 +12,10 @@ goguma-salad + Codex
 
 `agent/goguma-salad/geo-time-ar-v2`
 
+## Project Path
+
+`experiments/goguma-salad/geo-time-ar-v2/`
+
 ## Status
 
 IN_PROGRESS
@@ -27,6 +31,8 @@ IN_PROGRESS
 ## Current Direction
 
 FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하고, Kotlin Android와 ARCore에서 거리·Camera View Cone을 포함한 6DoF 공간 조건으로 최종 표시 대상을 선택한다. 기존 구현의 구조와 기술 선택은 아직 프로젝트 전체 표준이 아니라 이 Workstream의 검증 대상이다.
+
+구현과 전용 기술 문서는 [`experiments/goguma-salad/geo-time-ar-v2/`](../../experiments/goguma-salad/geo-time-ar-v2/)에 격리한다.
 
 ## Scope
 
@@ -66,7 +72,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 
 ## Notes for Other Teams
 
-goguma-salad가 기존에 개발한 Prototype을 이 Branch에서 이어서 검증한다. 같은 문제를 다른 방식으로 탐색하는 Workstream을 제한하지 않으며, 현재 기술 Stack이나 설계를 프로젝트 공통 기준으로 가정하지 않는다. 재사용이 필요한 경우 전체 Branch보다 검증된 Commit 또는 기능 단위를 우선 검토한다.
+goguma-salad가 기존에 개발한 Prototype을 `experiments/goguma-salad/geo-time-ar-v2/`에서 이어서 검증한다. 같은 문제를 다른 방식으로 탐색하는 Workstream을 제한하지 않으며, 현재 기술 Stack이나 설계를 프로젝트 공통 기준으로 가정하지 않는다. 재사용이 필요한 경우 전체 Branch보다 검증된 Commit 또는 기능 단위를 우선 검토한다.
 
 ## Integration Candidate
 
@@ -74,11 +80,12 @@ TBD
 
 ## Verification
 
-2026-08-24 Branch 이전 후 다음 항목을 다시 확인했다.
+2026-08-24 Branch 이전과 실험 폴더 격리 후 다음 항목을 새 경로에서 다시 확인했다.
 
 - Ruff: 통과
 - Backend Pytest: 15개 통과
 - Android `testDebugUnitTest assembleDebug`: 통과
+- Docker Compose 설정 검사: 통과
 - Docker Smoke Test: Docker Desktop Engine이 꺼져 있어 이번 확인에서는 미실행
 - ARCore 실기기: 검증 필요
 
