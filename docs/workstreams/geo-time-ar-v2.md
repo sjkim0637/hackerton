@@ -146,6 +146,7 @@ TBD
 - `d9f661d` fix(android): Glass 재생을 3DoF 정면 스크린으로 변경
 - `a31e5fa` fix(android): 고정 좌표 대신 마지막 GPS 기록 사용
 - `238e026` feat(android): 저장 없는 내장 GNSS 진단 화면 추가
+- `8cf7961` fix(android): GNSS 진단 중 Full Tracking 활성화
 
 ## Updated
 
