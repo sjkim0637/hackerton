@@ -42,6 +42,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - Android ARCore Session과 Anchor Marker Prototype
 - POI별 Moment Stack Marker와 Phone용 미리보기·전체화면 재생 흐름
 - 전체화면의 실제 Moment 간 좌우 Swipe 이동
+- Phone·Glass 데모 Mode 전환과 ARCore Pose 기반 응시·Head Gesture 입력
 - 거리와 Camera View Cone 기반 가시성 선택
 - 재현 가능한 로컬 실행, 자동 테스트 및 관련 설계 문서
 - 기존 로컬 Git Commit 이력의 공식 Branch 이전
@@ -68,7 +69,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - AR 탐색 화면에서는 날짜 Timeline을 노출하지 않고 POI별 Moment Stack Marker를 사용한다.
 - Phone은 Marker 터치, 5초 무음 미리보기, 화면 승인, 전체화면 재생을 사용한다.
 - 전체화면에서만 좌우 Swipe로 실제 Moment 사이를 이동하고 날짜를 잠깐 표시한다.
-- Glass는 향후 응시·음성·머리 Gesture를 입력 Adapter로 연결하되 6DoF 추적은 유지한다.
+- Glass 데모는 ARCore Pose로 응시·머리 Gesture를 모사하며 6DoF 추적은 유지한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
 
 ## Dependencies
@@ -91,16 +92,18 @@ TBD
 
 - Ruff: 통과
 - Backend Pytest: 15개 통과
-- Android Unit Test 7개와 `assembleDebug`: 통과
+- Android Unit Test 11개와 `assembleDebug`: 통과
 - Moment Stack 묶음·정렬·Swipe 경계 Test와 Debug APK Build: 통과
+- 끄덕임·좌우 왕복·느린 회전 제외·각도 경계 Test: 통과
 - Docker Compose 설정 검사: 통과
 - Docker Smoke Test: 통과
 - ARCore 실기기 `SM-S908N`: APK 설치·실행 및 Backend 연결 통과
 - 실기기에서 Media3 데모 영상 URL HTTP 200 응답 확인
+- Glass 데모 포함 최신 APK 실기기 설치 및 앱 기동 통과
 
 ## Known Issues
 
-- 실기기에서 Marker 터치부터 5초 미리보기, 승인, 전체화면 Swipe까지 사람 눈으로 보는 최종 UX 평가는 남아 있다.
+- 실기기 잠금 해제 후 Phone과 Glass 데모 전체 흐름을 사람 눈으로 보는 최종 UX 평가는 남아 있다.
 - 현재 Seed는 영상이 아닌 SVG Placeholder라 Phone UX 데모는 외부 Media3 테스트 영상을 대신 사용한다.
 - 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
 - 기존 저장소의 기술 선택은 아직 다른 Workstream과 비교·검토되지 않았다.
@@ -110,7 +113,7 @@ TBD
 1. 실기기에서 Marker 터치부터 전체화면 이동까지 실제 사용감을 평가한다.
 2. Seed에 자체 촬영한 실제 Moment 영상을 연결한다.
 3. Zone-local 좌표와 실제 현장 좌표의 정합 방식을 비교한다.
-4. Glass 입력 Adapter의 인터페이스를 구현할 시점을 정한다.
+4. 실제 Glass Hardware가 정해지면 현재 ARCore Pose 입력을 해당 SDK Adapter로 교체한다.
 
 ## Relevant Commits
 

@@ -3,7 +3,9 @@ package com.geotime.ar.ar
 import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.SystemClock
 import android.view.Surface
+import com.geotime.ar.interaction.HeadPose
 import com.geotime.ar.spatial.SpatialCandidate
 import com.geotime.ar.spatial.SpatialVisibilitySelector
 import com.geotime.ar.spatial.Vector3
@@ -12,6 +14,8 @@ import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.asin
+import kotlin.math.atan2
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -24,6 +28,8 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     @Volatile private var contentAlpha = 1f
     @Volatile private var focusedCandidateId: String? = null
     @Volatile var onTrackingUpdate: ((String) -> Unit)? = null
+    @Volatile var onSpatialFrame: ((String?, HeadPose, Long) -> Unit)? = null
+    private var lastSpatialFrameAtMs = 0L
     private var viewportWidth = 1
     private var viewportHeight = 1
 
@@ -92,12 +98,29 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val pose = camera.pose
             val translation = pose.translation
             val zAxis = pose.zAxis
+            val forward = Vector3(-zAxis[0], -zAxis[1], -zAxis[2])
             val visible = SpatialVisibilitySelector.select(
                 cameraPosition = Vector3(translation[0], translation[1], translation[2]),
-                cameraForward = Vector3(-zAxis[0], -zAxis[1], -zAxis[2]),
+                cameraForward = forward,
                 candidates = candidates,
             )
-            focusedCandidateId = visible.firstOrNull()?.candidate?.id
+            focusedCandidateId = visible.firstOrNull { it.angleDegrees <= 10f }?.candidate?.id
+            val nowMs = SystemClock.elapsedRealtime()
+            if (nowMs - lastSpatialFrameAtMs >= 50L) {
+                lastSpatialFrameAtMs = nowMs
+                onSpatialFrame?.invoke(
+                    focusedCandidateId,
+                    HeadPose(
+                        yawDegrees = Math.toDegrees(
+                            atan2(forward.x.toDouble(), -forward.z.toDouble())
+                        ).toFloat(),
+                        pitchDegrees = Math.toDegrees(
+                            asin(forward.y.coerceIn(-1f, 1f).toDouble())
+                        ).toFloat(),
+                    ),
+                    nowMs,
+                )
+            }
             visible.forEach { item ->
                 anchors.getOrPut(item.candidate.id) {
                     val position = item.candidate.position

@@ -29,6 +29,8 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - Marker 터치 후 5초 무음 미리보기와 재생 확인
 - 전체화면 영상 감상과 좌우 Swipe 기반 이전·다음 Moment 이동
 - 재생 시점의 짧은 날짜 표시와 아래 Swipe·뒤로가기 기반 AR 복귀
+- Phone과 Glass 데모 Mode 전환
+- Glass 데모의 5초 응시, 끄덕임·좌우 고개 확인, Head Gesture 기반 Moment 이동
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 

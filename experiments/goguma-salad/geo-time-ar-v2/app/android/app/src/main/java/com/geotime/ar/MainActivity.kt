@@ -26,6 +26,9 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.geotime.ar.ar.GeoTimeArView
+import com.geotime.ar.interaction.HeadGestureRecognizer
+import com.geotime.ar.interaction.HeadMotionAxis
+import com.geotime.ar.interaction.HeadPose
 import com.geotime.ar.network.GeoTimeApiClient
 import com.geotime.ar.time.MomentStack
 import com.geotime.ar.time.TimelineMoment
@@ -36,11 +39,16 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
-private enum class PhoneExperienceState {
+private enum class ExperienceState {
     WORLD_SCAN,
     PREVIEW,
     CONFIRM,
     FULLSCREEN,
+}
+
+private enum class ExperienceMode {
+    PHONE,
+    GLASS_DEMO,
 }
 
 class MainActivity : Activity() {
@@ -50,9 +58,12 @@ class MainActivity : Activity() {
     private lateinit var trackingLabel: TextView
     private lateinit var markerHint: TextView
     private lateinit var demoButton: Button
+    private lateinit var modeButton: Button
     private lateinit var playerOverlay: FrameLayout
     private lateinit var playerView: PlayerView
     private lateinit var promptPanel: LinearLayout
+    private lateinit var promptText: TextView
+    private lateinit var promptButtonRow: LinearLayout
     private lateinit var playbackDate: TextView
     private lateinit var playbackHint: TextView
     private lateinit var player: ExoPlayer
@@ -65,11 +76,19 @@ class MainActivity : Activity() {
     private var arSession: Session? = null
     private var installRequested = false
     private var demoPreviewEnabled = false
-    private var experienceState = PhoneExperienceState.WORLD_SCAN
+    private var experienceMode = ExperienceMode.PHONE
+    private var experienceState = ExperienceState.WORLD_SCAN
     private var selectedStack: MomentStack? = null
     private var selectedMomentIndex = 0
     private var touchStartX = 0f
     private var touchStartY = 0f
+    private val headGestureRecognizer = HeadGestureRecognizer()
+    private var lastHeadPose: HeadPose? = null
+    private var glassFocusedMarkerId: String? = null
+    private var glassFocusStartedAtMs = 0L
+    private var lastDwellSecond = -1
+    private var contentCenterPose: HeadPose? = null
+    private var lookAwayStartedAtMs = 0L
     private val finishPreview = Runnable { showPlaybackConfirmation() }
     private val hidePlaybackDate = Runnable {
         playbackDate.animate().alpha(0f).setDuration(220).start()
@@ -113,7 +132,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Android 시스템 뒤로가기 호환")
     override fun onBackPressed() {
-        if (experienceState != PhoneExperienceState.WORLD_SCAN) {
+        if (experienceState != ExperienceState.WORLD_SCAN) {
             exitContent()
         } else {
             super.onBackPressed()
@@ -207,7 +226,7 @@ class MainActivity : Activity() {
                     markerHint.text = if (stacks.isEmpty()) {
                         "이 장소에는 아직 시간 기록이 없습니다"
                     } else {
-                        "시간 기록 마커를 터치해 미리보세요"
+                        worldGuideText()
                     }
                 }.onFailure {
                     clearMomentStacks()
@@ -218,11 +237,13 @@ class MainActivity : Activity() {
     }
 
     private fun clearMomentStacks() {
+        resetGlassDwell()
         stacksByMarkerId.clear()
         arView.updateCandidates(emptyList())
     }
 
     private fun handleWorldTouch(event: MotionEvent): Boolean {
+        if (experienceMode == ExperienceMode.GLASS_DEMO) return true
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchStartX = event.x
@@ -247,14 +268,19 @@ class MainActivity : Activity() {
     }
 
     private fun beginPreview(stack: MomentStack) {
+        resetGlassDwell()
         selectedStack = stack
         selectedMomentIndex = 0
-        experienceState = PhoneExperienceState.PREVIEW
+        experienceState = ExperienceState.PREVIEW
         playerOverlay.visibility = View.VISIBLE
         playerOverlay.setBackgroundColor(0x66000000)
         promptPanel.visibility = View.GONE
         playbackDate.visibility = View.GONE
-        playbackHint.text = "5초 미리보기 · 소리 없음"
+        playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            "GLASS · 5초 미리보기 · 소리 없음"
+        } else {
+            "5초 미리보기 · 소리 없음"
+        }
         playbackHint.visibility = View.VISIBLE
         playerView.useController = false
         playerView.layoutParams = FrameLayout.LayoutParams(
@@ -271,17 +297,25 @@ class MainActivity : Activity() {
     }
 
     private fun showPlaybackConfirmation() {
-        if (experienceState != PhoneExperienceState.PREVIEW) return
-        experienceState = PhoneExperienceState.CONFIRM
+        if (experienceState != ExperienceState.PREVIEW) return
+        experienceState = ExperienceState.CONFIRM
         player.pause()
         playbackHint.visibility = View.GONE
+        if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            promptText.text = "해당 영상을 재생할까요?\n\n상하로 끄덕임  예\n좌우로 흔들기  아니오"
+            promptButtonRow.visibility = View.GONE
+            headGestureRecognizer.reset(lastHeadPose)
+        } else {
+            promptText.text = "미리보기를 봤어요\n전체 영상을 재생할까요?"
+            promptButtonRow.visibility = View.VISIBLE
+        }
         promptPanel.visibility = View.VISIBLE
         promptPanel.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
     }
 
     private fun enterFullscreenPlayback() {
         val stack = selectedStack ?: return
-        experienceState = PhoneExperienceState.FULLSCREEN
+        experienceState = ExperienceState.FULLSCREEN
         promptPanel.visibility = View.GONE
         playerOverlay.setBackgroundColor(Color.BLACK)
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
@@ -293,13 +327,23 @@ class MainActivity : Activity() {
             )
         playMoment(stack.momentAt(selectedMomentIndex), muted = false, restart = true)
         showMomentDate()
-        playbackHint.text = "← 최근 기록  ·  좌우로 넘기기  ·  과거 기록 →"
+        if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            contentCenterPose = lastHeadPose
+            lookAwayStartedAtMs = 0L
+            headGestureRecognizer.reset(lastHeadPose)
+        }
+        playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            "GLASS FOCUS · 빠른 좌우 고개 동작으로 기록 이동"
+        } else {
+            "← 최근 기록  ·  좌우로 넘기기  ·  과거 기록 →"
+        }
         playbackHint.visibility = View.VISIBLE
         playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
     }
 
     private fun handleContentTouch(event: MotionEvent): Boolean {
-        if (experienceState != PhoneExperienceState.FULLSCREEN) return true
+        if (experienceMode == ExperienceMode.GLASS_DEMO) return true
+        if (experienceState != ExperienceState.FULLSCREEN) return true
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchStartX = event.x
@@ -368,9 +412,102 @@ class MainActivity : Activity() {
         playbackHint.alpha = 1f
         selectedStack = null
         selectedMomentIndex = 0
-        experienceState = PhoneExperienceState.WORLD_SCAN
+        experienceState = ExperienceState.WORLD_SCAN
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-        markerHint.text = "시간 기록 마커를 터치해 미리보세요"
+        resetGlassInteraction()
+        markerHint.text = worldGuideText()
+    }
+
+    private fun processGlassFrame(markerId: String?, pose: HeadPose, timestampMs: Long) {
+        lastHeadPose = pose
+        if (experienceMode != ExperienceMode.GLASS_DEMO) return
+        when (experienceState) {
+            ExperienceState.WORLD_SCAN -> processGlassDwell(markerId, timestampMs)
+            ExperienceState.PREVIEW -> Unit
+            ExperienceState.CONFIRM -> {
+                val motion = headGestureRecognizer.update(pose, timestampMs) ?: return
+                when (motion.axis) {
+                    HeadMotionAxis.PITCH -> enterFullscreenPlayback()
+                    HeadMotionAxis.YAW -> exitContent()
+                }
+            }
+            ExperienceState.FULLSCREEN -> processGlassContentGesture(pose, timestampMs)
+        }
+    }
+
+    private fun processGlassDwell(markerId: String?, timestampMs: Long) {
+        if (markerId == null || markerId !in stacksByMarkerId) {
+            resetGlassDwell()
+            markerHint.text = "GLASS · 마커를 화면 중앙에 맞춰 주세요"
+            return
+        }
+        if (markerId != glassFocusedMarkerId) {
+            glassFocusedMarkerId = markerId
+            glassFocusStartedAtMs = timestampMs
+            lastDwellSecond = -1
+        }
+        val elapsedMs = timestampMs - glassFocusStartedAtMs
+        val remainingSeconds = ((GLASS_DWELL_MS - elapsedMs).coerceAtLeast(0L) + 999L) / 1_000L
+        if (remainingSeconds.toInt() != lastDwellSecond) {
+            lastDwellSecond = remainingSeconds.toInt()
+            markerHint.text = "GLASS · 응시 유지 ${remainingSeconds}초"
+        }
+        if (elapsedMs >= GLASS_DWELL_MS) {
+            stacksByMarkerId[markerId]?.let(::beginPreview)
+        }
+    }
+
+    private fun processGlassContentGesture(pose: HeadPose, timestampMs: Long) {
+        headGestureRecognizer.update(pose, timestampMs)?.let { motion ->
+            if (motion.axis == HeadMotionAxis.YAW) {
+                moveContent(if (motion.direction > 0) 1f else -1f)
+            }
+        }
+
+        val center = contentCenterPose ?: pose.also { contentCenterPose = it }
+        val yawOffset = abs(HeadGestureRecognizer.angleDelta(center.yawDegrees, pose.yawDegrees))
+        val pitchOffset = abs(pose.pitchDegrees - center.pitchDegrees)
+        if (maxOf(yawOffset, pitchOffset) >= GLASS_LOOK_AWAY_DEGREES) {
+            if (lookAwayStartedAtMs == 0L) lookAwayStartedAtMs = timestampMs
+            if (timestampMs - lookAwayStartedAtMs >= GLASS_LOOK_AWAY_MS) exitContent()
+        } else {
+            lookAwayStartedAtMs = 0L
+        }
+    }
+
+    private fun toggleExperienceMode() {
+        if (experienceState != ExperienceState.WORLD_SCAN) exitContent()
+        experienceMode = if (experienceMode == ExperienceMode.PHONE) {
+            ExperienceMode.GLASS_DEMO
+        } else {
+            ExperienceMode.PHONE
+        }
+        resetGlassInteraction()
+        modeButton.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            "Glass 데모 → Phone"
+        } else {
+            "Phone → Glass 데모"
+        }
+        markerHint.text = worldGuideText()
+    }
+
+    private fun resetGlassDwell() {
+        glassFocusedMarkerId = null
+        glassFocusStartedAtMs = 0L
+        lastDwellSecond = -1
+    }
+
+    private fun resetGlassInteraction() {
+        resetGlassDwell()
+        headGestureRecognizer.reset(lastHeadPose)
+        contentCenterPose = null
+        lookAwayStartedAtMs = 0L
+    }
+
+    private fun worldGuideText(): String = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+        "GLASS · 마커를 화면 중앙에서 5초간 응시하세요"
+    } else {
+        "시간 기록 마커를 터치해 미리보세요"
     }
 
     private fun lastKnownLocation(): Location? {
@@ -385,7 +522,15 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         arView = GeoTimeArView(this).apply {
-            onTrackingUpdate = { status -> runOnUiThread { trackingLabel.text = status } }
+            onTrackingUpdate = { status ->
+                runOnUiThread {
+                    trackingLabel.text = status
+                    if (!status.startsWith("6DoF")) resetGlassDwell()
+                }
+            }
+            onSpatialFrame = { markerId, pose, timestampMs ->
+                runOnUiThread { processGlassFrame(markerId, pose, timestampMs) }
+            }
             setOnTouchListener { _, event -> handleWorldTouch(event) }
         }
         zoneLabel = overlayText("현재 장소 확인 중")
@@ -415,6 +560,7 @@ class MainActivity : Activity() {
             loadZoneAndMoments()
         }
         val reloadButton = actionButton("다시 조회") { loadZoneAndMoments() }
+        modeButton = actionButton("Phone → Glass 데모") { toggleExperienceMode() }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -422,6 +568,7 @@ class MainActivity : Activity() {
             addView(markerHint)
             addView(LinearLayout(this@MainActivity).apply {
                 gravity = Gravity.CENTER
+                addView(modeButton)
                 addView(demoButton)
                 addView(reloadButton)
             })
@@ -471,7 +618,7 @@ class MainActivity : Activity() {
             },
         )
 
-        val promptText = overlayText("미리보기를 봤어요\n전체 영상을 재생할까요?").apply {
+        promptText = overlayText("미리보기를 봤어요\n전체 영상을 재생할까요?").apply {
             gravity = Gravity.CENTER
             textSize = 17f
             setTypeface(typeface, Typeface.BOLD)
@@ -484,11 +631,12 @@ class MainActivity : Activity() {
             setPadding(dp(22), dp(18), dp(22), dp(16))
             background = pillBackground(0xF0111827.toInt(), dp(20).toFloat())
             addView(promptText, LinearLayout.LayoutParams(-1, -2))
-            addView(LinearLayout(this@MainActivity).apply {
+            promptButtonRow = LinearLayout(this@MainActivity).apply {
                 gravity = Gravity.CENTER
                 addView(noButton)
                 addView(yesButton)
-            })
+            }
+            addView(promptButtonRow)
             visibility = View.GONE
         }
         playerOverlay.addView(
@@ -526,6 +674,9 @@ class MainActivity : Activity() {
 
     companion object {
         private const val PREVIEW_DURATION_MS = 5_000L
+        private const val GLASS_DWELL_MS = 5_000L
+        private const val GLASS_LOOK_AWAY_MS = 1_500L
+        private const val GLASS_LOOK_AWAY_DEGREES = 38f
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }
