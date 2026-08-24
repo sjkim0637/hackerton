@@ -2,6 +2,15 @@
 
 이 디렉터리는 기획·탐색 단계에서 서로 다른 아이디어와 구현 방향을 독립적으로 검증하는 공간이다.
 
+## 이름 구분
+
+| 구분 | 형식 | 예시 |
+|---|---|---|
+| Git Branch | `agent/<github-id>/<task>` | `agent/goguma-salad/geo-time-ar-v2` |
+| 실제 폴더 | `experiments/<github-id>/<task>/` | `experiments/goguma-salad/geo-time-ar-v2/` |
+
+`agent/`는 Git Branch 이름에만 사용한다. Repository에 `agent/` 폴더를 만들지 않는다. 실제 Project 파일은 항상 `experiments/` 아래에 둔다.
+
 ## 기본 구조
 
 ```text
@@ -23,7 +32,7 @@ experiments/goguma-salad/geo-time-ar-v2/
 
 ## 운영 규칙
 
-- 작업 Branch는 `agent/<github-id>/<task>` 형식을 그대로 사용한다.
+- Git Branch는 `agent/<github-id>/<task>`, 실제 Project Directory는 `experiments/<github-id>/<task>/` 형식을 사용한다.
 - 실험 폴더 하나는 다른 폴더에 의존하지 않고 실행·검토할 수 있도록 구성한다.
 - 실험의 목적과 현재 상태는 루트 `TEAM_WORKBOARD.md`와 `docs/workstreams/<task>.md`에 등록한다.
 - 실험 내부 `README.md`에는 실행 방법, 현재 구현, 제약사항을 기록한다.

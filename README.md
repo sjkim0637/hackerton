@@ -2,7 +2,7 @@
 
 이 저장소는 여러 사람이 각자의 AI Agent를 활용해 독립적으로 기획·실험하면서도 진행 상황과 결과를 안전하게 공유하기 위한 Git + Markdown 기반 협업 공간이다.
 
-현재는 **Phase 0 - Project Harness** 단계이다. 실제 Application, 기술 Stack, Architecture는 아직 정하지 않았으며 소스 코드도 없다.
+현재는 **Phase 1 - Planning & Exploration** 단계이다. 공통 Application, 기술 Stack, Architecture는 아직 정하지 않았으며 각 팀의 구현은 독립 실험으로 관리한다.
 
 ## 처음 참여할 때
 
@@ -13,7 +13,7 @@
 3. [`TEAM_WORKBOARD.md`](TEAM_WORKBOARD.md) - 현재 진행 중인 작업과 담당자
 4. [`ROADMAP.md`](ROADMAP.md) - 앞으로의 큰 단계
 
-## Branch 구조
+## Git Branch 구조
 
 ```text
 main
@@ -21,7 +21,17 @@ main
  └── agent/<github-id>/<task>
 ```
 
-`main`은 안정된 공통 기준, `integration`은 여러 결과의 조합과 검증, `agent/<github-id>/<task>`는 독립적인 기획·실험·개발 공간이다. AI 모델명이 아니라 GitHub ID를 Branch 정체성으로 사용한다.
+`main`은 안정된 공통 기준, `integration`은 여러 결과의 조합과 검증, `agent/<github-id>/<task>`는 독립 작업의 Git 이력을 관리한다. AI 모델명이 아니라 GitHub ID를 Branch 정체성으로 사용한다.
+
+## 실제 프로젝트 폴더 구조
+
+```text
+experiments/<github-id>/<task>/
+```
+
+기획·탐색 단계의 Source Code, 실행 설정과 전용 문서는 이 경로에 둔다. 예를 들어 Git Branch가 `agent/goguma-salad/geo-time-ar-v2`라면 실제 파일 경로는 `experiments/goguma-salad/geo-time-ar-v2/`이다.
+
+> `agent/...`는 Git Branch 이름이고 `experiments/...`는 Repository Directory이다. `agent/` 폴더를 만들지 않는다.
 
 ## 주요 문서 위치
 

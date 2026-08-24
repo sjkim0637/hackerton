@@ -4,12 +4,13 @@
 
 ## 저장소 구조와 작업 시작
 
-안정된 기준은 `main`, 결과 조합과 검증은 `integration`, 독립 작업은 `agent/<github-id>/<task>`에서 진행한다. 새 작업은 다음 순서로 시작한다.
+안정된 기준은 `main`, 결과 조합과 검증은 `integration`, 독립 작업 이력은 `agent/<github-id>/<task>` Git Branch에서 관리한다. 새 작업은 다음 순서로 시작한다.
 
 1. 최신 프로젝트 현황과 기존 작업을 확인한다.
 2. 목적이 드러나는 `agent/<github-id>/<task>` Branch를 만든다.
-3. `TEAM_WORKBOARD.md`에 작업을 등록한다.
-4. 상세 설명이 필요하면 `docs/workstreams/<task>.md`를 작성한다.
+3. 구현이 있으면 `experiments/<github-id>/<task>/`에 실제 프로젝트 폴더를 만든다.
+4. `TEAM_WORKBOARD.md`에 Branch와 Project Path를 등록한다.
+5. `docs/workstreams/<task>.md`를 작성한다.
 
 ## Workstream과 작업판
 
@@ -17,7 +18,7 @@
 
 ## 독립 아이디어와 Prototype
 
-서로 다른 방향을 독립적으로 구현하는 기획·탐색 단계에서는 `experiments/<github-id>/<task>/` 아래에 프로젝트를 구성한다. 실험별 Source Code, 실행 설정, 기술 문서와 `README.md`를 해당 폴더 안에 모으고, Repository Root에는 공통 하네스만 유지한다. 자세한 규칙은 `experiments/README.md`를 참고한다.
+서로 다른 방향을 독립적으로 구현하는 기획·탐색 단계에서는 `experiments/<github-id>/<task>/` 아래에 프로젝트를 구성한다. `agent/<github-id>/<task>`는 Git Branch 이름이고 실제 폴더 경로가 아니다. 실험별 Source Code, 실행 설정, 기술 문서와 `README.md`를 해당 폴더 안에 모으고, Repository Root에는 공통 하네스만 유지한다. 자세한 규칙은 `experiments/README.md`를 참고한다.
 
 ## Commit Convention
 

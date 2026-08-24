@@ -28,9 +28,18 @@ git remote -v
 
 미Commit 변경은 다른 사람의 작업일 수 있다. 내용을 확인하지 않고 삭제, 덮어쓰기, 되돌리기를 하지 않는다.
 
-## 3. Branch 운영
+## 3. Git Branch와 프로젝트 폴더
 
-기본 구조는 다음과 같다.
+독립 작업은 Git 이력과 실제 파일 위치를 다음 두 가지로 함께 관리한다.
+
+| 구분 | 형식 | 의미 |
+|---|---|---|
+| Git Branch | `agent/<github-id>/<task>` | 작업의 Commit 이력과 협업 흐름 |
+| Repository Directory | `experiments/<github-id>/<task>/` | 기획·탐색 단계의 실제 Source Code와 설정 |
+
+두 형식은 같은 `<github-id>`와 `<task>`를 사용하지만 용도가 다르다. `agent/`는 Git Branch 이름에만 사용하고 Repository 폴더로 만들지 않는다. `experiments/`는 실제 파일 경로이며 Branch 이름으로 사용하지 않는다.
+
+Git Branch 기본 구조는 다음과 같다.
 
 ```text
 main
@@ -40,7 +49,7 @@ main
 
 - `main`: 검증된 공통 기준과 프로젝트 전체 문서를 유지한다.
 - `integration`: 여러 작업의 조합, 충돌 해결, 통합 테스트에 사용한다.
-- `agent/<github-id>/<task>`: 개인 또는 팀의 독립 작업에 사용한다.
+- `agent/<github-id>/<task>`: 개인 또는 팀의 독립 작업 이력을 관리하는 Git Branch이다.
 - Branch 정체성은 AI 모델명이 아니라 GitHub ID와 작업명으로 표현한다.
 - `<task>`는 `ar-view`, `content-flow`처럼 목적이 드러나는 짧은 이름을 사용한다. `test`, `work`, `final`처럼 의미가 모호한 이름은 피한다.
 - 실제 기능 개발과 실험은 `main`에서 직접 하지 않는다. 공통 하네스와 저장소 관리 문서는 필요할 때 `main`에서 수정할 수 있다.
@@ -49,13 +58,13 @@ main
 ## 4. 새 작업 시작 절차
 
 1. 작업 목적과 범위를 정한다.
-2. `agent/<github-id>/<task>` Branch를 만든다.
-3. `TEAM_WORKBOARD.md`에 작업을 한 줄로 등록한다.
-4. 상세 설명이 필요하면 `docs/workstreams/<task>.md`를 만든다.
-5. Owner, Branch, Status, 방향, 통합 후보 여부를 기록한다.
+2. `agent/<github-id>/<task>` Git Branch를 만든다.
+3. 구현이나 실행 파일이 있으면 `experiments/<github-id>/<task>/` Directory를 만든다.
+4. `TEAM_WORKBOARD.md`에 Branch와 Project Path를 포함해 작업을 한 줄로 등록한다.
+5. `docs/workstreams/<task>.md`를 만들고 Owner, Branch, Project Path, Status, 방향, 통합 후보 여부를 기록한다.
 6. 작업을 시작한다.
 
-Branch만 만들고 작업판에 알리지 않는 상태를 피한다. 작업판에는 요약만 쓰고 자세한 내용은 Workstream 문서에 쓴다.
+Branch나 실험 폴더만 만들고 작업판에 알리지 않는 상태를 피한다. 작업판에는 요약만 쓰고 자세한 내용은 Workstream 문서에 쓴다.
 
 ## 5. 상태값
 
@@ -143,7 +152,7 @@ refactor(core): isolate timeline service
 experiments/<github-id>/<task>/
 ```
 
-- Branch는 계속 `agent/<github-id>/<task>` 형식을 사용한다. 실험 폴더는 Branch를 대신하지 않는다.
+- Git Branch는 `agent/<github-id>/<task>`, 실제 Project Directory는 `experiments/<github-id>/<task>/`를 사용한다.
 - 각 실험은 자체 `README.md`, Source Code, 설정, 기술 문서를 실험 폴더 안에 둔다.
 - Repository Root에는 공통 하네스와 전체 프로젝트 기준 문서만 둔다.
 - 실험의 기술 Stack과 Architecture는 프로젝트 전체 표준으로 간주하지 않는다.
