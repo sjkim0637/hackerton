@@ -1,0 +1,37 @@
+# 운영체제 임시 파일
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE와 편집기 개인 설정
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 환경 변수와 비밀정보
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+secrets/
+credentials/
+*.pem
+*.key
+
+# 로그와 임시 파일
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 일반적인 Build 및 검사 결과
+build/
+dist/
+out/
+coverage/
+.cache/
