@@ -197,11 +197,17 @@ class MainActivity : Activity() {
     }
 
     private fun loadZoneAndMoments() {
-        val location = lastKnownLocation()
-        val latitude = location?.latitude ?: 37.5665
-        val longitude = location?.longitude ?: 126.9780
-        zoneLabel.text = "GeoZone 조회 중…"
-        apiClient.loadNearby(latitude, longitude) { result ->
+        val location = lastRecordedLocation()
+        if (location == null) {
+            zoneLabel.text = "저장된 위치 기록이 없습니다"
+            clearMomentStacks()
+            markerHint.text = "위치 권한을 허용하고 GPS를 켠 뒤 다시 시도하세요"
+            markerHint.visibility = View.VISIBLE
+            coachHint.visibility = View.GONE
+            return
+        }
+        zoneLabel.text = "최근 GPS 기록 기준 GeoZone 조회 중…"
+        apiClient.loadNearby(location.latitude, location.longitude) { result ->
             runOnUiThread {
                 result.onSuccess { zone ->
                     if (zone == null) {
@@ -604,6 +610,41 @@ class MainActivity : Activity() {
         }.maxByOrNull(Location::getTime)
     }
 
+    private fun lastRecordedLocation(): Location? {
+        val systemLocation = lastKnownLocation()
+        if (systemLocation != null) {
+            saveLocation(systemLocation)
+            return systemLocation
+        }
+
+        val saved = preferences()
+        if (
+            !saved.contains(PREF_LAST_LATITUDE_BITS) ||
+            !saved.contains(PREF_LAST_LONGITUDE_BITS)
+        ) {
+            return null
+        }
+        return Location("geo-time-ar-history").apply {
+            latitude = Double.fromBits(saved.getLong(PREF_LAST_LATITUDE_BITS, 0L))
+            longitude = Double.fromBits(saved.getLong(PREF_LAST_LONGITUDE_BITS, 0L))
+            time = saved.getLong(PREF_LAST_LOCATION_TIME, 0L)
+            val savedAccuracy = saved.getFloat(PREF_LAST_LOCATION_ACCURACY, -1f)
+            if (savedAccuracy >= 0f) accuracy = savedAccuracy
+        }
+    }
+
+    private fun saveLocation(location: Location) {
+        preferences().edit()
+            .putLong(PREF_LAST_LATITUDE_BITS, location.latitude.toBits())
+            .putLong(PREF_LAST_LONGITUDE_BITS, location.longitude.toBits())
+            .putLong(PREF_LAST_LOCATION_TIME, location.time)
+            .putFloat(
+                PREF_LAST_LOCATION_ACCURACY,
+                if (location.hasAccuracy()) location.accuracy else -1f,
+            )
+            .apply()
+    }
+
     private fun buildUi() {
         arView = GeoTimeArView(this).apply {
             onTrackingUpdate = { status ->
@@ -773,6 +814,10 @@ class MainActivity : Activity() {
         private const val GLASS_DWELL_MS = 5_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
+        private const val PREF_LAST_LATITUDE_BITS = "last_latitude_bits"
+        private const val PREF_LAST_LONGITUDE_BITS = "last_longitude_bits"
+        private const val PREF_LAST_LOCATION_TIME = "last_location_time"
+        private const val PREF_LAST_LOCATION_ACCURACY = "last_location_accuracy"
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }

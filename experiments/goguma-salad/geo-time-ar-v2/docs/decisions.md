@@ -57,3 +57,17 @@ Glass 데모의 머리 동작은 일정 각도 이상 움직인 뒤 짧은 시�
 - Tethered Display Runtime: Phone이 Rendering Host라면 유선 Display 출력과 Vendor Sensor SDK를 사용한다. 이 경우에도 일반적인 네트워크 영상 Streaming과는 다르다.
 
 [Rokid AR Studio 공식 안내](https://arstudio.rokid.com/)와 [공식 개발자 FAQ](https://forum.rokid.com/post/detail/524)는 AOSP 기반 공간 OS, OpenXR 생태계와 UXR SDK, Camera·IMU 기반 VIO-SLAM 6DoF를 안내한다. 실제 Target 기기가 확정되면 Phone ARCore Adapter를 해당 Hardware SDK Adapter로 교체하고 별도 App Module 또는 Build Variant를 결정한다.
+
+## ADR-009 — RTK는 절대 위치 보정 계층으로 결합
+
+**Status: Proposed**
+
+RTK GNSS를 붙일 수 있지만 ARCore의 6DoF Tracking을 대체하지 않는다. 외장 RTK 수신기와 NTRIP 보정정보로 야외의 세계 좌표 기준을 정밀하게 잡고, Camera·IMU 기반 ARCore는 Frame 사이의 부드러운 이동과 회전, 공간 특징 추적을 담당한다.
+
+결합 계층은 RTK 위치·정확도·Fix 상태·측정 시각을 받아 Zone-local 기준점을 갱신하고 ARCore Session 좌표로 변환한다. GNSS Antenna와 Camera 사이의 물리적 간격, 기기 방향과 높이는 별도 Calibration 대상으로 둔다. RTK Fix가 풀리거나 실내로 이동하면 기존 ARCore Tracking을 유지하고 VPS, 일반 GNSS 또는 현장 Visual Marker를 보조 기준으로 사용한다.
+
+Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase와 다중 주파수 같은 세부 항목 지원은 Chipset별로 다르다. 따라서 Phone 내장 GNSS만으로 RTK 성능을 가정하지 않고, 1차 검증은 결과 좌표와 Fix 품질을 제공하는 외장 RTK 수신기를 기준으로 한다.
+
+- [Android Raw GNSS Measurements 공식 안내](https://developer.android.com/develop/sensors-and-location/sensors/gnss)
+- [ARCore Geospatial API 공식 안내](https://developers.google.com/ar/develop/geospatial)
+- [ARCore Geospatial Mode 정확도 설명](https://developers.google.com/ar/reference/java/com/google/ar/core/Config.GeospatialMode)
