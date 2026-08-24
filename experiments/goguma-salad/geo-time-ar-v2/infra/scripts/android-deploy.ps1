@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$BindOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +30,9 @@ function Invoke-Adb {
     }
 }
 
-if (-not $SkipBuild) {
+if ($BindOnly) {
+    Write-Host '[1/3] Binding only; build and install will be skipped.'
+} elseif (-not $SkipBuild) {
     Write-Host '[1/5] Running Android unit tests and debug APK build.'
     & $buildScript
     if ($LASTEXITCODE -ne 0) {
@@ -39,11 +42,12 @@ if (-not $SkipBuild) {
     Write-Host '[1/5] Using the existing debug APK.'
 }
 
-if (-not (Test-Path -LiteralPath $apkPath)) {
+if (-not $BindOnly -and -not (Test-Path -LiteralPath $apkPath)) {
     throw "Debug APK was not found. Run the full build task first: $apkPath"
 }
 
-Write-Host '[2/5] Checking connected Android devices.'
+$deviceStep = if ($BindOnly) { '[2/3]' } else { '[2/5]' }
+Write-Host "$deviceStep Checking connected Android devices."
 Invoke-Adb -Arguments @('start-server')
 $connectedDevices = @(
     & $adbPath devices |
@@ -65,8 +69,14 @@ if ($requestedSerial) {
     throw "Multiple Android devices are connected. Set `$env:ANDROID_SERIAL='<serial>' and retry: $($connectedDevices -join ', ')"
 }
 
-Write-Host "[3/5] Binding device 127.0.0.1:8000 to the backend: $serial"
+$bindingStep = if ($BindOnly) { '[3/3]' } else { '[3/5]' }
+Write-Host "$bindingStep Binding device 127.0.0.1:8000 to the backend: $serial"
 Invoke-Adb -Arguments @('-s', $serial, 'reverse', 'tcp:8000', 'tcp:8000')
+
+if ($BindOnly) {
+    Write-Host "Done: Backend binding is ready on $serial."
+    exit 0
+}
 
 Write-Host '[4/5] Installing the debug APK with replacement enabled.'
 Invoke-Adb -Arguments @('-s', $serial, 'install', '-r', $apkPath)

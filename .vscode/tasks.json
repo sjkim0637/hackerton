@@ -46,6 +46,29 @@
         "clear": true,
         "focus": true
       }
+    },
+    {
+      "label": "Geo-Time AR: Backend 바인딩만",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\goguma-salad\\geo-time-ar-v2\\infra\\scripts\\android-deploy.ps1",
+        "-BindOnly"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
     }
   ]
 }

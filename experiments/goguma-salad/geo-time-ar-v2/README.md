@@ -103,6 +103,7 @@ Repository Root를 연 상태에서 `터미널 → 작업 실행`을 선택하�
 
 - `Geo-Time AR: 빌드 · 바인딩 · APK 설치 · 실행`: Unit Test와 APK Build 후 `adb reverse`, 덮어쓰기 설치와 앱 실행까지 수행한다.
 - `Geo-Time AR: 바인딩 · 기존 APK 빠른 재설치 · 실행`: Build를 생략하고 이미 생성된 Debug APK를 바로 설치한다.
+- `Geo-Time AR: Backend 바인딩만`: 연결 기기에 `adb reverse tcp:8000 tcp:8000`만 적용하고 Build·설치·실행은 건드리지 않는다.
 
 기기가 한 대면 자동으로 선택한다. 여러 대가 연결된 경우에는 잘못된 기기 설치를 막기 위해 중단하며, PowerShell에서 `$env:ANDROID_SERIAL='<기기번호>'`를 지정한 뒤 다시 실행한다.
 
