@@ -128,6 +128,7 @@ TBD
 - `94aa987` fix(android): 리와인드 제스처 방향을 오른쪽 과거로 변경
 - `c73c11b` feat(android): 기기별 콘텐츠 재생 UX 구현
 - `2de87d5` feat(android): Glass 데모 제스처 모드 구현
+- `76f0d6f` fix(android): Phone 전체화면 닫기 버튼 추가
 
 ## Updated
 
