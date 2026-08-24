@@ -135,6 +135,7 @@ TBD
 - `d6a6a2b` fix(android): AR 배경을 유지하는 Phone 재생 화면 적용
 - `eb27be1` fix(android): Glass 시선 종료와 화면 유지 적용
 - `3944f6c` feat(android): 모드별 조작 안내 설정 추가
+- `3cc0c45` chore(android): 바인딩과 APK 설치 작업 추가
 
 ## Updated
 
