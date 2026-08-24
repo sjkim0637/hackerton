@@ -24,6 +24,12 @@ class RewindTimeline private constructor(
     fun newerIndex(currentIndex: Int): Int =
         (currentIndex - 1).coerceAtLeast(0)
 
+    fun indexAfterHorizontalDrag(currentIndex: Int, deltaX: Float): Int = when {
+        deltaX > 0f -> olderIndex(currentIndex)
+        deltaX < 0f -> newerIndex(currentIndex)
+        else -> currentIndex
+    }
+
     companion object {
         fun from(moments: List<TimelineMoment>): RewindTimeline {
             val ordered = moments

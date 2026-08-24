@@ -281,11 +281,8 @@ class MainActivity : Activity() {
         return false
     }
 
-    private fun previewIndex(dx: Float): Int = if (dx < 0f) {
-        timeline.olderIndex(selectedStopIndex)
-    } else {
-        timeline.newerIndex(selectedStopIndex)
-    }
+    private fun previewIndex(dx: Float): Int =
+        timeline.indexAfterHorizontalDrag(selectedStopIndex, dx)
 
     private fun showTimeState(stop: RewindStop, transient: Boolean) {
         timeLabel.animate().cancel()
@@ -303,7 +300,7 @@ class MainActivity : Activity() {
 
     private fun showGestureGuide() {
         gestureHint.animate().cancel()
-        gestureHint.text = "← 화면을 밀어 이 장소의 시간을 되감으세요"
+        gestureHint.text = "화면을 오른쪽으로 당겨 이 장소의 시간을 되감으세요 →"
         gestureHint.alpha = 1f
         gestureHint.animate()
             .alpha(0f)

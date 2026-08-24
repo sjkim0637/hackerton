@@ -26,4 +26,4 @@ Moment와 Campaign 원본을 중복 저장하지 않는다. 필요성이 확인�
 
 일반 UI Slider는 날짜 범위를 선택하는 편집 도구처럼 보여 현실의 시간을 조작한다는 제품 경험을 약화한다. Android MVP는 Camera 화면의 좌우 Swipe를 사용하고, `NOW`와 실제 Moment가 존재하는 시점에만 Snap한다.
 
-왼쪽 Swipe는 더 오래된 Moment, 오른쪽 Swipe는 `NOW` 방향으로 이동한다. Snap 시 햅틱과 날짜를 잠깐 표시하고 AR 콘텐츠를 Fade로 전환한다. 이 시간 이동 의도는 향후 AR Glass의 Gesture와 Voice 입력에서도 재사용한다.
+오른쪽 Swipe는 과거 시간층을 현재 화면으로 끌어당겨 더 오래된 Moment로 이동하고, 왼쪽 Swipe는 `NOW` 방향으로 이동한다. Snap 시 햅틱과 날짜를 잠깐 표시하고 AR 콘텐츠를 Fade로 전환한다. 이 시간 이동 의도는 향후 AR Glass의 Gesture와 Voice 입력에서도 재사용한다.
