@@ -32,6 +32,7 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - Phone과 Glass 데모 Mode 전환
 - Glass 데모의 5초 응시, 끄덕임·좌우 고개 확인, Head Gesture 기반 Moment 이동
 - 앱이 활성화된 동안 Android 자동 화면 꺼짐 방지
+- 첫 실행·Mode 전환 조작 안내와 설정의 안내 On/Off
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 

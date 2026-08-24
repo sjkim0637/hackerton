@@ -56,6 +56,16 @@ Marker 터치       → 5초 무음 미리보기
 
 AR 앱이 화면에 활성화된 동안에는 Android의 자동 화면 꺼짐을 막는다. 사용자가 앱을 백그라운드로 보내거나 직접 화면을 끄는 동작까지 무시하지는 않는다.
 
+## 앱 내 안내 설정
+
+첫 실행과 Phone·Glass 데모 Mode 전환 시 현재 Mode의 조작 안내를 표시한다. 하단 `설정`에서 `모드 전환 시 조작 안내 표시`를 끌 수 있으며, 자동 안내를 꺼도 설정의 `현재 모드 조작 안내 다시 보기`로 언제든 확인할 수 있다.
+
+## 실제 Glass와 현재 데모의 차이
+
+현재 Glass 데모는 폰 Camera와 ARCore Pose를 사용한다. 폰의 AR 영상을 실제 Glass로 Streaming하는 구현은 아니다. 실제 Glass 제품에서는 Hardware 유형에 따라 Glass 또는 전용 Computing 장치에서 별도 Runtime을 실행하거나, Phone이 유선 Display Host가 되고 Vendor SDK를 통해 Glass Pose를 받는다.
+
+Phone과 Glass는 Backend와 콘텐츠 상태 흐름을 공유하지만 화면과 입력은 분리한다. 실제 Target이 정해지면 ARCore Pose 입력을 OpenXR 또는 Vendor SDK 입력으로 교체한다.
+
 ## 기기 연결
 
 ```powershell

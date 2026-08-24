@@ -49,6 +49,8 @@ Phone MVP는 터치를 기본 입력으로 사용한다. Glass를 고려한다�
 
 두 모드는 공통 상태 전이를 사용하고 입력 Adapter만 분리한다. Glass 모드에서도 안전한 공간 인식과 AR 복귀를 위해 6DoF 추적 자체는 계속 유지한다.
 
+실제 제품에서는 Phone 화면과 Glass 화면을 별도 Presentation으로 취급한다. Backend, Moment Stack과 `발견 → 미리보기 → 승인 → 집중 감상 → 복귀` 상태 흐름은 공유하되, Phone은 ARCore·Touch Adapter를 사용하고 Glass는 해당 Hardware의 OpenXR 또는 Vendor Tracking·Input Adapter를 사용한다. 현재 앱의 Glass Mode 버튼은 이 구조를 폰 한 대에서 비교하기 위한 Demo Switch다.
+
 Glass 데모의 현재 입력 기준은 다음과 같다.
 
 - 화면 중심 10도 이내 Marker를 5초간 유지하면 무음 미리보기를 시작한다.

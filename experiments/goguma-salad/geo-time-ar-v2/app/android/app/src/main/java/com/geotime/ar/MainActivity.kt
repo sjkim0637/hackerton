@@ -2,6 +2,7 @@ package com.geotime.ar
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -21,6 +22,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.Switch
 import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -91,6 +93,7 @@ class MainActivity : Activity() {
     private var lastDwellSecond = -1
     private var contentCenterPose: HeadPose? = null
     private var lookAwayStartedAtMs = 0L
+    private var guideShownThisRun = false
     private val finishPreview = Runnable { showPlaybackConfirmation() }
     private val hidePlaybackDate = Runnable {
         playbackDate.animate().alpha(0f).setDuration(220).start()
@@ -115,6 +118,7 @@ class MainActivity : Activity() {
         ensureArSession()
         arView.onResume()
         loadZoneAndMoments()
+        maybeShowFirstGuide()
     }
 
     override fun onPause() {
@@ -508,7 +512,76 @@ class MainActivity : Activity() {
             "Phone → Glass 데모"
         }
         markerHint.text = worldGuideText()
+        if (preferences().getBoolean(PREF_SHOW_GUIDES, true)) showModeGuide()
     }
+
+    private fun showSettings() {
+        val guideSwitch = Switch(this).apply {
+            text = "모드 전환 시 조작 안내 표시"
+            textSize = 16f
+            isChecked = preferences().getBoolean(PREF_SHOW_GUIDES, true)
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setOnCheckedChangeListener { _, enabled ->
+                preferences().edit().putBoolean(PREF_SHOW_GUIDES, enabled).apply()
+            }
+        }
+        val guideButton = actionButton("현재 모드 조작 안내 다시 보기") {
+            showModeGuide()
+        }
+        val note = TextView(this).apply {
+            text = "끄면 모드 전환 안내 팝업만 숨겨집니다. 설정에서 언제든 안내를 다시 볼 수 있습니다."
+            setTextColor(0xFF4B5563.toInt())
+            textSize = 13f
+            setPadding(dp(8), dp(4), dp(8), dp(8))
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(4), dp(16), dp(4))
+            addView(guideSwitch, LinearLayout.LayoutParams(-1, -2))
+            addView(note, LinearLayout.LayoutParams(-1, -2))
+            addView(guideButton, LinearLayout.LayoutParams(-1, -2))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Geo-Time AR 설정")
+            .setView(content)
+            .setPositiveButton("완료", null)
+            .show()
+    }
+
+    private fun maybeShowFirstGuide() {
+        if (!preferences().getBoolean(PREF_SHOW_GUIDES, true)) return
+        if (guideShownThisRun || preferences().getBoolean(PREF_GUIDE_SEEN, false)) return
+        guideShownThisRun = true
+        mainHandler.postDelayed({
+            if (!isFinishing) showModeGuide(markAsSeen = true)
+        }, 700L)
+    }
+
+    private fun showModeGuide(markAsSeen: Boolean = false) {
+        val isGlass = experienceMode == ExperienceMode.GLASS_DEMO
+        val title = if (isGlass) "Glass 데모 조작 안내" else "Phone 조작 안내"
+        val message = if (isGlass) {
+            "이 모드는 실제 Glass 앱이 아니라 폰을 머리처럼 움직이는 UX 시뮬레이션입니다.\n\n" +
+                "• 마커 중앙 응시 5초: 미리보기\n" +
+                "• 상하 끄덕임: 재생\n" +
+                "• 좌우 고개 왕복: 취소 또는 기록 이동\n" +
+                "• 고개를 멀리 돌려 1.5초 유지: AR 복귀"
+        } else {
+            "• 마커 터치: 5초 미리보기\n" +
+                "• 화면 승인: 콘텐츠 집중 재생\n" +
+                "• 좌우 Swipe: 이전·다음 기록\n" +
+                "• 아래 Swipe: AR 복귀"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("확인") { _, _ ->
+                if (markAsSeen) preferences().edit().putBoolean(PREF_GUIDE_SEEN, true).apply()
+            }
+            .show()
+    }
+
+    private fun preferences() = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
 
     private fun resetGlassDwell() {
         glassFocusedMarkerId = null
@@ -583,6 +656,7 @@ class MainActivity : Activity() {
         }
         val reloadButton = actionButton("다시 조회") { loadZoneAndMoments() }
         modeButton = actionButton("Phone → Glass 데모") { toggleExperienceMode() }
+        val settingsButton = actionButton("설정") { showSettings() }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -593,6 +667,7 @@ class MainActivity : Activity() {
                 addView(modeButton)
                 addView(demoButton)
                 addView(reloadButton)
+                addView(settingsButton)
             })
         }
         root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
@@ -701,6 +776,9 @@ class MainActivity : Activity() {
         private const val GLASS_DWELL_MS = 5_000L
         private const val GLASS_LOOK_AWAY_MS = 1_500L
         private const val GLASS_LOOK_AWAY_DEGREES = 38f
+        private const val PREFERENCES_NAME = "geo_time_ar_settings"
+        private const val PREF_SHOW_GUIDES = "show_guides"
+        private const val PREF_GUIDE_SEEN = "guide_seen"
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }

@@ -71,6 +71,8 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - 콘텐츠 집중 화면에서만 좌우 Swipe로 실제 Moment 사이를 이동하고 날짜를 잠깐 표시한다.
 - Glass 데모는 ARCore Pose로 응시·머리 Gesture를 모사하며 6DoF 추적은 유지한다.
 - 앱이 활성화된 동안 자동 화면 꺼짐을 막고, Glass 재생 중 시선 이탈을 일시정지·AR 복귀로 연결한다.
+- 조작 안내는 첫 실행과 Mode 전환 때 표시하며 앱 설정에서 자동 표시를 끌 수 있다.
+- 실제 제품은 공통 상태 흐름 위에 Phone과 Glass Presentation·Tracking Adapter를 분리한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
 
 ## Dependencies

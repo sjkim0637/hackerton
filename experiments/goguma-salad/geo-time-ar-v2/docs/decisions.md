@@ -41,3 +41,17 @@ Reality Rewind의 방향 개념은 유지하지만, AR 탐색 화면 전체를 T
 Glass 데모 모드는 폰의 ARCore Camera Pose를 사용해 Glass Head Pose를 모사한다. 6DoF 추적을 계속 유지하면서 마커 중앙 응시, 끄덕임, 좌우 고개 동작을 같은 상태 전이에 연결한다. 콘텐츠 집중 화면이 3DoF처럼 안정적으로 보이더라도 실제 ARCore 추적을 3DoF로 낮추지는 않는다. Phone 모드에는 Head Gesture를 강제하지 않고 화면의 전환 버튼으로 두 입력 방식을 명확히 분리한다.
 
 Glass 데모의 머리 동작은 일정 각도 이상 움직인 뒤 짧은 시간 안에 기준 자세로 돌아왔을 때만 명령으로 확정한다. 확인 화면에서는 Pitch 동작을 `예`, Yaw 동작을 `아니오`로 해석한다. 전체 감상 중에는 빠른 Yaw 왕복을 이전·다음 Moment 이동으로 사용하고, 기준 시야에서 크게 벗어난 상태가 지속되면 AR 탐색으로 복귀한다.
+
+## ADR-008 — Phone과 실제 Glass 실행 화면 분리
+
+**Status: Accepted for Prototype**
+
+현재 Android 앱의 Glass 모드는 실제 Glass Runtime이 아니라 폰 ARCore Pose로 Head Pose 입력을 모사하는 UX 데모다. ARCore 화면을 네트워크로 Glass에 Streaming하는 구조로 간주하지 않는다.
+
+제품 단계에서는 공통 Backend·Domain·콘텐츠 상태 흐름을 공유하되 표시 화면과 입력 Adapter를 분리한다.
+
+- Phone Runtime: Phone 앱에서 Camera AR, Touch 미리보기와 콘텐츠 집중 화면을 실행한다.
+- Standalone/Compute-pack Glass Runtime: Glass 또는 전용 Computing 장치에 Glass 앱을 설치하고 Vendor SDK나 OpenXR의 Camera·IMU·6DoF Tracking과 Display를 직접 사용한다.
+- Tethered Display Runtime: Phone이 Rendering Host라면 유선 Display 출력과 Vendor Sensor SDK를 사용한다. 이 경우에도 일반적인 네트워크 영상 Streaming과는 다르다.
+
+[Rokid AR Studio 공식 안내](https://arstudio.rokid.com/)와 [공식 개발자 FAQ](https://forum.rokid.com/post/detail/524)는 AOSP 기반 공간 OS, OpenXR 생태계와 UXR SDK, Camera·IMU 기반 VIO-SLAM 6DoF를 안내한다. 실제 Target 기기가 확정되면 Phone ARCore Adapter를 해당 Hardware SDK Adapter로 교체하고 별도 App Module 또는 Build Variant를 결정한다.
