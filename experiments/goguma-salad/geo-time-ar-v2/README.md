@@ -27,7 +27,7 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - Kotlin Android 앱, ARCore Session, Camera 배경, Anchor Marker
 - 같은 장소의 Moment를 묶어 보여주는 `시간 기록 N개` AR Marker
 - Marker 터치 후 5초 무음 미리보기와 재생 확인
-- 전체화면 영상 감상과 좌우 Swipe 기반 이전·다음 Moment 이동
+- 어두워진 AR 배경 위 콘텐츠 집중 감상과 좌우 Swipe 기반 이전·다음 Moment 이동
 - 재생 시점의 짧은 날짜 표시와 아래 Swipe·뒤로가기 기반 AR 복귀
 - Phone과 Glass 데모 Mode 전환
 - Glass 데모의 5초 응시, 끄덕임·좌우 고개 확인, Head Gesture 기반 Moment 이동

@@ -24,6 +24,7 @@ import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.geotime.ar.ar.GeoTimeArView
 import com.geotime.ar.interaction.HeadGestureRecognizer
@@ -61,7 +62,6 @@ class MainActivity : Activity() {
     private lateinit var modeButton: Button
     private lateinit var playerOverlay: FrameLayout
     private lateinit var playerView: PlayerView
-    private lateinit var closePlaybackButton: Button
     private lateinit var promptPanel: LinearLayout
     private lateinit var promptText: TextView
     private lateinit var promptButtonRow: LinearLayout
@@ -276,7 +276,6 @@ class MainActivity : Activity() {
         playerOverlay.visibility = View.VISIBLE
         playerOverlay.setBackgroundColor(0x66000000)
         promptPanel.visibility = View.GONE
-        closePlaybackButton.visibility = View.GONE
         playbackDate.visibility = View.GONE
         playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
             "GLASS · 5초 미리보기 · 소리 없음"
@@ -319,12 +318,7 @@ class MainActivity : Activity() {
         val stack = selectedStack ?: return
         experienceState = ExperienceState.FULLSCREEN
         promptPanel.visibility = View.GONE
-        closePlaybackButton.visibility = if (experienceMode == ExperienceMode.PHONE) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
-        playerOverlay.setBackgroundColor(Color.BLACK)
+        playerOverlay.setBackgroundColor(0x80111827.toInt())
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
         playerView.useController = false
         window.decorView.systemUiVisibility = (
@@ -342,7 +336,7 @@ class MainActivity : Activity() {
         playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
             "GLASS FOCUS · 빠른 좌우 고개 동작으로 기록 이동"
         } else {
-            "← 최근 · 좌우로 넘기기 · 과거 →  ·  아래로 밀어 닫기"
+            "← 최근 · 좌우로 넘기기 · 과거 →  ·  아래로 내려 AR 복귀"
         }
         playbackHint.visibility = View.VISIBLE
         playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
@@ -416,7 +410,6 @@ class MainActivity : Activity() {
         playbackDate.removeCallbacks(hidePlaybackDate)
         player.stop()
         playerOverlay.visibility = View.GONE
-        closePlaybackButton.visibility = View.GONE
         playbackHint.alpha = 1f
         selectedStack = null
         selectedMomentIndex = 0
@@ -594,25 +587,13 @@ class MainActivity : Activity() {
             isClickable = true
         }
         playerView = PlayerView(this).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
+            setShutterBackgroundColor(Color.TRANSPARENT)
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             useController = false
             setOnTouchListener { _, event -> handleContentTouch(event) }
         }
         playerOverlay.addView(playerView, FrameLayout.LayoutParams(-1, dp(240), Gravity.CENTER))
-
-        closePlaybackButton = actionButton("✕ 닫기") { exitContent() }.apply {
-            visibility = View.GONE
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            background = pillBackground(0xCC111827.toInt(), dp(18).toFloat())
-        }
-        playerOverlay.addView(
-            closePlaybackButton,
-            FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
-                topMargin = dp(28)
-                marginStart = dp(18)
-            },
-        )
 
         playbackDate = overlayText("").apply {
             textSize = 18f

@@ -40,8 +40,8 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - Moment와 Campaign 도메인 분리
 - PostGIS, Migration, Seed를 포함한 Backend Prototype
 - Android ARCore Session과 Anchor Marker Prototype
-- POI별 Moment Stack Marker와 Phone용 미리보기·전체화면 재생 흐름
-- 전체화면의 실제 Moment 간 좌우 Swipe 이동
+- POI별 Moment Stack Marker와 Phone용 미리보기·콘텐츠 집중 재생 흐름
+- 콘텐츠 집중 화면의 실제 Moment 간 좌우 Swipe 이동
 - Phone·Glass 데모 Mode 전환과 ARCore Pose 기반 응시·Head Gesture 입력
 - 거리와 Camera View Cone 기반 가시성 선택
 - 재현 가능한 로컬 실행, 자동 테스트 및 관련 설계 문서
@@ -67,8 +67,8 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - 후보 조회와 최종 가시성 선택을 분리한다.
 - Backend는 `Geo + Time`, Android는 6DoF 공간 맥락을 중심으로 검증한다.
 - AR 탐색 화면에서는 날짜 Timeline을 노출하지 않고 POI별 Moment Stack Marker를 사용한다.
-- Phone은 Marker 터치, 5초 무음 미리보기, 화면 승인, 전체화면 재생을 사용한다.
-- 전체화면에서만 좌우 Swipe로 실제 Moment 사이를 이동하고 날짜를 잠깐 표시한다.
+- Phone은 Marker 터치, 5초 무음 미리보기, 화면 승인, AR 배경을 유지하는 콘텐츠 집중 재생을 사용한다.
+- 콘텐츠 집중 화면에서만 좌우 Swipe로 실제 Moment 사이를 이동하고 날짜를 잠깐 표시한다.
 - Glass 데모는 ARCore Pose로 응시·머리 Gesture를 모사하며 6DoF 추적은 유지한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
 

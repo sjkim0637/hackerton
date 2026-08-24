@@ -30,11 +30,10 @@ Marker 터치       → 5초 무음 미리보기
 화면에서 승인     → 전체화면 재생
 오른쪽 Swipe      → 더 오래된 Moment
 왼쪽 Swipe        → 더 최근 Moment
-화면의 닫기         → AR 탐색으로 복귀
 아래 Swipe/뒤로가기 → AR 탐색으로 복귀
 ```
 
-날짜와 제목은 영상 재생을 시작하거나 다른 Moment로 이동할 때만 잠깐 표시한다. 현재 Seed Asset은 SVG이므로 Phone UX 데모에서는 Media3 공식 테스트 영상을 대체 재생한다. 실제 `video/*` Content URL이 제공되면 해당 영상을 우선 사용한다.
+날짜와 제목은 영상 재생을 시작하거나 다른 Moment로 이동할 때만 잠깐 표시한다. Phone의 콘텐츠 집중 화면은 완전한 검은 배경을 사용하지 않고 어두워진 AR Camera 위에 영상 원본 비율을 유지한다. 현재 Seed Asset은 SVG이므로 Phone UX 데모에서는 Media3 공식 테스트 영상을 대체 재생한다. 실제 `video/*` Content URL이 제공되면 해당 영상을 우선 사용한다.
 
 ## Glass 데모 모드
 
