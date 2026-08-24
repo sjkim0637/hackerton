@@ -28,6 +28,7 @@ main
 | 위치 | 용도 |
 |---|---|
 | `TEAM_WORKBOARD.md` | 누가 무엇을 왜 진행 중인지 빠르게 확인 |
+| `experiments/` | 팀별 독립 아이디어와 Prototype 구현 |
 | `docs/workstreams/` | 개별 작업의 상세 목적·방향·상태 |
 | `docs/workers/` | 참여자별 장기 상태 |
 | `docs/architecture/` | 채택된 시스템 구조 |

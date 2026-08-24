@@ -15,6 +15,10 @@
 
 작업판에는 Owner, Branch, Topic, Purpose, Status, Workstream, Updated만 간결하게 적는다. 목표, 배경, 범위, 방향, 질문, 의존성, 통합 후보 여부는 Workstream 문서에 적는다. 상태가 달라지면 두 문서를 함께 갱신한다.
 
+## 독립 아이디어와 Prototype
+
+서로 다른 방향을 독립적으로 구현하는 기획·탐색 단계에서는 `experiments/<github-id>/<task>/` 아래에 프로젝트를 구성한다. 실험별 Source Code, 실행 설정, 기술 문서와 `README.md`를 해당 폴더 안에 모으고, Repository Root에는 공통 하네스만 유지한다. 자세한 규칙은 `experiments/README.md`를 참고한다.
+
 ## Commit Convention
 
 Commit은 나중에 필요한 변경만 선택할 수 있도록 논리적인 단위로 나눈다. 메시지는 `feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `refactor(scope): ...`, `chore: ...`처럼 목적이 드러나게 작성한다.

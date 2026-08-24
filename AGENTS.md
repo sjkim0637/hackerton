@@ -135,6 +135,25 @@ refactor(core): isolate timeline service
 
 ## 11. 여러 작업 동시 운영
 
+### 독립 아이디어와 Prototype
+
+기획·탐색 단계에서 각 팀이 서로 다른 제품 또는 기술 방향을 구현할 때는 프로젝트 파일을 다음 위치에 둔다.
+
+```text
+experiments/<github-id>/<task>/
+```
+
+- Branch는 계속 `agent/<github-id>/<task>` 형식을 사용한다. 실험 폴더는 Branch를 대신하지 않는다.
+- 각 실험은 자체 `README.md`, Source Code, 설정, 기술 문서를 실험 폴더 안에 둔다.
+- Repository Root에는 공통 하네스와 전체 프로젝트 기준 문서만 둔다.
+- 실험의 기술 Stack과 Architecture는 프로젝트 전체 표준으로 간주하지 않는다.
+- 여러 실험을 `integration`에 함께 반영해도 경로가 겹치지 않도록 한다.
+- 방향이 채택된 뒤 필요한 Commit이나 기능을 선별하고, 팀 합의를 거쳐 정식 프로젝트 구조로 승격한다.
+
+자세한 디렉터리 예시는 `experiments/README.md`를 참고한다.
+
+### Worktree
+
 여러 Agent나 작업을 동시에 진행할 때는 Git Worktree 사용을 권장한다. 각 Worktree는 하나의 `agent/<github-id>/<task>` Branch에 연결한다. Worktree 생성 여부와 위치는 팀과 합의하며, 하네스 자체가 특정 IDE나 Agent에 의존하지 않도록 한다.
 
 ## 12. 작업 종료 점검
