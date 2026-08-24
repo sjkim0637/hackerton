@@ -149,6 +149,7 @@ TBD
 - `238e026` feat(android): 저장 없는 내장 GNSS 진단 화면 추가
 - `8cf7961` fix(android): GNSS 진단 중 Full Tracking 활성화
 - `e30a30c` docs: 사이버펑크 UI 전체 디자인 프롬프트 작성
+- `156916d` docs: UI용 이미지 조각 생성 프롬프트 추가
 
 ## Updated
 
