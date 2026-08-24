@@ -5,7 +5,8 @@
 ## 현재 완료된 범위
 
 - [x] GPS 기반 주변 GeoZone 조회
-- [x] 현재 위치를 얻지 못할 때 마지막 정상 GPS 기록 재사용
+- [x] 임의 기본 좌표 없이 Android가 제공하는 최근 GPS 기록 사용
+- [x] 내장 GNSS의 L1/L5·ADR·Reset·Cycle Slip 실시간 진단 화면
 - [x] POI별 Moment Stack Marker 표시
 - [x] Phone Touch 기반 미리보기와 콘텐츠 집중 재생
 - [x] Glass UX Simulation과 6DoF Preview → 3DoF형 정면 Screen 전환
@@ -63,7 +64,7 @@ Android GPS
 ```
 
 - GPS는 현재 사용자가 어느 `GeoZone` 주변에 있는지 찾는 데 사용한다.
-- Android가 제공하는 최근 위치를 앱에 저장하고, 다음 실행에서 현재 위치를 얻지 못하면 마지막 정상 기록을 재사용한다. 저장 기록도 없으면 임의의 기본 좌표로 조회하지 않는다.
+- Android가 제공하는 최근 위치 기록만 사용한다. 위치 좌표를 앱 설정이나 Database에 별도로 저장하지 않으며, Android에서 기록을 받지 못하면 임의의 기본 좌표로 조회하지 않는다.
 - `POI.location`에도 GPS 위·경도가 저장되지만 Android Marker 배치 계산에는 아직 사용하지 않는다.
 - Marker 위치는 Seed의 `local_x/y/z`를 사용한다.
 - Zone-local 좌표와 ARCore Session 좌표 변환은 현재 Identity로 가정한다.
@@ -83,7 +84,9 @@ Android GPS
 
 - [ ] 외장 RTK GNSS 수신기와 Android 연결 방식(Bluetooth, USB, Vendor SDK) 검증
 - [ ] NTRIP 보정정보 공급망과 현장 통신 안정성 검증
-- [ ] RTK Fix 상태, 수평·수직 정확도와 측정 시각을 위치 품질 정보로 보존
+- [x] Phone 내장 GNSS의 L1/L5·ADR와 Cycle Slip 진단
+- [ ] 진단 결과를 바탕으로 Phone 내장 Carrier Phase RTK 가능 여부 결정
+- [ ] RTK Fix 상태, 수평·수직 정확도와 측정 시각을 현재 Session에서 관리
 - [ ] RTK 절대 위치와 ARCore의 연속 6DoF Pose를 결합하는 좌표 변환 계층 설계
 - [ ] GNSS Antenna와 Camera 사이 Offset, 기기 방향, 높이 Calibration
 - [ ] RTK 음영·Fix 해제 시 ARCore·VPS·일반 GNSS로 단계적 전환

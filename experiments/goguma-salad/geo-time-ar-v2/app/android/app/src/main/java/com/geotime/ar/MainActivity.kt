@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.location.GnssMeasurement
+import android.location.GnssMeasurementsEvent
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -22,6 +24,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import androidx.media3.common.MediaItem
@@ -92,6 +95,26 @@ class MainActivity : Activity() {
     private var glassFocusedMarkerId: String? = null
     private var glassFocusStartedAtMs = 0L
     private var lastDwellSecond = -1
+    private var gnssDiagnosticDialog: AlertDialog? = null
+    private var gnssDiagnosticText: TextView? = null
+    private var gnssEpochCount = 0
+    private var gnssValidAdrCount = 0
+    private var gnssResetCount = 0
+    private var gnssCycleSlipCount = 0
+    private val gnssMeasurementsCallback = object : GnssMeasurementsEvent.Callback() {
+        override fun onGnssMeasurementsReceived(eventArgs: GnssMeasurementsEvent) {
+            updateGnssDiagnostics(eventArgs.measurements)
+        }
+
+        override fun onStatusChanged(status: Int) {
+            if (status == STATUS_NOT_SUPPORTED) {
+                runOnUiThread {
+                    gnssDiagnosticText?.text =
+                        "이 기기는 Android Raw GNSS 측정을 지원하지 않습니다."
+                }
+            }
+        }
+    }
     private val finishPreview = Runnable { showPlaybackConfirmation() }
     private val hidePlaybackDate = Runnable {
         playbackDate.animate().alpha(0f).setDuration(220).start()
@@ -130,6 +153,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        stopGnssDiagnostics()
         player.pause()
         arView.onPause()
         arSession?.pause()
@@ -197,7 +221,7 @@ class MainActivity : Activity() {
     }
 
     private fun loadZoneAndMoments() {
-        val location = lastRecordedLocation()
+        val location = lastKnownLocation()
         if (location == null) {
             zoneLabel.text = "저장된 위치 기록이 없습니다"
             clearMomentStacks()
@@ -206,7 +230,7 @@ class MainActivity : Activity() {
             coachHint.visibility = View.GONE
             return
         }
-        zoneLabel.text = "최근 GPS 기록 기준 GeoZone 조회 중…"
+        zoneLabel.text = "Android 최근 GPS 기록 기준 GeoZone 조회 중…"
         apiClient.loadNearby(location.latitude, location.longitude) { result ->
             runOnUiThread {
                 result.onSuccess { zone ->
@@ -610,41 +634,6 @@ class MainActivity : Activity() {
         }.maxByOrNull(Location::getTime)
     }
 
-    private fun lastRecordedLocation(): Location? {
-        val systemLocation = lastKnownLocation()
-        if (systemLocation != null) {
-            saveLocation(systemLocation)
-            return systemLocation
-        }
-
-        val saved = preferences()
-        if (
-            !saved.contains(PREF_LAST_LATITUDE_BITS) ||
-            !saved.contains(PREF_LAST_LONGITUDE_BITS)
-        ) {
-            return null
-        }
-        return Location("geo-time-ar-history").apply {
-            latitude = Double.fromBits(saved.getLong(PREF_LAST_LATITUDE_BITS, 0L))
-            longitude = Double.fromBits(saved.getLong(PREF_LAST_LONGITUDE_BITS, 0L))
-            time = saved.getLong(PREF_LAST_LOCATION_TIME, 0L)
-            val savedAccuracy = saved.getFloat(PREF_LAST_LOCATION_ACCURACY, -1f)
-            if (savedAccuracy >= 0f) accuracy = savedAccuracy
-        }
-    }
-
-    private fun saveLocation(location: Location) {
-        preferences().edit()
-            .putLong(PREF_LAST_LATITUDE_BITS, location.latitude.toBits())
-            .putLong(PREF_LAST_LONGITUDE_BITS, location.longitude.toBits())
-            .putLong(PREF_LAST_LOCATION_TIME, location.time)
-            .putFloat(
-                PREF_LAST_LOCATION_ACCURACY,
-                if (location.hasAccuracy()) location.accuracy else -1f,
-            )
-            .apply()
-    }
-
     private fun buildUi() {
         arView = GeoTimeArView(this).apply {
             onTrackingUpdate = { status ->
@@ -693,6 +682,7 @@ class MainActivity : Activity() {
         }
         val reloadButton = actionButton("다시 조회") { loadZoneAndMoments() }
         modeButton = actionButton("Phone → Glass 데모") { toggleExperienceMode() }
+        val gnssButton = actionButton("GNSS 진단") { showGnssDiagnostics() }
         val settingsButton = actionButton("설정") { showSettings() }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -704,7 +694,11 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 addView(modeButton)
                 addView(demoButton)
+            })
+            addView(LinearLayout(this@MainActivity).apply {
+                gravity = Gravity.CENTER
                 addView(reloadButton)
+                addView(gnssButton)
                 addView(settingsButton)
             })
         }
@@ -713,6 +707,99 @@ class MainActivity : Activity() {
         buildPlayerOverlay()
         root.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
+    }
+
+    private fun showGnssDiagnostics() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            AlertDialog.Builder(this)
+                .setTitle("GNSS 진단")
+                .setMessage("정밀 위치 권한을 허용해야 위성 원시 신호를 확인할 수 있습니다.")
+                .setPositiveButton("확인", null)
+                .show()
+            return
+        }
+
+        stopGnssDiagnostics()
+        gnssEpochCount = 0
+        gnssValidAdrCount = 0
+        gnssResetCount = 0
+        gnssCycleSlipCount = 0
+        gnssDiagnosticText = TextView(this).apply {
+            text = "위성 신호를 기다리는 중…\n\n가능하면 야외에서 하늘이 잘 보이도록 기기를 유지하세요."
+            setTextColor(0xFF111827.toInt())
+            textSize = 14f
+            setPadding(dp(20), dp(16), dp(20), dp(16))
+            typeface = Typeface.MONOSPACE
+        }
+        val scroll = ScrollView(this).apply { addView(gnssDiagnosticText) }
+        gnssDiagnosticDialog = AlertDialog.Builder(this)
+            .setTitle("내장 GNSS · Carrier Phase 진단")
+            .setView(scroll)
+            .setNegativeButton("닫기", null)
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener { stopGnssDiagnostics() }
+                dialog.show()
+            }
+
+        val manager = getSystemService(LocationManager::class.java)
+        val registered = runCatching {
+            manager.registerGnssMeasurementsCallback(gnssMeasurementsCallback, mainHandler)
+        }.getOrDefault(false)
+        if (!registered) {
+            gnssDiagnosticText?.text = "GNSS 원시 측정을 시작하지 못했습니다.\nGPS 설정과 기기 지원 여부를 확인하세요."
+        }
+    }
+
+    private fun updateGnssDiagnostics(measurements: Collection<GnssMeasurement>) {
+        val l1Signals = measurements.count { it.hasCarrierFrequencyHz() && it.carrierFrequencyHz in 1.55e9f..1.61e9f }
+        val l5Signals = measurements.count { it.hasCarrierFrequencyHz() && it.carrierFrequencyHz in 1.16e9f..1.19e9f }
+        val validAdr = measurements.count { it.accumulatedDeltaRangeState and GnssMeasurement.ADR_STATE_VALID != 0 }
+        val reset = measurements.count { it.accumulatedDeltaRangeState and GnssMeasurement.ADR_STATE_RESET != 0 }
+        val cycleSlip = measurements.count { it.accumulatedDeltaRangeState and GnssMeasurement.ADR_STATE_CYCLE_SLIP != 0 }
+        val halfCycleResolved = measurements.count {
+            it.accumulatedDeltaRangeState and GnssMeasurement.ADR_STATE_HALF_CYCLE_RESOLVED != 0
+        }
+        gnssEpochCount += 1
+        gnssValidAdrCount += validAdr
+        gnssResetCount += reset
+        gnssCycleSlipCount += cycleSlip
+
+        val judgment = when {
+            validAdr == 0 -> "ADR 없음 · 내장 Carrier Phase RTK 곤란"
+            reset > 0 || cycleSlip > 0 -> "ADR 감지 · 아직 불안정"
+            gnssEpochCount < 10 -> "ADR 감지 · 더 수집해야 판단 가능"
+            else -> "Carrier Phase 검증 후보"
+        }
+        runOnUiThread {
+            gnssDiagnosticText?.text = buildString {
+                appendLine("초기 판정  $judgment")
+                appendLine()
+                appendLine("현재 수신 신호  ${measurements.size}개")
+                appendLine("L1/E1 대역      ${l1Signals}개")
+                appendLine("L5/E5a 대역     ${l5Signals}개")
+                appendLine("유효 ADR         ${validAdr}개")
+                appendLine("Half-cycle 해결  ${halfCycleResolved}개")
+                appendLine("Reset            ${reset}개")
+                appendLine("Cycle Slip       ${cycleSlip}개")
+                appendLine()
+                appendLine("누적 Epoch       ${gnssEpochCount}회")
+                appendLine("누적 유효 ADR    ${gnssValidAdrCount}개")
+                appendLine("누적 Reset       ${gnssResetCount}개")
+                appendLine("누적 Cycle Slip  ${gnssCycleSlipCount}개")
+                appendLine()
+                append("이 화면은 진단값을 저장하거나 서버로 전송하지 않습니다.")
+            }
+        }
+    }
+
+    private fun stopGnssDiagnostics() {
+        runCatching {
+            getSystemService(LocationManager::class.java)
+                .unregisterGnssMeasurementsCallback(gnssMeasurementsCallback)
+        }
+        gnssDiagnosticDialog = null
+        gnssDiagnosticText = null
     }
 
     private fun buildPlayerOverlay() {
@@ -814,10 +901,6 @@ class MainActivity : Activity() {
         private const val GLASS_DWELL_MS = 5_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
-        private const val PREF_LAST_LATITUDE_BITS = "last_latitude_bits"
-        private const val PREF_LAST_LONGITUDE_BITS = "last_longitude_bits"
-        private const val PREF_LAST_LOCATION_TIME = "last_location_time"
-        private const val PREF_LAST_LOCATION_ACCURACY = "last_location_accuracy"
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }

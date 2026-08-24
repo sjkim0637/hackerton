@@ -66,7 +66,7 @@ RTK GNSS를 붙일 수 있지만 ARCore의 6DoF Tracking을 대체하지 않는�
 
 결합 계층은 RTK 위치·정확도·Fix 상태·측정 시각을 받아 Zone-local 기준점을 갱신하고 ARCore Session 좌표로 변환한다. GNSS Antenna와 Camera 사이의 물리적 간격, 기기 방향과 높이는 별도 Calibration 대상으로 둔다. RTK Fix가 풀리거나 실내로 이동하면 기존 ARCore Tracking을 유지하고 VPS, 일반 GNSS 또는 현장 Visual Marker를 보조 기준으로 사용한다.
 
-Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase와 다중 주파수 같은 세부 항목 지원은 Chipset별로 다르다. 따라서 Phone 내장 GNSS만으로 RTK 성능을 가정하지 않고, 1차 검증은 결과 좌표와 Fix 품질을 제공하는 외장 RTK 수신기를 기준으로 한다.
+Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase와 다중 주파수 같은 세부 항목 지원은 Chipset별로 다르다. 1차 검증은 Phone 내장 GNSS의 L1/L5, ADR 유효 상태, Reset과 Cycle Slip을 실시간으로 측정한다. 측정 품질이 충분하면 내장 Carrier Phase와 NTRIP 보정정보를 결합하고, 품질이 부족할 때 외장 RTK 수신기를 대안으로 검토한다. 진단값과 위치 좌표는 현재 Session 화면에만 사용하고 앱이나 서버에 별도로 저장하지 않는다.
 
 - [Android Raw GNSS Measurements 공식 안내](https://developer.android.com/develop/sensors-and-location/sensors/gnss)
 - [ARCore Geospatial API 공식 안내](https://developers.google.com/ar/develop/geospatial)
