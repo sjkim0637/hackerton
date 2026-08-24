@@ -123,6 +123,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        clearLegacySavedLocation()
         buildUi()
         player = ExoPlayer.Builder(this).build().also {
             playerView.player = it
@@ -603,6 +604,15 @@ class MainActivity : Activity() {
     }
 
     private fun preferences() = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
+
+    private fun clearLegacySavedLocation() {
+        preferences().edit()
+            .remove("last_latitude_bits")
+            .remove("last_longitude_bits")
+            .remove("last_location_time")
+            .remove("last_location_accuracy")
+            .apply()
+    }
 
     private fun resetGlassDwell() {
         glassFocusedMarkerId = null
