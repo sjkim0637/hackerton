@@ -86,7 +86,7 @@ TBD
 
 - Ruff: 통과
 - Backend Pytest: 15개 통과
-- Android Unit Test 4개와 `assembleDebug`: 통과
+- Android Unit Test 5개와 `assembleDebug`: 통과
 - Reality Rewind Timeline 정렬·경계 이동 Test와 Debug APK Build: 통과
 - Docker Compose 설정 검사: 통과
 - Docker Smoke Test: Docker Desktop Engine이 꺼져 있어 이번 확인에서는 미실행
@@ -116,6 +116,7 @@ TBD
 - `508424c` → `7bfb9c9` feat: gate spatial content by geozone proximity
 - `b430c3d` refactor: isolate Geo-Time AR experiment workspace
 - `79e0b0e` feat(android): 실제 Moment를 넘기는 리와인드 제스처 구현
+- `94aa987` fix(android): 리와인드 제스처 방향을 오른쪽 과거로 변경
 
 ## Updated
 
