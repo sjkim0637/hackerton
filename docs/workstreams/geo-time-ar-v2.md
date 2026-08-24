@@ -114,10 +114,12 @@ TBD
 
 ## Next
 
-1. 실기기에서 Marker 터치부터 콘텐츠 집중 화면 이동까지 실제 사용감을 평가한다.
-2. Seed에 자체 촬영한 실제 Moment 영상을 연결한다.
-3. Zone-local 좌표와 실제 현장 좌표의 정합 방식을 비교한다.
-4. 실제 Glass Hardware가 정해지면 현재 ARCore Pose 입력을 해당 SDK Adapter로 교체한다.
+상세 우선순위와 Checkbox는 [`제품 TODO`](../../experiments/goguma-salad/geo-time-ar-v2/docs/product-backlog.md)에서 관리한다.
+
+1. 시작 화면과 Phone·Glass·Creator 진입 Flow를 확정한다.
+2. 화면별 UI 지시서와 디자인 Asset을 준비한다.
+3. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
+4. Server 설정, 실제 영상 Preload·Cache와 Creator Upload를 순서대로 구현한다.
 
 ## Relevant Commits
 

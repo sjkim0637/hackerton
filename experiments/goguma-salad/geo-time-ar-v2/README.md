@@ -120,6 +120,7 @@ Repository Root를 연 상태에서 `터미널 → 작업 실행`을 선택하�
 - [Android/ARCore](docs/android-arcore.md)
 - [Platform 원칙](docs/platform-principles.md)
 - [기존 설계 결정](docs/decisions.md)
+- [제품 TODO](docs/product-backlog.md)
 
 ## 현재 제약
 
