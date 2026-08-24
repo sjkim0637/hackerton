@@ -110,6 +110,7 @@ TBD
 - `24e12d8` → `4f5a297` docs: add architecture and verification guides
 - `4d0d99e` → `83f565c` fix: route android debug api through adb reverse
 - `508424c` → `7bfb9c9` feat: gate spatial content by geozone proximity
+- `b430c3d` refactor: isolate Geo-Time AR experiment workspace
 
 ## Updated
 
