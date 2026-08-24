@@ -137,6 +137,7 @@ TBD
 - `3944f6c` feat(android): 모드별 조작 안내 설정 추가
 - `3cc0c45` chore(android): 바인딩과 APK 설치 작업 추가
 - `9ba3fb2` fix(android): 조작 안내를 동작별 Coach Mark로 변경
+- `cb44c34` chore(android): Backend 바인딩 전용 작업 추가
 
 ## Updated
 
