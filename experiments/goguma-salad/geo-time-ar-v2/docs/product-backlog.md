@@ -7,6 +7,8 @@
 - [x] GPS 기반 주변 GeoZone 조회
 - [x] 임의 기본 좌표 없이 Android가 제공하는 최근 GPS 기록 사용
 - [x] 내장 GNSS의 L1/L5·ADR·Reset·Cycle Slip 실시간 진단 화면
+- [x] 진단 화면을 연 동안만 GPS 측정을 활성화하고 종료 시 즉시 해제
+- [x] ADR 연속성 확인을 위해 진단 중에만 GNSS Full Tracking 사용
 - [x] POI별 Moment Stack Marker 표시
 - [x] Phone Touch 기반 미리보기와 콘텐츠 집중 재생
 - [x] Glass UX Simulation과 6DoF Preview → 3DoF형 정면 Screen 전환

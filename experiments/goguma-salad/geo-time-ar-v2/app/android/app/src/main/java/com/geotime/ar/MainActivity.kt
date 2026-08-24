@@ -8,10 +8,13 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.location.GnssMeasurement
+import android.location.GnssMeasurementRequest
 import android.location.GnssMeasurementsEvent
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -101,6 +104,16 @@ class MainActivity : Activity() {
     private var gnssValidAdrCount = 0
     private var gnssResetCount = 0
     private var gnssCycleSlipCount = 0
+    private val gnssLocationListener = LocationListener { _ ->
+        // Raw GNSS 측정을 활성화하기 위한 요청이며 위치 좌표는 사용하거나 저장하지 않는다.
+    }
+    private val gnssNoSignalTimeout = Runnable {
+        if (gnssEpochCount == 0 && gnssDiagnosticText != null) {
+            gnssDiagnosticText?.text =
+                "GPS는 활성화됐지만 Raw GNSS 신호가 아직 없습니다.\n\n" +
+                "창가보다 하늘이 열린 야외에서 30초 정도 기다려 주세요."
+        }
+    }
     private val gnssMeasurementsCallback = object : GnssMeasurementsEvent.Callback() {
         override fun onGnssMeasurementsReceived(eventArgs: GnssMeasurementsEvent) {
             updateGnssDiagnostics(eventArgs.measurements)
@@ -735,7 +748,7 @@ class MainActivity : Activity() {
         gnssResetCount = 0
         gnssCycleSlipCount = 0
         gnssDiagnosticText = TextView(this).apply {
-            text = "위성 신호를 기다리는 중…\n\n가능하면 야외에서 하늘이 잘 보이도록 기기를 유지하세요."
+            text = "Full Tracking으로 위성 신호를 기다리는 중…\n\n가능하면 야외에서 하늘이 잘 보이도록 기기를 유지하세요."
             setTextColor(0xFF111827.toInt())
             textSize = 14f
             setPadding(dp(20), dp(16), dp(20), dp(16))
@@ -754,14 +767,36 @@ class MainActivity : Activity() {
 
         val manager = getSystemService(LocationManager::class.java)
         val registered = runCatching {
-            manager.registerGnssMeasurementsCallback(gnssMeasurementsCallback, mainHandler)
+            val callbackRegistered = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                manager.registerGnssMeasurementsCallback(
+                    GnssMeasurementRequest.Builder()
+                        .setFullTracking(true)
+                        .build(),
+                    mainExecutor,
+                    gnssMeasurementsCallback,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                manager.registerGnssMeasurementsCallback(gnssMeasurementsCallback, mainHandler)
+            }
+            manager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                1_000L,
+                0f,
+                gnssLocationListener,
+                Looper.getMainLooper(),
+            )
+            callbackRegistered
         }.getOrDefault(false)
         if (!registered) {
             gnssDiagnosticText?.text = "GNSS 원시 측정을 시작하지 못했습니다.\nGPS 설정과 기기 지원 여부를 확인하세요."
+        } else {
+            mainHandler.postDelayed(gnssNoSignalTimeout, GNSS_SIGNAL_TIMEOUT_MS)
         }
     }
 
     private fun updateGnssDiagnostics(measurements: Collection<GnssMeasurement>) {
+        mainHandler.removeCallbacks(gnssNoSignalTimeout)
         val l1Signals = measurements.count { it.hasCarrierFrequencyHz() && it.carrierFrequencyHz in 1.55e9f..1.61e9f }
         val l5Signals = measurements.count { it.hasCarrierFrequencyHz() && it.carrierFrequencyHz in 1.16e9f..1.19e9f }
         val validAdr = measurements.count { it.accumulatedDeltaRangeState and GnssMeasurement.ADR_STATE_VALID != 0 }
@@ -804,9 +839,12 @@ class MainActivity : Activity() {
     }
 
     private fun stopGnssDiagnostics() {
+        mainHandler.removeCallbacks(gnssNoSignalTimeout)
         runCatching {
-            getSystemService(LocationManager::class.java)
-                .unregisterGnssMeasurementsCallback(gnssMeasurementsCallback)
+            getSystemService(LocationManager::class.java).also { manager ->
+                manager.unregisterGnssMeasurementsCallback(gnssMeasurementsCallback)
+                manager.removeUpdates(gnssLocationListener)
+            }
         }
         gnssDiagnosticDialog = null
         gnssDiagnosticText = null
@@ -909,6 +947,7 @@ class MainActivity : Activity() {
     companion object {
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
+        private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
         private const val DEMO_VIDEO_URL =
