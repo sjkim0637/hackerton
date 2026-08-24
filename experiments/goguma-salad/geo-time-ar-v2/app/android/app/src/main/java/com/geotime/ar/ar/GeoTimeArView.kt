@@ -21,6 +21,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     private val anchors = ConcurrentHashMap<String, Anchor>()
     @Volatile private var arSession: Session? = null
     @Volatile private var candidates: List<SpatialCandidate> = emptyList()
+    @Volatile private var contentAlpha = 1f
     @Volatile var onTrackingUpdate: ((String) -> Unit)? = null
     private var viewportWidth = 1
     private var viewportHeight = 1
@@ -48,6 +49,10 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             id !in nextIds
         }
         candidates = next
+    }
+
+    fun updateContentAlpha(alpha: Float) {
+        contentAlpha = alpha.coerceIn(0f, 1f)
     }
 
     fun detachAllAnchors() = queueEvent {
@@ -101,7 +106,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             camera.getProjectionMatrix(projection, 0, 0.1f, 100f)
             visible.forEach { item ->
                 anchors[item.candidate.id]?.let {
-                    markerRenderer.draw(it, item.candidate.title, view, projection)
+                    markerRenderer.draw(it, item.candidate.title, view, projection, contentAlpha)
                 }
             }
             val nearest = visible.minByOrNull { it.distanceM }

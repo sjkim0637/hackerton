@@ -21,7 +21,13 @@ data class SpatialCandidate(
     val minDistanceM: Float,
     val maxDistanceM: Float,
     val viewConeDegrees: Float,
+    val sourceType: SpatialSourceType = SpatialSourceType.MOMENT,
 )
+
+enum class SpatialSourceType {
+    MOMENT,
+    CAMPAIGN,
+}
 
 data class VisibleCandidate(
     val candidate: SpatialCandidate,
@@ -56,4 +62,3 @@ object SpatialVisibilitySelector {
         }.sortedWith(compareBy<VisibleCandidate> { it.angleDegrees }.thenBy { it.distanceM })
     }
 }
-

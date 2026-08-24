@@ -1,7 +1,9 @@
 package com.geotime.ar.network
 
 import com.geotime.ar.spatial.SpatialCandidate
+import com.geotime.ar.spatial.SpatialSourceType
 import com.geotime.ar.spatial.Vector3
+import com.geotime.ar.time.TimelineMoment
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
@@ -46,13 +48,14 @@ class GeoTimeApiClient(
     fun loadCandidates(
         zoneId: String,
         at: Instant,
+        momentWindowMinutes: Int = 1,
         onResult: (Result<List<SpatialCandidate>>) -> Unit,
     ) = executor.execute {
         runCatching {
             val encodedTime = URLEncoder.encode(at.toString(), StandardCharsets.UTF_8.name())
             val response = get(
                 "/geozones/$zoneId/content-candidates?at=$encodedTime" +
-                    "&moment_window_minutes=5256000&limit=100"
+                    "&moment_window_minutes=$momentWindowMinutes&limit=100"
             )
             val items = JSONArray(response)
             buildList {
@@ -71,6 +74,32 @@ class GeoTimeApiClient(
                             minDistanceM = placement.getDouble("min_visible_distance_m").toFloat(),
                             maxDistanceM = placement.getDouble("max_visible_distance_m").toFloat(),
                             viewConeDegrees = placement.getDouble("view_cone_degrees").toFloat(),
+                            sourceType = when (item.getString("source_type")) {
+                                "campaign" -> SpatialSourceType.CAMPAIGN
+                                else -> SpatialSourceType.MOMENT
+                            },
+                        )
+                    )
+                }
+            }
+        }.also(onResult)
+    }
+
+    fun loadTimeline(
+        zoneId: String,
+        onResult: (Result<List<TimelineMoment>>) -> Unit,
+    ) = executor.execute {
+        runCatching {
+            val response = get("/geozones/$zoneId/timeline?limit=200")
+            val items = JSONArray(response)
+            buildList {
+                repeat(items.length()) { index ->
+                    val item = items.getJSONObject(index)
+                    add(
+                        TimelineMoment(
+                            id = item.getString("id"),
+                            title = item.getJSONObject("content").getString("title"),
+                            recordedAt = Instant.parse(item.getString("recorded_at")),
                         )
                     )
                 }

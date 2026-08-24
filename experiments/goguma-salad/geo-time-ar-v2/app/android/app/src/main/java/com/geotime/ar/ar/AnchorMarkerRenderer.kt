@@ -35,7 +35,13 @@ class AnchorMarkerRenderer {
         program = GlTools.createProgram(VERTEX_SHADER, FRAGMENT_SHADER)
     }
 
-    fun draw(anchor: Anchor, title: String, view: FloatArray, projection: FloatArray) {
+    fun draw(
+        anchor: Anchor,
+        title: String,
+        view: FloatArray,
+        projection: FloatArray,
+        contentAlpha: Float,
+    ) {
         if (anchor.trackingState != TrackingState.TRACKING) return
         anchor.pose.toMatrix(model, 0)
         Matrix.multiplyMM(modelView, 0, view, 0, model, 0)
@@ -46,6 +52,7 @@ class AnchorMarkerRenderer {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures.getOrPut(title) { createCardTexture(title) })
         GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "u_Texture"), 0)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "u_Alpha"), contentAlpha)
 
         val stride = 5 * 4
         val position = GLES20.glGetAttribLocation(program, "a_Position")
@@ -136,9 +143,11 @@ class AnchorMarkerRenderer {
         private const val FRAGMENT_SHADER = """
             precision mediump float;
             uniform sampler2D u_Texture;
+            uniform float u_Alpha;
             varying vec2 v_TexCoord;
             void main() {
-                gl_FragColor = texture2D(u_Texture, v_TexCoord);
+                vec4 color = texture2D(u_Texture, v_TexCoord);
+                gl_FragColor = vec4(color.rgb, color.a * u_Alpha);
             }
         """
     }
