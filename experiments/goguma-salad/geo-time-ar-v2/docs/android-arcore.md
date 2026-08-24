@@ -30,6 +30,7 @@ Marker 터치       → 5초 무음 미리보기
 화면에서 승인     → 전체화면 재생
 오른쪽 Swipe      → 더 오래된 Moment
 왼쪽 Swipe        → 더 최근 Moment
+화면의 닫기         → AR 탐색으로 복귀
 아래 Swipe/뒤로가기 → AR 탐색으로 복귀
 ```
 
