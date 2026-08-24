@@ -148,6 +148,7 @@ TBD
 - `a31e5fa` fix(android): 고정 좌표 대신 마지막 GPS 기록 사용
 - `238e026` feat(android): 저장 없는 내장 GNSS 진단 화면 추가
 - `8cf7961` fix(android): GNSS 진단 중 Full Tracking 활성화
+- `e30a30c` docs: 사이버펑크 UI 전체 디자인 프롬프트 작성
 
 ## Updated
 
