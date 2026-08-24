@@ -22,7 +22,17 @@
 
 ## Commit Convention
 
-Commit은 나중에 필요한 변경만 선택할 수 있도록 논리적인 단위로 나눈다. 메시지는 `feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `refactor(scope): ...`, `chore: ...`처럼 목적이 드러나게 작성한다.
+Commit은 나중에 필요한 변경만 선택할 수 있도록 논리적인 단위로 나눈다. `feat`, `fix`, `docs`, `refactor`, `test`, `chore` 같은 type과 선택적인 scope는 영문 표준 표기를 유지하고, 변경 설명은 한글로 작성한다.
+
+예:
+
+```text
+docs: 작업 경로 운영 규칙 정리
+feat(api): 주변 GeoZone 조회 기능 추가
+fix(android): Camera 권한 거부 처리
+```
+
+이미 원격에 Push된 기존 Commit Message는 수정하지 않고 이후 Commit부터 이 규칙을 적용한다.
 
 ## Pull Request
 
