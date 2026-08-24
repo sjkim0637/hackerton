@@ -1,4 +1,6 @@
-# 목표
+# Geo-Time AR Platform 초기 구축 원본 지시문
+
+## 목표
 
 이번 작업의 목표는 특정 서비스 하나를 먼저 만드는 것이 아니라, 향후 여러 Use Case를 올릴 수 있는 **Geo-Time AR Platform Core**를 구축하는 것이다.
 

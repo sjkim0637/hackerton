@@ -72,22 +72,37 @@ goguma-salad가 기존에 개발한 Prototype을 이 Branch에서 이어서 검�
 
 TBD
 
+## Verification
+
+2026-08-24 Branch 이전 후 다음 항목을 다시 확인했다.
+
+- Ruff: 통과
+- Backend Pytest: 15개 통과
+- Android `testDebugUnitTest assembleDebug`: 통과
+- Docker Smoke Test: Docker Desktop Engine이 꺼져 있어 이번 확인에서는 미실행
+- ARCore 실기기: 검증 필요
+
 ## Known Issues
 
 - ARCore 지원 실기기에서 Camera와 Anchor의 최종 실행 검증이 남아 있다.
 - 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
-- 기존 저장소 Commit을 공식 작업 Branch로 이전하는 중이다.
+- 기존 저장소의 기술 선택은 아직 다른 Workstream과 비교·검토되지 않았다.
 
 ## Next
 
-1. 기존 Commit 이력을 `agent/goguma-salad/geo-time-ar-v2`로 이전한다.
-2. 하네스 공통 문서와 기존 프로젝트 문서의 역할 충돌을 정리한다.
-3. 자동 테스트와 Build 상태를 다시 확인한다.
-4. ARCore 지원 실기기에서 Camera, Tracking, Anchor를 검증한다.
+1. Docker Desktop Engine을 실행한 뒤 Docker Smoke Test를 다시 수행한다.
+2. ARCore 지원 실기기에서 Camera, Tracking, Anchor를 검증한다.
+3. Zone-local 좌표와 실제 현장 좌표의 정합 방식을 비교한다.
+4. 재사용하거나 통합할 후보 기능을 Commit 단위로 정리한다.
 
 ## Relevant Commits
 
-기존 저장소 이력을 Branch로 이전한 뒤 갱신한다.
+- `e94334e` → `1bdf9bf` chore: initialize repository structure
+- `4947562` → `1829181` feat: add postgis backend and docker environment
+- `6e4439b` → `8f2eb45` feat: initialize android arcore application
+- `24e12d8` → `4f5a297` docs: add architecture and verification guides
+- `4d0d99e` → `83f565c` fix: route android debug api through adb reverse
+- `508424c` → `7bfb9c9` feat: gate spatial content by geozone proximity
 
 ## Updated
 
