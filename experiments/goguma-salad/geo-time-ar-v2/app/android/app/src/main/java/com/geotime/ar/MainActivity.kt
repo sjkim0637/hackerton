@@ -17,6 +17,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -97,6 +98,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         buildUi()
         player = ExoPlayer.Builder(this).build().also {
             playerView.player = it
@@ -333,13 +335,17 @@ class MainActivity : Activity() {
             lookAwayStartedAtMs = 0L
             headGestureRecognizer.reset(lastHeadPose)
         }
+        playbackHint.animate().cancel()
+        playbackHint.alpha = 1f
         playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
-            "GLASS FOCUS · 빠른 좌우 고개 동작으로 기록 이동"
+            glassContentGuideText()
         } else {
             "← 최근 · 좌우로 넘기기 · 과거 →  ·  아래로 내려 AR 복귀"
         }
         playbackHint.visibility = View.VISIBLE
-        playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
+        if (experienceMode == ExperienceMode.PHONE) {
+            playbackHint.animate().alpha(0f).setStartDelay(2_500).setDuration(350).start()
+        }
     }
 
     private fun handleContentTouch(event: MotionEvent): Boolean {
@@ -469,9 +475,21 @@ class MainActivity : Activity() {
         val yawOffset = abs(HeadGestureRecognizer.angleDelta(center.yawDegrees, pose.yawDegrees))
         val pitchOffset = abs(pose.pitchDegrees - center.pitchDegrees)
         if (maxOf(yawOffset, pitchOffset) >= GLASS_LOOK_AWAY_DEGREES) {
-            if (lookAwayStartedAtMs == 0L) lookAwayStartedAtMs = timestampMs
-            if (timestampMs - lookAwayStartedAtMs >= GLASS_LOOK_AWAY_MS) exitContent()
+            if (lookAwayStartedAtMs == 0L) {
+                lookAwayStartedAtMs = timestampMs
+                player.pause()
+            }
+            val elapsedMs = timestampMs - lookAwayStartedAtMs
+            val remainingMs = (GLASS_LOOK_AWAY_MS - elapsedMs).coerceAtLeast(0L)
+            playbackHint.text = "GLASS · 시선 이탈 · AR 복귀 ${(remainingMs + 999L) / 1_000L}초"
+            playbackHint.alpha = 1f
+            if (elapsedMs >= GLASS_LOOK_AWAY_MS) exitContent()
         } else {
+            if (lookAwayStartedAtMs != 0L) {
+                player.play()
+                playbackHint.text = glassContentGuideText()
+                playbackHint.alpha = 1f
+            }
             lookAwayStartedAtMs = 0L
         }
     }
@@ -510,6 +528,9 @@ class MainActivity : Activity() {
     } else {
         "시간 기록 마커를 터치해 미리보세요"
     }
+
+    private fun glassContentGuideText() =
+        "GLASS · 빠른 좌우 왕복: 기록 이동 · 고개를 멀리 돌려 나가기"
 
     private fun lastKnownLocation(): Location? {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {

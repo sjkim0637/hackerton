@@ -70,6 +70,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - Phone은 Marker 터치, 5초 무음 미리보기, 화면 승인, AR 배경을 유지하는 콘텐츠 집중 재생을 사용한다.
 - 콘텐츠 집중 화면에서만 좌우 Swipe로 실제 Moment 사이를 이동하고 날짜를 잠깐 표시한다.
 - Glass 데모는 ARCore Pose로 응시·머리 Gesture를 모사하며 6DoF 추적은 유지한다.
+- 앱이 활성화된 동안 자동 화면 꺼짐을 막고, Glass 재생 중 시선 이탈을 일시정지·AR 복귀로 연결한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
 
 ## Dependencies
@@ -110,7 +111,7 @@ TBD
 
 ## Next
 
-1. 실기기에서 Marker 터치부터 전체화면 이동까지 실제 사용감을 평가한다.
+1. 실기기에서 Marker 터치부터 콘텐츠 집중 화면 이동까지 실제 사용감을 평가한다.
 2. Seed에 자체 촬영한 실제 Moment 영상을 연결한다.
 3. Zone-local 좌표와 실제 현장 좌표의 정합 방식을 비교한다.
 4. 실제 Glass Hardware가 정해지면 현재 ARCore Pose 입력을 해당 SDK Adapter로 교체한다.
