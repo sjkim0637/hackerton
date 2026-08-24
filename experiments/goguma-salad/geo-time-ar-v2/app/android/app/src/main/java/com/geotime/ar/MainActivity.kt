@@ -92,8 +92,6 @@ class MainActivity : Activity() {
     private var glassFocusedMarkerId: String? = null
     private var glassFocusStartedAtMs = 0L
     private var lastDwellSecond = -1
-    private var contentCenterPose: HeadPose? = null
-    private var lookAwayStartedAtMs = 0L
     private val finishPreview = Runnable { showPlaybackConfirmation() }
     private val hidePlaybackDate = Runnable {
         playbackDate.animate().alpha(0f).setDuration(220).start()
@@ -106,6 +104,17 @@ class MainActivity : Activity() {
         player = ExoPlayer.Builder(this).build().also {
             playerView.player = it
             it.repeatMode = Player.REPEAT_MODE_ONE
+            it.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (
+                        playbackState == Player.STATE_ENDED &&
+                        experienceMode == ExperienceMode.GLASS_DEMO &&
+                        experienceState == ExperienceState.FULLSCREEN
+                    ) {
+                        exitContent()
+                    }
+                }
+            })
         }
     }
 
@@ -298,6 +307,7 @@ class MainActivity : Activity() {
         }
         playbackHint.visibility = View.VISIBLE
         playerView.useController = false
+        player.repeatMode = Player.REPEAT_MODE_ONE
         playerView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(240),
@@ -335,6 +345,7 @@ class MainActivity : Activity() {
         playerOverlay.setBackgroundColor(0x80111827.toInt())
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
         playerView.useController = false
+        player.repeatMode = Player.REPEAT_MODE_OFF
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -343,8 +354,6 @@ class MainActivity : Activity() {
         playMoment(stack.momentAt(selectedMomentIndex), muted = false, restart = true)
         showMomentDate()
         if (experienceMode == ExperienceMode.GLASS_DEMO) {
-            contentCenterPose = lastHeadPose
-            lookAwayStartedAtMs = 0L
             headGestureRecognizer.reset(lastHeadPose)
         }
         playbackHint.animate().cancel()
@@ -483,31 +492,6 @@ class MainActivity : Activity() {
                 moveContent(if (motion.direction > 0) 1f else -1f)
             }
         }
-
-        val center = contentCenterPose ?: pose.also { contentCenterPose = it }
-        val yawOffset = abs(HeadGestureRecognizer.angleDelta(center.yawDegrees, pose.yawDegrees))
-        val pitchOffset = abs(pose.pitchDegrees - center.pitchDegrees)
-        if (maxOf(yawOffset, pitchOffset) >= GLASS_LOOK_AWAY_DEGREES) {
-            if (lookAwayStartedAtMs == 0L) {
-                lookAwayStartedAtMs = timestampMs
-                player.pause()
-            }
-            val elapsedMs = timestampMs - lookAwayStartedAtMs
-            val remainingMs = (GLASS_LOOK_AWAY_MS - elapsedMs).coerceAtLeast(0L)
-            playbackHint.text = "GLASS · 시선 이탈 · AR 복귀 ${(remainingMs + 999L) / 1_000L}초"
-            playbackHint.alpha = 1f
-            if (elapsedMs >= GLASS_LOOK_AWAY_MS) exitContent()
-        } else {
-            if (lookAwayStartedAtMs != 0L) {
-                player.play()
-                playbackHint.text = glassContentGuideText()
-                playbackHint.alpha = 1f
-                playbackHint.visibility = if (
-                    preferences().getBoolean(PREF_SHOW_GUIDES, true)
-                ) View.VISIBLE else View.GONE
-            }
-            lookAwayStartedAtMs = 0L
-        }
     }
 
     private fun toggleExperienceMode() {
@@ -599,8 +583,6 @@ class MainActivity : Activity() {
     private fun resetGlassInteraction() {
         resetGlassDwell()
         headGestureRecognizer.reset(lastHeadPose)
-        contentCenterPose = null
-        lookAwayStartedAtMs = 0L
     }
 
     private fun worldGuideText(): String = if (experienceMode == ExperienceMode.GLASS_DEMO) {
@@ -610,7 +592,7 @@ class MainActivity : Activity() {
     }
 
     private fun glassContentGuideText() =
-        "GLASS · 빠른 좌우 왕복: 기록 이동 · 고개를 멀리 돌려 나가기"
+        "GLASS · 3DoF 정면 스크린 · 빠른 좌우 왕복: 기록 이동"
 
     private fun lastKnownLocation(): Location? {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -789,8 +771,6 @@ class MainActivity : Activity() {
     companion object {
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
-        private const val GLASS_LOOK_AWAY_MS = 1_500L
-        private const val GLASS_LOOK_AWAY_DEGREES = 38f
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
         private const val DEMO_VIDEO_URL =
