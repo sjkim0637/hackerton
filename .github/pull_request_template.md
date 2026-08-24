@@ -10,6 +10,10 @@ GitHub ID:
 
 `agent/<github-id>/<task>`
 
+## Project Path
+
+`experiments/<github-id>/<task>/` 또는 `해당 없음`
+
 ## Workstream
 
 관련 문서 경로를 적어 주세요.

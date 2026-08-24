@@ -17,9 +17,13 @@ Workstream은 하나의 독립적인 작업 또는 탐색 방향이다. 구현�
 
 <github-id> + Agent
 
-## Branch
+## Git Branch
 
 agent/<github-id>/<task>
+
+## Project Path
+
+experiments/<github-id>/<task>/ | 해당 없음
 
 ## Status
 
@@ -82,4 +86,4 @@ YES | NO | TBD
 YYYY-MM-DD
 ```
 
-작업판은 전체 목록을 빠르게 보는 Index이고 Workstream은 상세 설명이다. 작업 종료 또는 중단 시 Status, Next, Known Issues, Relevant Commits를 실제 상태로 갱신한다.
+`agent/<github-id>/<task>`는 Git Branch 이름이고 `experiments/<github-id>/<task>/`는 실제 Repository Directory이다. 작업판은 전체 목록을 빠르게 보는 Index이고 Workstream은 상세 설명이다. 작업 종료 또는 중단 시 Status, Next, Known Issues, Relevant Commits를 실제 상태로 갱신한다.

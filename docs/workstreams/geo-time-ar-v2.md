@@ -8,7 +8,7 @@ Geo-Time AR Platform Core Prototype
 
 goguma-salad + Codex
 
-## Branch
+## Git Branch
 
 `agent/goguma-salad/geo-time-ar-v2`
 
