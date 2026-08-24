@@ -23,6 +23,7 @@
 - [ ] 실제 Glass Runtime에서는 기기 특성에 따라 Glass 화면 자동 진입
 - [ ] 전체 화면 Flow와 Navigation 확정
 - [x] 화면별 Cyberpunk UI 지시서와 이미지 생성 Prompt 작성
+- [x] Native UI에 사용할 Cyberpunk 이미지 Asset 생성 Prompt 작성
 - [ ] 전달받은 디자인 Asset을 Android UI에 반영
 - [ ] Loading, Empty, Offline, Permission 거절, Server 오류 화면 디자인
 

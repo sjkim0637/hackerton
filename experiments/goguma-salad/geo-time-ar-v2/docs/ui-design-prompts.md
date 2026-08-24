@@ -1,6 +1,6 @@
 # Geo-Time AR 사이버펑크 UI 디자인 지시서
 
-이 문서는 Dreamina 같은 이미지 생성 도구로 Geo-Time AR의 화면 시안을 만들 때 사용하는 복사·붙여넣기용 Prompt 모음이다. 생성된 이미지는 그대로 앱에 넣는 최종 Asset이 아니라 Android UI를 구현하기 위한 디자인 원본으로 사용한다.
+이 문서는 Dreamina 같은 이미지 생성 도구로 Geo-Time AR의 **전체 화면 참고 시안**을 만들 때 사용하는 Prompt 모음이다. 실제 UI에 넣을 투명 이미지 조각은 [`UI용 이미지 Asset 생성 지시서`](ui-image-asset-prompts.md)를 사용한다.
 
 ## 1. 디자인 방향
 
@@ -222,7 +222,7 @@ AR Glass에서 6DoF 공간에 고정된 small video preview. 현실 위 POI 위�
 AR Glass에서 재생 승인 후 사용자의 시야 정면에 안정적으로 따라오는 3DoF cinema screen. 현실 배경은 어둡게 하지 않고 영상 주변만 subtle vignette. 화면은 시야를 전부 덮지 않으며 고개가 움직여도 정면의 편안한 거리와 크기를 유지하는 느낌. 날짜는 시작 순간에만 작은 amber label로 나타난다. 빠른 좌우 고개 왕복으로 이전/다음 기록 이동을 암시하는 최소한의 edge echo. 물리 button, touch slider, 검은 전체 화면 없음.
 ```
 
-## 5. 먼저 만들어 받을 1차 묶음
+## 5. 전체 화면 시안이 별도로 필요할 때의 1차 묶음
 
 전체를 한 번에 만들면 화면마다 Style이 달라질 가능성이 크다. 다음 6개를 먼저 같은 Seed·Style Reference로 생성한다.
 
@@ -255,4 +255,3 @@ AR Glass에서 재생 승인 후 사용자의 시야 정면에 안정적으로 �
 - Cyberpunk 분위기가 있어도 일반인이 버튼과 상태를 바로 이해할 수 있는가?
 - Organic Moment와 광고 Campaign을 오해하지 않게 구분했는가?
 - 작은 글자와 낮은 대비를 사용하지 않았는가?
-

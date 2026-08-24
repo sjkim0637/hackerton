@@ -122,6 +122,7 @@ Repository Root를 연 상태에서 `터미널 → 작업 실행`을 선택하�
 - [기존 설계 결정](docs/decisions.md)
 - [제품 TODO](docs/product-backlog.md)
 - [사이버펑크 UI 디자인 지시서와 생성 Prompt](docs/ui-design-prompts.md)
+- [사이버펑크 UI용 이미지 Asset 생성 Prompt](docs/ui-image-asset-prompts.md)
 
 ## 현재 제약
 
