@@ -110,22 +110,27 @@ Workstream과 작업판은 다음 값만 사용한다.
 
 나중에 필요한 변경만 선택할 수 있도록 하나의 논리적인 목적을 한 Commit에 담는다.
 
+Commit 설명은 비개발자도 변경 목적을 이해할 수 있도록 기본적으로 한글로 작성한다. 자동 분류와 검색을 위해 `type`과 선택적인 `scope`는 영문 표준 표기를 유지한다.
+
 권장 형식:
 
 ```text
-<type>(선택적 범위): 명확한 변경 내용
+<type>(선택적 scope): 명확한 한글 변경 내용
 ```
 
 예:
 
 ```text
-docs: register AR view workstream
-feat(api): add moment retrieval endpoint
-fix(auth): handle expired token
-refactor(core): isolate timeline service
+docs: AR 화면 Workstream 등록
+feat(api): Moment 조회 Endpoint 추가
+fix(auth): 만료된 Token 처리
+refactor(core): Timeline Service 분리
+chore: 프로젝트 협업 하네스 초기화
 ```
 
-`update`, `수정`, `final2`처럼 목적을 알 수 없는 메시지는 사용하지 않는다. 관련 없는 변경을 한 Commit에 섞지 않는다.
+기본 type은 `feat`, `fix`, `docs`, `refactor`, `test`, `chore`를 사용한다. 코드 Identifier, API Name, Library Name처럼 원문 유지가 필요한 표현은 영문을 사용할 수 있다. `update`, `수정`, `final2`처럼 목적을 알 수 없는 메시지는 사용하지 않는다. 관련 없는 변경을 한 Commit에 섞지 않는다.
+
+이미 원격에 Push된 기존 Commit Message는 협업 이력을 보호하기 위해 다시 작성하지 않는다. 규칙 변경 이후 생성하는 Commit부터 한글 설명을 적용한다.
 
 ## 9. 통합 원칙
 
