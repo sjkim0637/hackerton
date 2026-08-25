@@ -144,8 +144,8 @@ class FlightHudView(context: Context) : View(context) {
             drawRollTick(canvas, centerX, centerY, radius, angle, highlighted = false)
         }
         if (showRollExitCue) {
-            drawRollTick(canvas, centerX, centerY, radius, -8f, highlighted = true)
-            drawRollTick(canvas, centerX, centerY, radius, 8f, highlighted = true)
+            drawRollTick(canvas, centerX, centerY, radius, -15f, highlighted = true)
+            drawRollTick(canvas, centerX, centerY, radius, 15f, highlighted = true)
         }
 
         drawFixedAircraftSymbol(canvas, centerX, centerY)
@@ -161,7 +161,7 @@ class FlightHudView(context: Context) : View(context) {
         if (showRollExitCue) {
             textPaint.color = amber
             textPaint.textSize = sp(8.5f)
-            canvas.drawText("ROLL ±8° EXIT", centerX, centerY + radius + dp(28f), textPaint)
+            canvas.drawText("ROLL ±15° EXIT", centerX, centerY + radius + dp(28f), textPaint)
         }
     }
 

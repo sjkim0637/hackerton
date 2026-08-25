@@ -843,7 +843,7 @@ class MainActivity : Activity() {
     }
 
     private fun glassContentGuideText() =
-        "GLASS · 빠른 좌우 왕복: 기록 이동 · 좌우 Roll 8°: AR 복귀"
+        "GLASS · 빠른 좌우 왕복: 기록 이동 · 좌우 Roll 15°: AR 복귀"
 
     private fun lastKnownLocation(): Location? {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -1466,7 +1466,7 @@ class MainActivity : Activity() {
         private const val VIEWER_PERMISSION_REQUEST = 10
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
-        private const val GLASS_EXIT_ROLL_DEGREES = 8f
+        private const val GLASS_EXIT_ROLL_DEGREES = 15f
         private const val DEMO_ZONE_LATITUDE = 37.5648801960179
         private const val DEMO_ZONE_LONGITUDE = 126.991228638001
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
