@@ -14,8 +14,6 @@ import android.location.GnssMeasurementsEvent
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -53,6 +51,7 @@ import com.geotime.ar.ui.FlightHudView
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Session
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -117,7 +116,7 @@ class MainActivity : Activity() {
     private var arSession: Session? = null
     private var viewerSurfaceResumed = false
     private var installRequested = false
-    private var demoPreviewEnabled = false
+    private var demoPreviewEnabled = true
     private var appScreen = AppScreen.START
     private var experienceMode = ExperienceMode.PHONE
     private var experienceState = ExperienceState.WORLD_SCAN
@@ -127,6 +126,7 @@ class MainActivity : Activity() {
     private var touchStartY = 0f
     private val headGestureRecognizer = HeadGestureRecognizer()
     private var lastHeadPose: HeadPose? = null
+    private var hudRollBaselineDegrees: Float? = null
     private var glassContentBaselinePose: HeadPose? = null
     private var glassFocusedMarkerId: String? = null
     private var glassFocusStartedAtMs = 0L
@@ -320,6 +320,10 @@ class MainActivity : Activity() {
             "현재 장소의 시간을 찾는 중",
             "GPS와 공간 정보를 안전하게 확인하고 있습니다.",
         )
+        if (demoPreviewEnabled) {
+            activateLocalDemo()
+            return
+        }
         val location = lastKnownLocation()
         if (location == null) {
             zoneLabel.text = "저장된 위치 기록이 없습니다"
@@ -371,9 +375,7 @@ class MainActivity : Activity() {
                         }
                     }
                 }.onFailure {
-                    zoneLabel.text = "Backend 연결 실패: ${it.message}"
-                    clearMomentStacks()
-                    showConnectionFailure(it)
+                    activateLocalDemo(it)
                 }
             }
         }
@@ -406,13 +408,36 @@ class MainActivity : Activity() {
                         showCoach(worldGuideText())
                     }
                 }.onFailure {
-                    clearMomentStacks()
-                    markerHint.text = "시간 기록 조회 실패: ${it.message}"
-                    markerHint.visibility = View.VISIBLE
-                    showConnectionFailure(it)
+                    activateLocalDemo(it)
                 }
             }
         }
+    }
+
+    private fun activateLocalDemo(error: Throwable? = null) {
+        val moments = listOf(
+            TimelineMoment(
+                id = "local-demo-2024",
+                title = "을지로의 여름",
+                recordedAt = Instant.parse("2024-08-25T06:00:00Z"),
+                poiId = "tower-107-demo",
+            ),
+            TimelineMoment(
+                id = "local-demo-2020",
+                title = "타워 107의 기억",
+                recordedAt = Instant.parse("2020-08-25T06:00:00Z"),
+                poiId = "tower-107-demo",
+            ),
+        )
+        val stacks = MomentStack.group(moments)
+        stacksByMarkerId.clear()
+        stacks.associateByTo(stacksByMarkerId, MomentStack::id)
+        arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
+        zoneLabel.text = "현재 장소: 을지로 타워 107 · Local Demo"
+        markerHint.visibility = View.GONE
+        hideViewerState()
+        showCoach("DEMO · Server 연결 없이 로컬 시간 기록을 표시합니다")
+        trackingLabel.text = error?.let { "Local Demo · ${it.javaClass.simpleName}" } ?: "Local Demo 준비 완료"
     }
 
     private fun clearMomentStacks() {
@@ -663,11 +688,14 @@ class MainActivity : Activity() {
         val baseline = glassContentBaselinePose
         val isGlassFullscreen = experienceMode == ExperienceMode.GLASS_DEMO &&
             experienceState == ExperienceState.FULLSCREEN && baseline != null
+        val rollBaseline = hudRollBaselineDegrees ?: pose.rollDegrees.also {
+            hudRollBaselineDegrees = it
+        }
         runOnUiThread {
             flightHud.setPose(
                 heading = pose.yawDegrees,
                 pitch = pose.pitchDegrees,
-                roll = pose.rollDegrees,
+                roll = HeadGestureRecognizer.angleDelta(rollBaseline, pose.rollDegrees),
                 exitBaselinePitch = if (isGlassFullscreen) baseline?.pitchDegrees else null,
             )
             flightHud.visibility = View.VISIBLE
@@ -830,7 +858,10 @@ class MainActivity : Activity() {
             onTrackingUpdate = { status ->
                 runOnUiThread {
                     trackingLabel.text = status
-                    if (!status.startsWith("6DoF")) resetGlassDwell()
+                    if (!status.startsWith("6DoF")) {
+                        resetGlassDwell()
+                        hudRollBaselineDegrees = null
+                    }
                 }
             }
             onSpatialFrame = { markerId, pose, timestampMs ->
@@ -1038,6 +1069,7 @@ class MainActivity : Activity() {
         appScreen = AppScreen.VIEWER
         experienceMode = mode
         experienceState = ExperienceState.WORLD_SCAN
+        hudRollBaselineDegrees = null
         startScreen.visibility = View.GONE
         creatorScreen.visibility = View.GONE
         viewerRoot.visibility = View.VISIBLE
@@ -1126,27 +1158,6 @@ class MainActivity : Activity() {
 
     private fun hideViewerState() {
         viewerStatePanel.visibility = View.GONE
-    }
-
-    private fun showConnectionFailure(error: Throwable) {
-        val online = isNetworkAvailable()
-        showViewerState(
-            if (online) ViewerUiState.SERVER_ERROR else ViewerUiState.OFFLINE,
-            if (online) "Server에 연결할 수 없습니다" else "Network 연결이 끊어졌습니다",
-            if (online) {
-                error.message ?: "API Server 상태와 주소를 확인해 주세요."
-            } else {
-                "Moment는 안전하게 유지됩니다. Network 연결 후 다시 시도해 주세요."
-            },
-            "다시 시도",
-        ) { loadZoneAndMoments() }
-    }
-
-    private fun isNetworkAvailable(): Boolean {
-        val manager = getSystemService(ConnectivityManager::class.java)
-        val network = manager.activeNetwork ?: return false
-        val capabilities = manager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     private fun openAppSettings() {
