@@ -19,7 +19,7 @@ for ($attempt = 1; $attempt -le 30; $attempt++) {
 }
 Assert-True ($health.status -eq 'ready') 'Backend readiness failed'
 
-$nearby = (Invoke-WebRequest "$baseUrl/geozones/nearby?latitude=37.5665&longitude=126.9780&radius_m=1000" -UseBasicParsing).Content | ConvertFrom-Json
+$nearby = (Invoke-WebRequest "$baseUrl/geozones/nearby?latitude=37.5648801960179&longitude=126.991228638001&radius_m=1000" -UseBasicParsing).Content | ConvertFrom-Json
 Assert-True ($nearby.Count -ge 1) 'No nearby GeoZone returned'
 Assert-True ($nearby[0].id -eq $zoneId) 'Unexpected nearest GeoZone'
 

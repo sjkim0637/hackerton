@@ -2,7 +2,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
@@ -18,6 +17,8 @@ from app.models import (
 )
 
 DEMO_ZONE_ID = uuid.UUID("00000000-0000-4000-8000-000000000101")
+DEMO_POI_ID = uuid.UUID("00000000-0000-4000-8000-000000000301")
+DEMO_POINT_WKT = "POINT(126.991228638001 37.5648801960179)"
 DEMO_USER_IDS = [
     uuid.UUID("00000000-0000-4000-8000-000000000201"),
     uuid.UUID("00000000-0000-4000-8000-000000000202"),
@@ -25,11 +26,25 @@ DEMO_USER_IDS = [
 ]
 
 
+def demo_location() -> WKTElement:
+    return WKTElement(DEMO_POINT_WKT, srid=4326)
+
+
 def seed() -> None:
     settings = get_settings()
     with SessionLocal() as db:
-        if db.scalar(select(GeoZone.id).where(GeoZone.id == DEMO_ZONE_ID)):
-            print("Seed data already exists")
+        existing_zone = db.get(GeoZone, DEMO_ZONE_ID)
+        if existing_zone is not None:
+            existing_zone.name = "을지로 타워 107"
+            existing_zone.description = "Geo-Time AR development zone at Tower 107, Euljiro"
+            existing_zone.center_point = demo_location()
+            existing_poi = db.get(POI, DEMO_POI_ID)
+            if existing_poi is not None:
+                existing_poi.name = "타워 107"
+                existing_poi.poi_type = "office"
+                existing_poi.location = demo_location()
+            db.commit()
+            print("Existing demo zone updated")
             return
 
         users = [
@@ -38,17 +53,17 @@ def seed() -> None:
         ]
         zone = GeoZone(
             id=DEMO_ZONE_ID,
-            name="Seoul Demo Zone",
-            description="Geo-Time AR development zone near Seoul City Hall",
-            center_point=WKTElement("POINT(126.9780 37.5665)", srid=4326),
+            name="을지로 타워 107",
+            description="Geo-Time AR development zone at Tower 107, Euljiro",
+            center_point=demo_location(),
             radius_m=500.0,
         )
         poi = POI(
-            id=uuid.UUID("00000000-0000-4000-8000-000000000301"),
+            id=DEMO_POI_ID,
             geo_zone_id=zone.id,
-            name="Demo Plaza",
-            poi_type="plaza",
-            location=WKTElement("POINT(126.9780 37.5665)", srid=4326),
+            name="타워 107",
+            poi_type="office",
+            location=demo_location(),
             metadata_={"coordinate_frame": "zone_local_ar_x_east_y_up_minus_z_north"},
         )
         db.add_all([*users, zone, poi])

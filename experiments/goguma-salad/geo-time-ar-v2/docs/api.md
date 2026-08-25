@@ -10,7 +10,7 @@ OpenAPI UI는 `http://localhost:8000/docs`에서 확인한다.
 ## GeoZone
 
 ```http
-GET /geozones/nearby?latitude=37.5665&longitude=126.9780&radius_m=1000&limit=20
+GET /geozones/nearby?latitude=37.5648801960179&longitude=126.991228638001&radius_m=1000&limit=20
 ```
 
 위·경도 범위와 최대 반경 50km를 검증하고 거리순으로 반환한다.
