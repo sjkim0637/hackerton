@@ -5,6 +5,7 @@ import kotlin.math.abs
 data class HeadPose(
     val yawDegrees: Float,
     val pitchDegrees: Float,
+    val rollDegrees: Float = 0f,
 )
 
 enum class HeadMotionAxis {

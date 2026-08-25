@@ -98,6 +98,8 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val pose = camera.pose
             val translation = pose.translation
             val zAxis = pose.zAxis
+            val xAxis = pose.xAxis
+            val yAxis = pose.yAxis
             val forward = Vector3(-zAxis[0], -zAxis[1], -zAxis[2])
             val visible = SpatialVisibilitySelector.select(
                 cameraPosition = Vector3(translation[0], translation[1], translation[2]),
@@ -116,6 +118,9 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
                         ).toFloat(),
                         pitchDegrees = Math.toDegrees(
                             asin(forward.y.coerceIn(-1f, 1f).toDouble())
+                        ).toFloat(),
+                        rollDegrees = Math.toDegrees(
+                            atan2(xAxis[1].toDouble(), yAxis[1].toDouble())
                         ).toFloat(),
                     ),
                     nowMs,

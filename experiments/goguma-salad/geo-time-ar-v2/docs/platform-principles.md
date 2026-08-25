@@ -57,7 +57,7 @@ Glass 데모의 현재 입력 기준은 다음과 같다.
 - 미리보기 5초 뒤 Pitch 왕복은 재생 승인, Yaw 왕복은 취소로 해석한다.
 - 전체 감상 중 빠른 Yaw 왕복은 같은 POI의 이전·다음 Moment 이동으로 해석한다.
 - 전체 감상 중 재생 시작 자세에서 Pitch가 상하 어느 방향이든 15도에 도달하면 즉시 AR 탐색으로 복귀한다.
-- Phone·Glass HUD는 상단의 현재 시선 방향 Compass Tape와 작은 Pitch 눈금을 낮은 투명도로 공통 표시한다. Glass 전체 감상에서는 재생 시작 자세 기준 상대 Pitch와 15도 종료선을 표시한다.
+- Phone·Glass HUD는 화면 폭을 활용한 고대비 Compass Tape와 조준 영역을 비우는 좌하단 Artificial Horizon을 공통 표시한다. Artificial Horizon의 지평선·Pitch 눈금은 현재 Pitch에 따라 이동하고 Roll에 따라 회전하며, Glass 전체 감상에서는 재생 시작 자세 기준 상하 15도 종료선을 함께 표시한다.
 - 재생 승인 시 6DoF 공간 고정 Preview를 시야 정면의 3DoF형 Screen으로 전환한다.
 - 고개를 멀리 돌리는 정상적인 공간 탐색 행동을 종료 명령으로 사용하지 않는다.
 - 현재 Demo는 15도 Pitch 기울임 또는 영상 종료 시 AR로 복귀한다. 실제 제품에서는 Target Hardware의 Pose와 입력 특성에 맞춰 임곗값을 다시 검증한다.

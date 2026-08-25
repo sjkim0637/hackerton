@@ -110,7 +110,7 @@ TBD
 - Phone·Glass 영상 종료 후 AR Marker 복귀와 Preview Frame 제거 후 Android Unit Test 11개와 `assembleDebug`: 통과
 - Demo Zone을 을지로 타워 107로 이전한 뒤 Ruff, Backend Pytest 15개와 Docker Smoke Test: 통과
 - Glass 전체 재생의 상하 15도 AR 복귀 처리 후 Android Unit Test 12개와 `assembleDebug`: 통과
-- Phone·Glass 공통 Compass Tape·Pitch Cockpit HUD 적용 후 Android Unit Test 12개와 `assembleDebug`: 통과
+- Phone·Glass 공통 대형 Compass Tape와 좌하단 Pitch·Roll 연동 Artificial Horizon HUD 적용 후 Android Unit Test 12개, `assembleDebug`, 실기기 배치 확인: 통과
 
 ## Known Issues
 
