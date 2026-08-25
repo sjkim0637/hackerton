@@ -22,6 +22,7 @@
 - [x] Phone·Glass 영상 자연 종료 후 AR Marker 화면 자동 복귀
 - [x] 조준을 방해하는 Preview Frame 장식 제거
 - [x] Glass 전체 재생 중 상하 15도 기울임으로 AR 복귀
+- [x] Phone·Glass 공통 상단 Compass Tape와 Pitch Cockpit HUD
 
 ## P0 — 화면 구조와 디자인
 

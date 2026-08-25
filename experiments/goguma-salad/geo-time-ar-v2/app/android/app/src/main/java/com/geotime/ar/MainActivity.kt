@@ -54,7 +54,9 @@ import com.google.ar.core.Config
 import com.google.ar.core.Session
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private enum class ExperienceState {
     WORLD_SCAN,
@@ -99,6 +101,8 @@ class MainActivity : Activity() {
     private lateinit var promptButtonRow: LinearLayout
     private lateinit var playbackDate: TextView
     private lateinit var playbackHint: TextView
+    private lateinit var compassIndicator: TextView
+    private lateinit var pitchIndicator: TextView
     private lateinit var viewerStatePanel: LinearLayout
     private lateinit var viewerStateImage: ImageView
     private lateinit var viewerStateTitle: TextView
@@ -604,6 +608,7 @@ class MainActivity : Activity() {
 
     private fun processGlassFrame(markerId: String?, pose: HeadPose, timestampMs: Long) {
         lastHeadPose = pose
+        updateViewerHud(pose)
         if (experienceMode != ExperienceMode.GLASS_DEMO) return
         when (experienceState) {
             ExperienceState.WORLD_SCAN -> processGlassDwell(markerId, timestampMs)
@@ -656,6 +661,46 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun updateViewerHud(pose: HeadPose) {
+        val heading = ((pose.yawDegrees.roundToInt() % 360) + 360) % 360
+        val tapeCenter = (((heading / 15f).roundToInt() * 15) % 360 + 360) % 360
+        val compassText = (-30..30 step 15).joinToString("   ") { offset ->
+            headingLabel(tapeCenter + offset)
+        } + "\n▲ ${String.format(Locale.US, "%03d°", heading)}"
+        val baseline = glassContentBaselinePose
+        val isGlassFullscreen = experienceMode == ExperienceMode.GLASS_DEMO &&
+            experienceState == ExperienceState.FULLSCREEN && baseline != null
+        val displayedPitch = if (isGlassFullscreen) {
+            pose.pitchDegrees - baseline.pitchDegrees
+        } else {
+            pose.pitchDegrees
+        }
+        runOnUiThread {
+            compassIndicator.text = compassText
+            compassIndicator.visibility = View.VISIBLE
+            pitchIndicator.text = pitchLadderText(displayedPitch, showExitCue = isGlassFullscreen)
+            pitchIndicator.visibility = View.VISIBLE
+        }
+    }
+
+    private fun headingLabel(degrees: Int): String = when (((degrees % 360) + 360) % 360) {
+        0 -> "N"
+        90 -> "E"
+        180 -> "S"
+        270 -> "W"
+        else -> String.format(Locale.US, "%03d", ((degrees % 360) + 360) % 360)
+    }
+
+    private fun pitchLadderText(pitch: Float, showExitCue: Boolean): String {
+        val current = String.format(Locale.US, "%+.1f°", pitch)
+        val exitCue = if (showExitCue) " EXIT" else ""
+        return "+15  ───$exitCue\n" +
+            "+10  ──\n" +
+            "  0  ━ $current\n" +
+            "-10  ──\n" +
+            "-15  ───$exitCue"
+    }
+
     private fun toggleExperienceMode() {
         if (experienceState != ExperienceState.WORLD_SCAN) exitContent()
         experienceMode = if (experienceMode == ExperienceMode.PHONE) {
@@ -663,6 +708,8 @@ class MainActivity : Activity() {
         } else {
             ExperienceMode.PHONE
         }
+        compassIndicator.visibility = View.VISIBLE
+        pitchIndicator.visibility = View.VISIBLE
         resetGlassInteraction()
         showCoach(worldGuideText())
     }
@@ -883,6 +930,7 @@ class MainActivity : Activity() {
 
         buildPlayerOverlay()
         viewerRoot.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
+        buildViewerHud()
         root.addView(viewerRoot, FrameLayout.LayoutParams(-1, -1))
 
         startScreen = buildStartScreen()
@@ -1021,6 +1069,8 @@ class MainActivity : Activity() {
         startScreen.visibility = View.GONE
         creatorScreen.visibility = View.GONE
         viewerRoot.visibility = View.VISIBLE
+        compassIndicator.visibility = View.VISIBLE
+        pitchIndicator.visibility = View.VISIBLE
         showViewerState(
             ViewerUiState.LOADING,
             if (mode == ExperienceMode.GLASS_DEMO) "Glass Demo 준비 중" else "Phone Viewer 준비 중",
@@ -1045,6 +1095,8 @@ class MainActivity : Activity() {
         viewerRoot.visibility = View.GONE
         creatorScreen.visibility = View.GONE
         startScreen.visibility = View.VISIBLE
+        compassIndicator.visibility = View.GONE
+        pitchIndicator.visibility = View.GONE
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
     }
 
@@ -1388,6 +1440,43 @@ class MainActivity : Activity() {
         playerOverlay.addView(
             promptPanel,
             FrameLayout.LayoutParams(-2, -2, Gravity.CENTER).apply { topMargin = dp(300) },
+        )
+    }
+
+    private fun buildViewerHud() {
+        compassIndicator = TextView(this).apply {
+            text = "330   345   N   015   030\n▲ 000°"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFBEEAF2.toInt())
+            setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
+            alpha = 0.52f
+            setPadding(dp(8), dp(3), dp(8), dp(3))
+            visibility = View.GONE
+            isClickable = false
+        }
+        viewerRoot.addView(
+            compassIndicator,
+            FrameLayout.LayoutParams(dp(330), -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = dp(116)
+            },
+        )
+
+        pitchIndicator = TextView(this).apply {
+            textSize = 9f
+            gravity = Gravity.START
+            setTextColor(0xFFBEEAF2.toInt())
+            setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
+            alpha = 0.42f
+            setLineSpacing(0f, 1.05f)
+            visibility = View.GONE
+            isClickable = false
+        }
+        viewerRoot.addView(
+            pitchIndicator,
+            FrameLayout.LayoutParams(dp(110), -2, Gravity.START or Gravity.CENTER_VERTICAL).apply {
+                marginStart = dp(12)
+            },
         )
     }
 
