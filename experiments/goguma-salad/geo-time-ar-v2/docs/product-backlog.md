@@ -18,6 +18,7 @@
 - [x] Cyberpunk 시작 화면과 Phone·Glass Demo·Creator 진입 Flow
 - [x] Loading·Empty·Offline·Permission·Server 오류 상태 화면
 - [x] Viewer 화면의 개발·진단 Button을 설정으로 이동
+- [x] 시스템 뒤로가기의 Viewer·Creator·콘텐츠 단계별 내부 복귀 처리
 
 ## P0 — 화면 구조와 디자인
 

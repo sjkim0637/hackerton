@@ -106,6 +106,7 @@ TBD
 - Glass 데모 포함 최신 APK 실기기 설치 및 앱 기동 통과
 - Cyberpunk 시작 화면과 상태 UI 적용 후 Android Unit Test 11개와 `assembleDebug`: 통과
 - Viewer 개발·진단 도구의 설정 이동과 투명 PNG Asset 교체 후 Android Unit Test 11개와 `assembleDebug`: 통과
+- Android 13+ System Back Dispatcher를 포함한 화면 단계별 복귀 처리 후 Android Unit Test 11개와 `assembleDebug`: 통과
 
 ## Known Issues
 

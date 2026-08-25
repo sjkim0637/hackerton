@@ -28,6 +28,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.window.OnBackInvokedDispatcher
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -168,6 +169,11 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         clearLegacySavedLocation()
         buildUi()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            ) { handleSystemBack() }
+        }
         player = ExoPlayer.Builder(this).build().also {
             playerView.player = it
             it.repeatMode = Player.REPEAT_MODE_ONE
@@ -212,10 +218,14 @@ class MainActivity : Activity() {
 
     @Deprecated("Android 시스템 뒤로가기 호환")
     override fun onBackPressed() {
+        handleSystemBack()
+    }
+
+    private fun handleSystemBack() {
         when {
             appScreen == AppScreen.VIEWER && experienceState != ExperienceState.WORLD_SCAN -> exitContent()
             appScreen != AppScreen.START -> showStartScreen()
-            else -> super.onBackPressed()
+            else -> finishAfterTransition()
         }
     }
 
