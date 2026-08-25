@@ -3,6 +3,7 @@ package com.geotime.ar
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -13,11 +14,14 @@ import android.location.GnssMeasurementsEvent
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -26,7 +30,9 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -61,8 +67,25 @@ private enum class ExperienceMode {
     GLASS_DEMO,
 }
 
+private enum class AppScreen {
+    START,
+    VIEWER,
+    CREATOR,
+}
+
+private enum class ViewerUiState {
+    LOADING,
+    EMPTY,
+    OFFLINE,
+    PERMISSION,
+    SERVER_ERROR,
+}
+
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
+    private lateinit var viewerRoot: FrameLayout
+    private lateinit var startScreen: View
+    private lateinit var creatorScreen: View
     private lateinit var arView: GeoTimeArView
     private lateinit var zoneLabel: TextView
     private lateinit var trackingLabel: TextView
@@ -77,6 +100,13 @@ class MainActivity : Activity() {
     private lateinit var promptButtonRow: LinearLayout
     private lateinit var playbackDate: TextView
     private lateinit var playbackHint: TextView
+    private lateinit var previewFrame: ImageView
+    private lateinit var viewerStatePanel: LinearLayout
+    private lateinit var viewerStateImage: ImageView
+    private lateinit var viewerStateTitle: TextView
+    private lateinit var viewerStateMessage: TextView
+    private lateinit var viewerStateProgress: ProgressBar
+    private lateinit var viewerStateAction: Button
     private lateinit var player: ExoPlayer
 
     private val apiClient = GeoTimeApiClient(BuildConfig.API_BASE_URL)
@@ -85,8 +115,10 @@ class MainActivity : Activity() {
         .withZone(ZoneId.systemDefault())
     private val stacksByMarkerId = mutableMapOf<String, MomentStack>()
     private var arSession: Session? = null
+    private var viewerSurfaceResumed = false
     private var installRequested = false
     private var demoPreviewEnabled = false
+    private var appScreen = AppScreen.START
     private var experienceMode = ExperienceMode.PHONE
     private var experienceState = ExperienceState.WORLD_SCAN
     private var selectedStack: MomentStack? = null
@@ -157,27 +189,24 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (!hasCameraPermission()) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION), 10)
-            return
-        }
-        ensureArSession()
-        arView.onResume()
-        loadZoneAndMoments()
+        if (appScreen == AppScreen.VIEWER) resumeViewer()
     }
 
     override fun onPause() {
         stopGnssDiagnostics()
         player.pause()
-        arView.onPause()
-        arSession?.pause()
+        if (viewerSurfaceResumed) {
+            arView.onPause()
+            arSession?.pause()
+            viewerSurfaceResumed = false
+        }
         super.onPause()
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
         player.release()
-        arView.detachAllAnchors()
+        if (arSession != null) arView.detachAllAnchors()
         arSession?.close()
         apiClient.close()
         super.onDestroy()
@@ -185,10 +214,10 @@ class MainActivity : Activity() {
 
     @Deprecated("Android 시스템 뒤로가기 호환")
     override fun onBackPressed() {
-        if (experienceState != ExperienceState.WORLD_SCAN) {
-            exitContent()
-        } else {
-            super.onBackPressed()
+        when {
+            appScreen == AppScreen.VIEWER && experienceState != ExperienceState.WORLD_SCAN -> exitContent()
+            appScreen != AppScreen.START -> showStartScreen()
+            else -> super.onBackPressed()
         }
     }
 
@@ -198,11 +227,42 @@ class MainActivity : Activity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 10 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            onResume()
+        if (requestCode != VIEWER_PERMISSION_REQUEST) return
+        if (hasViewerPermissions()) {
+            resumeViewer()
         } else {
-            trackingLabel.text = "카메라 권한이 필요합니다"
+            showViewerState(
+                ViewerUiState.PERMISSION,
+                "Camera와 위치 권한이 필요합니다",
+                "현실 공간의 Moment를 찾고 표시하려면 Camera와 정밀 위치 권한을 허용해 주세요.",
+                "앱 설정 열기",
+            ) { openAppSettings() }
         }
+    }
+
+    private fun resumeViewer() {
+        if (!hasViewerPermissions()) {
+            showViewerState(
+                ViewerUiState.PERMISSION,
+                "공간 접근 권한을 확인해 주세요",
+                "Geo-Time AR은 Camera 영상 위에 현재 장소의 시간 기록을 배치합니다.",
+                "권한 허용",
+            ) { requestViewerPermissions() }
+            return
+        }
+        ensureArSession()
+        if (!viewerSurfaceResumed) {
+            arView.onResume()
+            viewerSurfaceResumed = true
+        }
+        loadZoneAndMoments()
+    }
+
+    private fun requestViewerPermissions() {
+        requestPermissions(
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION),
+            VIEWER_PERMISSION_REQUEST,
+        )
     }
 
     private fun ensureArSession() {
@@ -215,6 +275,11 @@ class MainActivity : Activity() {
                 ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
                     installRequested = true
                     trackingLabel.text = "Google Play Services for AR 설치 중"
+                    showViewerState(
+                        ViewerUiState.LOADING,
+                        "AR 환경을 준비하고 있습니다",
+                        "Google Play Services for AR 설치가 끝나면 자동으로 계속됩니다.",
+                    )
                     return
                 }
                 ArCoreApk.InstallStatus.INSTALLED -> Unit
@@ -231,10 +296,21 @@ class MainActivity : Activity() {
             arView.attachSession(session)
         } catch (error: Exception) {
             trackingLabel.text = "ARCore 시작 실패: ${error.message}"
+            showViewerState(
+                ViewerUiState.SERVER_ERROR,
+                "AR을 시작하지 못했습니다",
+                error.message ?: "기기의 ARCore 지원 상태를 확인해 주세요.",
+                "다시 시도",
+            ) { resumeViewer() }
         }
     }
 
     private fun loadZoneAndMoments() {
+        showViewerState(
+            ViewerUiState.LOADING,
+            "현재 장소의 시간을 찾는 중",
+            "GPS와 공간 정보를 안전하게 확인하고 있습니다.",
+        )
         val location = lastKnownLocation()
         if (location == null) {
             zoneLabel.text = "저장된 위치 기록이 없습니다"
@@ -242,6 +318,12 @@ class MainActivity : Activity() {
             markerHint.text = "위치 권한을 허용하고 GPS를 켠 뒤 다시 시도하세요"
             markerHint.visibility = View.VISIBLE
             coachHint.visibility = View.GONE
+            showViewerState(
+                ViewerUiState.PERMISSION,
+                "현재 위치를 확인할 수 없습니다",
+                "GPS를 켜고 잠시 이동한 뒤 다시 시도해 주세요. 임의 좌표는 사용하지 않습니다.",
+                "다시 확인",
+            ) { loadZoneAndMoments() }
             return
         }
         zoneLabel.text = "Android 최근 GPS 기록 기준 GeoZone 조회 중…"
@@ -251,6 +333,12 @@ class MainActivity : Activity() {
                     if (zone == null) {
                         zoneLabel.text = "주변 GeoZone 없음"
                         clearMomentStacks()
+                        showViewerState(
+                            ViewerUiState.EMPTY,
+                            "주변에 열린 시간 기록이 없습니다",
+                            "다른 장소로 이동하거나 Demo 미리보기를 켜서 흐름을 확인해 보세요.",
+                            "다시 조회",
+                        ) { loadZoneAndMoments() }
                     } else {
                         val isInside = zone.distanceM <= zone.radiusM
                         zoneLabel.text = if (isInside) {
@@ -265,11 +353,18 @@ class MainActivity : Activity() {
                             markerHint.text = "현재 장소에 가까이 가면 시간 기록이 나타납니다"
                             markerHint.visibility = View.VISIBLE
                             coachHint.visibility = View.GONE
+                            showViewerState(
+                                ViewerUiState.EMPTY,
+                                "GeoZone에 조금 더 가까이 가세요",
+                                "${zone.name}까지 ${zone.distanceM.toInt()}m 남았습니다.",
+                                "다시 조회",
+                            ) { loadZoneAndMoments() }
                         }
                     }
                 }.onFailure {
                     zoneLabel.text = "Backend 연결 실패: ${it.message}"
                     clearMomentStacks()
+                    showConnectionFailure(it)
                 }
             }
         }
@@ -290,14 +385,22 @@ class MainActivity : Activity() {
                         markerHint.text = "이 장소에는 아직 시간 기록이 없습니다"
                         markerHint.visibility = View.VISIBLE
                         coachHint.visibility = View.GONE
+                        showViewerState(
+                            ViewerUiState.EMPTY,
+                            "아직 남겨진 Moment가 없습니다",
+                            "이 공간의 첫 번째 시간 기록은 Creator에서 만들 수 있습니다.",
+                            "Creator 열기",
+                        ) { showCreatorScreen() }
                     } else {
                         markerHint.visibility = View.GONE
+                        hideViewerState()
                         showCoach(worldGuideText())
                     }
                 }.onFailure {
                     clearMomentStacks()
                     markerHint.text = "시간 기록 조회 실패: ${it.message}"
                     markerHint.visibility = View.VISIBLE
+                    showConnectionFailure(it)
                 }
             }
         }
@@ -360,6 +463,15 @@ class MainActivity : Activity() {
             marginStart = dp(18)
             marginEnd = dp(18)
         }
+        previewFrame.visibility = View.VISIBLE
+        previewFrame.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(276),
+            Gravity.CENTER,
+        ).apply {
+            marginStart = dp(8)
+            marginEnd = dp(8)
+        }
         playMoment(stack.momentAt(selectedMomentIndex), muted = true, restart = true)
         mainHandler.removeCallbacks(finishPreview)
         mainHandler.postDelayed(finishPreview, PREVIEW_DURATION_MS)
@@ -388,6 +500,7 @@ class MainActivity : Activity() {
         promptPanel.visibility = View.GONE
         playerOverlay.setBackgroundColor(0x80111827.toInt())
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
+        previewFrame.visibility = View.GONE
         playerView.useController = false
         player.repeatMode = Player.REPEAT_MODE_OFF
         window.decorView.systemUiVisibility = (
@@ -482,6 +595,7 @@ class MainActivity : Activity() {
         playbackDate.removeCallbacks(hidePlaybackDate)
         player.stop()
         playerOverlay.visibility = View.GONE
+        previewFrame.visibility = View.GONE
         playbackHint.alpha = 1f
         selectedStack = null
         selectedMomentIndex = 0
@@ -670,8 +784,11 @@ class MainActivity : Activity() {
             }
             setOnTouchListener { _, event -> handleWorldTouch(event) }
         }
-        zoneLabel = overlayText("현재 장소 확인 중")
-        trackingLabel = overlayText("ARCore 준비 중")
+        zoneLabel = overlayText("현재 장소 확인 중").apply {
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(COLOR_CYAN)
+        }
+        trackingLabel = overlayText("ARCore 준비 중").apply { textSize = 12f }
         markerHint = overlayText("시간 기록을 불러오는 중…").apply {
             gravity = Gravity.CENTER
             textSize = 14f
@@ -686,17 +803,30 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
 
-        root = FrameLayout(this)
-        root.addView(arView, FrameLayout.LayoutParams(-1, -1))
+        root = FrameLayout(this).apply { setBackgroundColor(COLOR_BACKGROUND) }
+        viewerRoot = FrameLayout(this).apply {
+            visibility = View.GONE
+            addView(arView, FrameLayout.LayoutParams(-1, -1))
+        }
 
         val top = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(14), dp(16), dp(12))
-            setBackgroundColor(0x73111827)
-            addView(zoneLabel)
-            addView(trackingLabel)
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(12), dp(16), dp(12))
+            background = glassBackground(COLOR_SURFACE, COLOR_CYAN)
+            addView(compactButton("‹ 홈") { showStartScreen() })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(8), 0, 0, 0)
+                addView(zoneLabel)
+                addView(trackingLabel)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
         }
-        root.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        viewerRoot.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
+            marginStart = dp(10)
+            marginEnd = dp(10)
+            topMargin = dp(10)
+        })
 
         demoButton = actionButton("Demo 미리보기 켜기") {
             demoPreviewEnabled = !demoPreviewEnabled
@@ -725,11 +855,346 @@ class MainActivity : Activity() {
                 addView(settingsButton)
             })
         }
-        root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        viewerRoot.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+
+        buildViewerStatePanel()
+        viewerRoot.addView(
+            viewerStatePanel,
+            FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).apply {
+                marginStart = dp(28)
+                marginEnd = dp(28)
+            },
+        )
 
         buildPlayerOverlay()
-        root.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
+        viewerRoot.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
+        root.addView(viewerRoot, FrameLayout.LayoutParams(-1, -1))
+
+        startScreen = buildStartScreen()
+        creatorScreen = buildCreatorScreen().apply { visibility = View.GONE }
+        root.addView(startScreen, FrameLayout.LayoutParams(-1, -1))
+        root.addView(creatorScreen, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
+    }
+
+    private fun buildStartScreen(): View = FrameLayout(this).apply {
+        addView(ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.start_background)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = null
+        }, FrameLayout.LayoutParams(-1, -1))
+        addView(View(this@MainActivity).apply { setBackgroundColor(0x42000000) }, FrameLayout.LayoutParams(-1, -1))
+
+        val content = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(48), dp(22), dp(32))
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.brand_app_icon_master)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = "Geo-Time AR"
+            }, LinearLayout.LayoutParams(dp(72), dp(72)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+            addView(titleText("GEO · TIME · AR", 29f).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(14), 0, 0)
+            })
+            addView(bodyText("현재 공간에 남아 있는 과거의 신호를 복원합니다.").apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(12), dp(8), dp(12), dp(20))
+            })
+            addView(modeCard(
+                R.drawable.mode_phone_viewer,
+                "PHONE VIEWER",
+                "Camera로 주변 Moment를 찾고 터치해 재생합니다.",
+                COLOR_CYAN,
+            ) { openViewer(ExperienceMode.PHONE) })
+            addView(modeCard(
+                R.drawable.mode_glass,
+                "GLASS DEMO",
+                "응시와 Head Gesture 흐름을 Phone에서 체험합니다.",
+                COLOR_CYAN,
+            ) { openViewer(ExperienceMode.GLASS_DEMO) })
+            addView(modeCard(
+                R.drawable.mode_creator,
+                "CREATOR",
+                "지금의 장면을 촬영하고 공간에 남기는 흐름입니다.",
+                COLOR_AMBER,
+            ) { showCreatorScreen() })
+            addView(compactButton("설정 · 연결 상태") { showSettings() }.apply {
+                setTextColor(0xFFB7C9D8.toInt())
+            }, LinearLayout.LayoutParams(-2, -2).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(10)
+            })
+        }
+        addView(ScrollView(this@MainActivity).apply {
+            isFillViewport = true
+            addView(content)
+        }, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun buildCreatorScreen(): View = FrameLayout(this).apply {
+        setBackgroundColor(COLOR_BACKGROUND)
+        addView(ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.start_background)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            alpha = 0.32f
+        }, FrameLayout.LayoutParams(-1, -1))
+        val content = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(28), dp(22), dp(30))
+            addView(compactButton("‹ 시작 화면") { showStartScreen() })
+            addView(titleText("새로운 시간을 남기세요", 27f).apply {
+                setPadding(0, dp(24), 0, dp(8))
+            })
+            addView(bodyText("영상 선택 → 공간 배치 → 업로드의 3단계로 Moment를 만듭니다."))
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.creator_record_ring)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = "Creator record ring"
+                background = glassBackground(COLOR_SURFACE, COLOR_AMBER)
+            }, LinearLayout.LayoutParams(-1, dp(230)).apply {
+                topMargin = dp(22)
+                bottomMargin = dp(18)
+            })
+            addView(cyberButton("지금 촬영", COLOR_AMBER) { showCreatorPendingMessage() })
+            addView(cyberButton("갤러리에서 선택", COLOR_CYAN) { showCreatorPendingMessage() })
+            addView(bodyText("01  영상 선택    →    02  공간 배치    →    03  업로드").apply {
+                gravity = Gravity.CENTER
+                setTextColor(0xFFB8C7D4.toInt())
+                setPadding(0, dp(20), 0, 0)
+            })
+            addView(bodyText("화면 구조는 준비되었습니다. 촬영·Gallery·Upload 기능은 Product Backlog의 P1 Creator Mode에서 연결합니다.").apply {
+                textSize = 12f
+                setTextColor(0xFF8598A8.toInt())
+                gravity = Gravity.CENTER
+                setPadding(dp(16), dp(14), dp(16), 0)
+            })
+        }
+        addView(ScrollView(this@MainActivity).apply { addView(content) }, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun buildViewerStatePanel() {
+        viewerStateImage = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = null
+        }
+        viewerStateProgress = ProgressBar(this).apply { isIndeterminate = true }
+        viewerStateTitle = titleText("", 20f).apply { gravity = Gravity.CENTER }
+        viewerStateMessage = bodyText("").apply { gravity = Gravity.CENTER }
+        viewerStateAction = cyberButton("다시 시도", COLOR_CYAN) {}
+        viewerStatePanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(22), dp(22), dp(22), dp(20))
+            background = glassBackground(0xF2050811.toInt(), COLOR_CYAN)
+            addView(viewerStateImage, LinearLayout.LayoutParams(dp(132), dp(112)))
+            addView(viewerStateProgress, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                topMargin = dp(4)
+                bottomMargin = dp(12)
+            })
+            addView(viewerStateTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(viewerStateMessage, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(viewerStateAction, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+            visibility = View.GONE
+        }
+    }
+
+    private fun openViewer(mode: ExperienceMode) {
+        appScreen = AppScreen.VIEWER
+        experienceMode = mode
+        experienceState = ExperienceState.WORLD_SCAN
+        startScreen.visibility = View.GONE
+        creatorScreen.visibility = View.GONE
+        viewerRoot.visibility = View.VISIBLE
+        modeButton.text = if (mode == ExperienceMode.GLASS_DEMO) {
+            "Glass 데모 → Phone"
+        } else {
+            "Phone → Glass 데모"
+        }
+        showViewerState(
+            ViewerUiState.LOADING,
+            if (mode == ExperienceMode.GLASS_DEMO) "Glass Demo 준비 중" else "Phone Viewer 준비 중",
+            "Camera와 현재 장소의 공간 정보를 연결하고 있습니다.",
+        )
+        resumeViewer()
+    }
+
+    private fun showStartScreen() {
+        val leavingViewer = appScreen == AppScreen.VIEWER
+        if (experienceState != ExperienceState.WORLD_SCAN) exitContent()
+        if (leavingViewer && viewerSurfaceResumed) {
+            arView.onPause()
+            arSession?.pause()
+            viewerSurfaceResumed = false
+        }
+        if (leavingViewer) {
+            clearMomentStacks()
+        }
+        stopGnssDiagnostics()
+        appScreen = AppScreen.START
+        viewerRoot.visibility = View.GONE
+        creatorScreen.visibility = View.GONE
+        startScreen.visibility = View.VISIBLE
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+    }
+
+    private fun showCreatorScreen() {
+        val leavingViewer = appScreen == AppScreen.VIEWER
+        if (experienceState != ExperienceState.WORLD_SCAN) exitContent()
+        if (leavingViewer && viewerSurfaceResumed) {
+            arView.onPause()
+            arSession?.pause()
+            viewerSurfaceResumed = false
+        }
+        if (leavingViewer) {
+            clearMomentStacks()
+        }
+        appScreen = AppScreen.CREATOR
+        viewerRoot.visibility = View.GONE
+        startScreen.visibility = View.GONE
+        creatorScreen.visibility = View.VISIBLE
+    }
+
+    private fun showCreatorPendingMessage() {
+        AlertDialog.Builder(this)
+            .setTitle("Creator 기능 연결 예정")
+            .setMessage("화면 Flow는 준비되었습니다. Camera 촬영, Gallery 선택과 Upload는 P1 Creator Mode 구현에서 연결합니다.")
+            .setPositiveButton("확인", null)
+            .show()
+    }
+
+    private fun showViewerState(
+        state: ViewerUiState,
+        title: String,
+        message: String,
+        actionLabel: String? = null,
+        action: (() -> Unit)? = null,
+    ) {
+        viewerStateTitle.text = title
+        viewerStateMessage.text = message
+        viewerStateProgress.visibility = if (state == ViewerUiState.LOADING) View.VISIBLE else View.GONE
+        viewerStateImage.visibility = if (state == ViewerUiState.LOADING) View.GONE else View.VISIBLE
+        when (state) {
+            ViewerUiState.EMPTY -> viewerStateImage.setImageResource(R.drawable.state_empty_moment)
+            ViewerUiState.PERMISSION -> viewerStateImage.setImageResource(R.drawable.state_permission_privacy)
+            ViewerUiState.OFFLINE, ViewerUiState.SERVER_ERROR -> {
+                viewerStateImage.setImageResource(R.drawable.state_offline_server)
+            }
+            ViewerUiState.LOADING -> Unit
+        }
+        viewerStateAction.visibility = if (actionLabel != null && action != null) View.VISIBLE else View.GONE
+        if (actionLabel != null && action != null) {
+            viewerStateAction.text = actionLabel
+            viewerStateAction.setOnClickListener { action() }
+        } else {
+            viewerStateAction.setOnClickListener(null)
+        }
+        viewerStatePanel.visibility = View.VISIBLE
+    }
+
+    private fun hideViewerState() {
+        viewerStatePanel.visibility = View.GONE
+    }
+
+    private fun showConnectionFailure(error: Throwable) {
+        val online = isNetworkAvailable()
+        showViewerState(
+            if (online) ViewerUiState.SERVER_ERROR else ViewerUiState.OFFLINE,
+            if (online) "Server에 연결할 수 없습니다" else "Network 연결이 끊어졌습니다",
+            if (online) {
+                error.message ?: "API Server 상태와 주소를 확인해 주세요."
+            } else {
+                "Moment는 안전하게 유지됩니다. Network 연결 후 다시 시도해 주세요."
+            },
+            "다시 시도",
+        ) { loadZoneAndMoments() }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun openAppSettings() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        })
+    }
+
+    private fun modeCard(
+        imageRes: Int,
+        title: String,
+        description: String,
+        accent: Int,
+        action: () -> Unit,
+    ): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(10), dp(10), dp(14), dp(10))
+        background = glassBackground(0xE0101827.toInt(), accent)
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { action() }
+        addView(ImageView(this@MainActivity).apply {
+            setImageResource(imageRes)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = title
+        }, LinearLayout.LayoutParams(dp(92), dp(92)))
+        addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), 0, 0, 0)
+            addView(titleText(title, 16f).apply { setTextColor(accent) })
+            addView(bodyText(description).apply {
+                textSize = 13f
+                setPadding(0, dp(5), 0, 0)
+            })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }
+    }
+
+    private fun cyberButton(label: String, accent: Int, action: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        textSize = 15f
+        setTextColor(accent)
+        background = glassBackground(0xE0101827.toInt(), accent)
+        setPadding(dp(16), dp(10), dp(16), dp(10))
+        setOnClickListener { action() }
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
+    }
+
+    private fun compactButton(label: String, action: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        textSize = 12f
+        minHeight = 0
+        minimumHeight = 0
+        setTextColor(COLOR_CYAN)
+        setPadding(dp(10), dp(6), dp(10), dp(6))
+        background = glassBackground(0xCC101827.toInt(), 0x5538D9FF)
+        setOnClickListener { action() }
+    }
+
+    private fun titleText(value: String, size: Float) = TextView(this).apply {
+        text = value
+        textSize = size
+        setTextColor(Color.WHITE)
+        setTypeface(typeface, Typeface.BOLD)
+    }
+
+    private fun bodyText(value: String) = TextView(this).apply {
+        text = value
+        textSize = 14f
+        setTextColor(0xFFD7E5EF.toInt())
+        setLineSpacing(0f, 1.15f)
+    }
+
+    private fun glassBackground(fill: Int, border: Int) = GradientDrawable().apply {
+        setColor(fill)
+        cornerRadius = dp(20).toFloat()
+        setStroke(dp(1), border)
     }
 
     private fun showGnssDiagnostics() {
@@ -863,6 +1328,13 @@ class MainActivity : Activity() {
             setOnTouchListener { _, event -> handleContentTouch(event) }
         }
         playerOverlay.addView(playerView, FrameLayout.LayoutParams(-1, dp(240), Gravity.CENTER))
+        previewFrame = ImageView(this).apply {
+            setImageResource(R.drawable.preview_hologram_frame)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = null
+            visibility = View.GONE
+        }
+        playerOverlay.addView(previewFrame)
 
         playbackDate = overlayText("").apply {
             textSize = 18f
@@ -939,17 +1411,23 @@ class MainActivity : Activity() {
         setStroke(dp(1), 0x55FFFFFF)
     }
 
-    private fun hasCameraPermission() =
-        checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    private fun hasViewerPermissions() =
+        checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val VIEWER_PERMISSION_REQUEST = 10
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
+        private const val COLOR_BACKGROUND = 0xFF050811.toInt()
+        private const val COLOR_SURFACE = 0xDD101827.toInt()
+        private const val COLOR_CYAN = 0xFF38D9FF.toInt()
+        private const val COLOR_AMBER = 0xFFFFB547.toInt()
         private const val DEMO_VIDEO_URL =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
     }

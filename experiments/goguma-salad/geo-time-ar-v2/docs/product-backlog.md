@@ -15,17 +15,19 @@
 - [x] 동작별 Coach Mark와 안내 표시 설정
 - [x] Local FastAPI, PostGIS, MinIO 개발 환경
 - [x] Android Build·Binding·설치 Task
+- [x] Cyberpunk 시작 화면과 Phone·Glass Demo·Creator 진입 Flow
+- [x] Loading·Empty·Offline·Permission·Server 오류 상태 화면
 
 ## P0 — 화면 구조와 디자인
 
-- [ ] 앱 실행 후 바로 AR로 들어가지 않는 시작 화면 구현
-- [ ] 시작 화면에서 `Phone Viewer`, `Glass Demo`, `Creator` 진입 분기
+- [x] 앱 실행 후 바로 AR로 들어가지 않는 시작 화면 구현
+- [x] 시작 화면에서 `Phone Viewer`, `Glass Demo`, `Creator` 진입 분기
 - [ ] 실제 Glass Runtime에서는 기기 특성에 따라 Glass 화면 자동 진입
-- [ ] 전체 화면 Flow와 Navigation 확정
+- [x] 전체 화면 Flow와 Navigation 확정
 - [x] 화면별 Cyberpunk UI 지시서와 이미지 생성 Prompt 작성
 - [x] Native UI에 사용할 Cyberpunk 이미지 Asset 생성 Prompt 작성
-- [ ] 전달받은 디자인 Asset을 Android UI에 반영
-- [ ] Loading, Empty, Offline, Permission 거절, Server 오류 화면 디자인
+- [x] 전달받은 디자인 Asset을 Android UI에 반영
+- [x] Loading, Empty, Offline, Permission 거절, Server 오류 화면 디자인
 
 필요한 주요 디자인 화면:
 

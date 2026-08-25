@@ -104,10 +104,12 @@ TBD
 - ARCore 실기기 `SM-S908N`: APK 설치·실행 및 Backend 연결 통과
 - 실기기에서 Media3 데모 영상 URL HTTP 200 응답 확인
 - Glass 데모 포함 최신 APK 실기기 설치 및 앱 기동 통과
+- Cyberpunk 시작 화면과 상태 UI 적용 후 Android Unit Test 11개와 `assembleDebug`: 통과
 
 ## Known Issues
 
 - 실기기 잠금 해제 후 Phone과 Glass 데모 전체 흐름을 사람 눈으로 보는 최종 UX 평가는 남아 있다.
+- Creator 진입 화면과 3단계 Flow는 준비됐지만 촬영·Gallery 선택·공간 배치·Upload 동작은 P1 구현 전이다.
 - 현재 Seed는 영상이 아닌 SVG Placeholder라 Phone UX 데모는 외부 Media3 테스트 영상을 대신 사용한다.
 - 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
 - 주변 GeoZone 조회는 Android가 제공하는 최근 GPS 기록을 사용하며 앱에 위치를 별도 저장하거나 임의의 기본 좌표로 대체하지 않는다.
@@ -119,10 +121,10 @@ TBD
 
 상세 우선순위와 Checkbox는 [`제품 TODO`](../../experiments/goguma-salad/geo-time-ar-v2/docs/product-backlog.md)에서 관리한다.
 
-1. 시작 화면과 Phone·Glass·Creator 진입 Flow를 확정한다.
-2. 화면별 UI 지시서와 디자인 Asset을 준비한다.
-3. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
-4. Server 설정, 실제 영상 Preload·Cache와 Creator Upload를 순서대로 구현한다.
+1. Server 주소 설정과 연결 Test 화면을 구현한다.
+2. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
+3. 실제 영상 Preload와 Cache를 적용한다.
+4. Creator 촬영·공간 배치·Upload MVP를 구현한다.
 
 ## Relevant Commits
 
@@ -153,4 +155,4 @@ TBD
 
 ## Updated
 
-2026-08-24
+2026-08-25
