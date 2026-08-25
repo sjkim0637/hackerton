@@ -99,7 +99,6 @@ class MainActivity : Activity() {
     private lateinit var promptButtonRow: LinearLayout
     private lateinit var playbackDate: TextView
     private lateinit var playbackHint: TextView
-    private lateinit var previewFrame: ImageView
     private lateinit var viewerStatePanel: LinearLayout
     private lateinit var viewerStateImage: ImageView
     private lateinit var viewerStateTitle: TextView
@@ -181,7 +180,6 @@ class MainActivity : Activity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (
                         playbackState == Player.STATE_ENDED &&
-                        experienceMode == ExperienceMode.GLASS_DEMO &&
                         experienceState == ExperienceState.FULLSCREEN
                     ) {
                         exitContent()
@@ -471,15 +469,6 @@ class MainActivity : Activity() {
             marginStart = dp(18)
             marginEnd = dp(18)
         }
-        previewFrame.visibility = View.VISIBLE
-        previewFrame.layoutParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(276),
-            Gravity.CENTER,
-        ).apply {
-            marginStart = dp(8)
-            marginEnd = dp(8)
-        }
         playMoment(stack.momentAt(selectedMomentIndex), muted = true, restart = true)
         mainHandler.removeCallbacks(finishPreview)
         mainHandler.postDelayed(finishPreview, PREVIEW_DURATION_MS)
@@ -508,7 +497,6 @@ class MainActivity : Activity() {
         promptPanel.visibility = View.GONE
         playerOverlay.setBackgroundColor(0x80111827.toInt())
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
-        previewFrame.visibility = View.GONE
         playerView.useController = false
         player.repeatMode = Player.REPEAT_MODE_OFF
         window.decorView.systemUiVisibility = (
@@ -603,7 +591,6 @@ class MainActivity : Activity() {
         playbackDate.removeCallbacks(hidePlaybackDate)
         player.stop()
         playerOverlay.visibility = View.GONE
-        previewFrame.visibility = View.GONE
         playbackHint.alpha = 1f
         selectedStack = null
         selectedMomentIndex = 0
@@ -1341,14 +1328,6 @@ class MainActivity : Activity() {
             setOnTouchListener { _, event -> handleContentTouch(event) }
         }
         playerOverlay.addView(playerView, FrameLayout.LayoutParams(-1, dp(240), Gravity.CENTER))
-        previewFrame = ImageView(this).apply {
-            setImageResource(R.drawable.preview_hologram_frame)
-            scaleType = ImageView.ScaleType.FIT_XY
-            contentDescription = null
-            visibility = View.GONE
-        }
-        playerOverlay.addView(previewFrame)
-
         playbackDate = overlayText("").apply {
             textSize = 18f
             setTypeface(typeface, Typeface.BOLD)

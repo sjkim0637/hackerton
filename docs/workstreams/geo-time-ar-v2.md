@@ -107,6 +107,7 @@ TBD
 - Cyberpunk 시작 화면과 상태 UI 적용 후 Android Unit Test 11개와 `assembleDebug`: 통과
 - Viewer 개발·진단 도구의 설정 이동과 투명 PNG Asset 교체 후 Android Unit Test 11개와 `assembleDebug`: 통과
 - Android 13+ System Back Dispatcher를 포함한 화면 단계별 복귀 처리 후 Android Unit Test 11개와 `assembleDebug`: 통과
+- Phone·Glass 영상 종료 후 AR Marker 복귀와 Preview Frame 제거 후 Android Unit Test 11개와 `assembleDebug`: 통과
 
 ## Known Issues
 
