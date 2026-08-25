@@ -125,6 +125,7 @@ class MainActivity : Activity() {
     private var touchStartY = 0f
     private val headGestureRecognizer = HeadGestureRecognizer()
     private var lastHeadPose: HeadPose? = null
+    private var glassContentBaselinePose: HeadPose? = null
     private var glassFocusedMarkerId: String? = null
     private var glassFocusStartedAtMs = 0L
     private var lastDwellSecond = -1
@@ -507,6 +508,7 @@ class MainActivity : Activity() {
         playMoment(stack.momentAt(selectedMomentIndex), muted = false, restart = true)
         showMomentDate()
         if (experienceMode == ExperienceMode.GLASS_DEMO) {
+            glassContentBaselinePose = lastHeadPose
             headGestureRecognizer.reset(lastHeadPose)
         }
         playbackHint.animate().cancel()
@@ -640,6 +642,13 @@ class MainActivity : Activity() {
     }
 
     private fun processGlassContentGesture(pose: HeadPose, timestampMs: Long) {
+        val baseline = glassContentBaselinePose ?: pose.also {
+            glassContentBaselinePose = it
+        }
+        if (HeadGestureRecognizer.hasReachedPitchTilt(baseline, pose, GLASS_EXIT_TILT_DEGREES)) {
+            exitContent()
+            return
+        }
         headGestureRecognizer.update(pose, timestampMs)?.let { motion ->
             if (motion.axis == HeadMotionAxis.YAW) {
                 moveContent(if (motion.direction > 0) 1f else -1f)
@@ -774,6 +783,7 @@ class MainActivity : Activity() {
 
     private fun resetGlassInteraction() {
         resetGlassDwell()
+        glassContentBaselinePose = null
         headGestureRecognizer.reset(lastHeadPose)
     }
 
@@ -784,7 +794,7 @@ class MainActivity : Activity() {
     }
 
     private fun glassContentGuideText() =
-        "GLASS · 3DoF 정면 스크린 · 빠른 좌우 왕복: 기록 이동"
+        "GLASS · 빠른 좌우 왕복: 기록 이동 · 상하 15° 기울임: AR 복귀"
 
     private fun lastKnownLocation(): Location? {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -1413,6 +1423,7 @@ class MainActivity : Activity() {
         private const val VIEWER_PERMISSION_REQUEST = 10
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
+        private const val GLASS_EXIT_TILT_DEGREES = 15f
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"

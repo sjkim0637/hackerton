@@ -43,4 +43,34 @@ class HeadGestureRecognizerTest {
     fun `각도 경계에서도 짧은 차이를 계산한다`() {
         assertEquals(2f, HeadGestureRecognizer.angleDelta(179f, -179f), 0.001f)
     }
+
+    @Test
+    fun `전체 재생은 기준 자세에서 상하 15도 기울이면 종료 조건을 만족한다`() {
+        val baseline = HeadPose(yawDegrees = 20f, pitchDegrees = 3f)
+
+        assertEquals(
+            true,
+            HeadGestureRecognizer.hasReachedPitchTilt(
+                baseline,
+                HeadPose(yawDegrees = 20f, pitchDegrees = 18f),
+                thresholdDegrees = 15f,
+            ),
+        )
+        assertEquals(
+            true,
+            HeadGestureRecognizer.hasReachedPitchTilt(
+                baseline,
+                HeadPose(yawDegrees = 20f, pitchDegrees = -12f),
+                thresholdDegrees = 15f,
+            ),
+        )
+        assertEquals(
+            false,
+            HeadGestureRecognizer.hasReachedPitchTilt(
+                baseline,
+                HeadPose(yawDegrees = 20f, pitchDegrees = 17.9f),
+                thresholdDegrees = 15f,
+            ),
+        )
+    }
 }
