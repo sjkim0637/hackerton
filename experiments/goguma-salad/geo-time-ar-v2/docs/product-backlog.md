@@ -17,6 +17,7 @@
 - [x] Android Build·Binding·설치 Task
 - [x] Cyberpunk 시작 화면과 Phone·Glass Demo·Creator 진입 Flow
 - [x] Loading·Empty·Offline·Permission·Server 오류 상태 화면
+- [x] Viewer 화면의 개발·진단 Button을 설정으로 이동
 
 ## P0 — 화면 구조와 디자인
 
@@ -50,6 +51,7 @@
 - [ ] Demo·개발·운영 Server Profile 전환
 - [ ] 기본 시작 Mode 또는 마지막 Mode 기억
 - [x] 동작별 Coach Mark 표시 On/Off
+- [x] Viewer의 Mode 전환·Demo Preview·재조회·GNSS 진단 도구를 설정으로 이동
 - [ ] Preview 음소거와 자동 재생 설정
 - [ ] Upload 화질과 Wi-Fi 전용 Upload 설정
 - [ ] Media Cache 용량 확인과 삭제

@@ -105,6 +105,7 @@ TBD
 - 실기기에서 Media3 데모 영상 URL HTTP 200 응답 확인
 - Glass 데모 포함 최신 APK 실기기 설치 및 앱 기동 통과
 - Cyberpunk 시작 화면과 상태 UI 적용 후 Android Unit Test 11개와 `assembleDebug`: 통과
+- Viewer 개발·진단 도구의 설정 이동과 투명 PNG Asset 교체 후 Android Unit Test 11개와 `assembleDebug`: 통과
 
 ## Known Issues
 

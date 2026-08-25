@@ -91,8 +91,6 @@ class MainActivity : Activity() {
     private lateinit var trackingLabel: TextView
     private lateinit var markerHint: TextView
     private lateinit var coachHint: TextView
-    private lateinit var demoButton: Button
-    private lateinit var modeButton: Button
     private lateinit var playerOverlay: FrameLayout
     private lateinit var playerView: PlayerView
     private lateinit var promptPanel: LinearLayout
@@ -660,11 +658,6 @@ class MainActivity : Activity() {
             ExperienceMode.PHONE
         }
         resetGlassInteraction()
-        modeButton.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
-            "Glass 데모 → Phone"
-        } else {
-            "Phone → Glass 데모"
-        }
         showCoach(worldGuideText())
     }
 
@@ -685,11 +678,46 @@ class MainActivity : Activity() {
             textSize = 13f
             setPadding(dp(8), dp(4), dp(8), dp(8))
         }
+        val toolsTitle = TextView(this).apply {
+            text = "Viewer 도구"
+            setTextColor(COLOR_CYAN)
+            textSize = 14f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(8), dp(14), dp(8), dp(6))
+        }
+        lateinit var modeControl: Button
+        modeControl = actionButton(
+            if (experienceMode == ExperienceMode.GLASS_DEMO) "현재 Glass Demo · Phone으로 변경" else "현재 Phone Viewer · Glass Demo로 변경",
+        ) {
+            toggleExperienceMode()
+            modeControl.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
+                "현재 Glass Demo · Phone으로 변경"
+            } else {
+                "현재 Phone Viewer · Glass Demo로 변경"
+            }
+        }
+        lateinit var demoControl: Button
+        demoControl = actionButton(
+            if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기",
+        ) {
+            demoPreviewEnabled = !demoPreviewEnabled
+            if (appScreen == AppScreen.VIEWER) loadZoneAndMoments()
+            demoControl.text = if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기"
+        }
+        val reloadControl = actionButton("현재 장소 다시 조회") {
+            if (appScreen == AppScreen.VIEWER) loadZoneAndMoments()
+        }
+        val gnssControl = actionButton("GNSS 진단 열기") { showGnssDiagnostics() }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(4), dp(16), dp(4))
             addView(guideSwitch, LinearLayout.LayoutParams(-1, -2))
             addView(note, LinearLayout.LayoutParams(-1, -2))
+            addView(toolsTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(modeControl, LinearLayout.LayoutParams(-1, -2))
+            addView(demoControl, LinearLayout.LayoutParams(-1, -2))
+            addView(reloadControl, LinearLayout.LayoutParams(-1, -2))
+            addView(gnssControl, LinearLayout.LayoutParams(-1, -2))
         }
         AlertDialog.Builder(this)
             .setTitle("Geo-Time AR 설정")
@@ -828,32 +856,12 @@ class MainActivity : Activity() {
             topMargin = dp(10)
         })
 
-        demoButton = actionButton("Demo 미리보기 켜기") {
-            demoPreviewEnabled = !demoPreviewEnabled
-            demoButton.text = if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기"
-            loadZoneAndMoments()
-        }
-        val reloadButton = actionButton("다시 조회") { loadZoneAndMoments() }
-        modeButton = actionButton("Phone → Glass 데모") { toggleExperienceMode() }
-        val gnssButton = actionButton("GNSS 진단") { showGnssDiagnostics() }
-        val settingsButton = actionButton("설정") { showSettings() }
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(8), dp(12), dp(14))
             addView(markerHint)
             addView(coachHint)
-            addView(LinearLayout(this@MainActivity).apply {
-                gravity = Gravity.CENTER
-                addView(modeButton)
-                addView(demoButton)
-            })
-            addView(LinearLayout(this@MainActivity).apply {
-                gravity = Gravity.CENTER
-                addView(reloadButton)
-                addView(gnssButton)
-                addView(settingsButton)
-            })
         }
         viewerRoot.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
 
@@ -1006,11 +1014,6 @@ class MainActivity : Activity() {
         startScreen.visibility = View.GONE
         creatorScreen.visibility = View.GONE
         viewerRoot.visibility = View.VISIBLE
-        modeButton.text = if (mode == ExperienceMode.GLASS_DEMO) {
-            "Glass 데모 → Phone"
-        } else {
-            "Phone → Glass 데모"
-        }
         showViewerState(
             ViewerUiState.LOADING,
             if (mode == ExperienceMode.GLASS_DEMO) "Glass Demo 준비 중" else "Phone Viewer 준비 중",

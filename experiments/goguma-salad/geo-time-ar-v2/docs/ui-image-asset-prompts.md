@@ -2,6 +2,12 @@
 
 이 문서는 전체 화면 시안이 아니라 Android Native UI 안에 넣을 **이미지 조각**을 만들기 위한 Prompt 모음이다. Button, Text, Card, Toggle, 입력창은 Android에서 직접 구현하고 아래의 Brand·Illustration·AR Marker만 이미지 Asset으로 사용한다.
 
+## 정식 Asset 파일 기준
+
+- 앱에서 참조하거나 후속 UI 구현에 사용할 정식 결과물은 `assets/`의 날짜·차수 표기가 없는 PNG 파일이다.
+- 투명 배경 대상은 Alpha Channel을 포함하며, `brand-app-icon-master.png`와 `start-background.png`만 불투명하다.
+- `-01`, `-02`, `-03` 등이 붙은 JPEG·PNG는 생성 원본 후보로 보존하며 앱에서 직접 참조하지 않는다.
+
 ## 제작 원칙
 
 - 각 Prompt는 한 번에 Asset 하나만 생성한다.
@@ -244,4 +250,3 @@ AR Glass의 시야 정면 3DoF 영상 screen에 사용할 open edge overlay. 중
 12. `AS12` 아래 Swipe 복귀 Icon
 
 파일은 개별 PNG로 전달한다. 여러 Asset을 한 장의 Sheet로 만들면 자르는 과정에서 Glow와 투명 여백이 달라지므로 가능하면 한 파일에 하나씩 생성한다.
-
