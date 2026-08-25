@@ -70,11 +70,12 @@ if ($requestedSerial) {
 }
 
 $bindingStep = if ($BindOnly) { '[3/3]' } else { '[3/5]' }
-Write-Host "$bindingStep Binding device 127.0.0.1:8000 to the backend: $serial"
+Write-Host "$bindingStep Binding device ports 8000 (API) and 9000 (Media) to the development services: $serial"
 Invoke-Adb -Arguments @('-s', $serial, 'reverse', 'tcp:8000', 'tcp:8000')
+Invoke-Adb -Arguments @('-s', $serial, 'reverse', 'tcp:9000', 'tcp:9000')
 
 if ($BindOnly) {
-    Write-Host "Done: Backend binding is ready on $serial."
+    Write-Host "Done: API and Media bindings are ready on $serial."
     exit 0
 }
 

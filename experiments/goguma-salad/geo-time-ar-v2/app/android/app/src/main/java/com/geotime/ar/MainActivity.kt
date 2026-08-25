@@ -320,12 +320,8 @@ class MainActivity : Activity() {
             "현재 장소의 시간을 찾는 중",
             "GPS와 공간 정보를 안전하게 확인하고 있습니다.",
         )
-        if (demoPreviewEnabled) {
-            activateLocalDemo()
-            return
-        }
-        val location = lastKnownLocation()
-        if (location == null) {
+        val location = if (demoPreviewEnabled) null else lastKnownLocation()
+        if (!demoPreviewEnabled && location == null) {
             zoneLabel.text = "저장된 위치 기록이 없습니다"
             clearMomentStacks()
             markerHint.text = "위치 권한을 허용하고 GPS를 켠 뒤 다시 시도하세요"
@@ -339,8 +335,14 @@ class MainActivity : Activity() {
             ) { loadZoneAndMoments() }
             return
         }
-        zoneLabel.text = "Android 최근 GPS 기록 기준 GeoZone 조회 중…"
-        apiClient.loadNearby(location.latitude, location.longitude) { result ->
+        val latitude = if (demoPreviewEnabled) DEMO_ZONE_LATITUDE else location!!.latitude
+        val longitude = if (demoPreviewEnabled) DEMO_ZONE_LONGITUDE else location!!.longitude
+        zoneLabel.text = if (demoPreviewEnabled) {
+            "Demo Zone: 을지로 타워 107 조회 중…"
+        } else {
+            "Android 최근 GPS 기록 기준 GeoZone 조회 중…"
+        }
+        apiClient.loadNearby(latitude, longitude) { result ->
             runOnUiThread {
                 result.onSuccess { zone ->
                     if (zone == null) {
@@ -1465,6 +1467,8 @@ class MainActivity : Activity() {
         private const val PREVIEW_DURATION_MS = 5_000L
         private const val GLASS_DWELL_MS = 5_000L
         private const val GLASS_EXIT_TILT_DEGREES = 15f
+        private const val DEMO_ZONE_LATITUDE = 37.5648801960179
+        private const val DEMO_ZONE_LONGITUDE = 126.991228638001
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"

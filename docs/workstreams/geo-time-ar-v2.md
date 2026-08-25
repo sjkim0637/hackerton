@@ -112,6 +112,7 @@ TBD
 - Glass 전체 재생의 상하 15도 AR 복귀 처리 후 Android Unit Test 12개와 `assembleDebug`: 통과
 - Phone·Glass 공통 대형 Compass Tape와 좌하단 Pitch·Roll 연동 Artificial Horizon HUD 적용 후 Android Unit Test 12개, `assembleDebug`, 실기기 배치 확인: 통과
 - 기본 Local Demo 전환과 AR Tracking 시작 자세 기준 Roll 영점 보정 후 Android Unit Test 12개와 `assembleDebug`: 통과
+- Demo의 을지로 타워 107 Backend 좌표 조회와 USB API·Media 이중 Reverse 자동화 후 Backend Health·Nearby·Timeline API 확인: 통과
 
 ## Known Issues
 

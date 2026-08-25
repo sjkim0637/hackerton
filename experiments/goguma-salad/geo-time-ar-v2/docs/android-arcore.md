@@ -71,10 +71,11 @@ Phone과 Glass는 Backend와 콘텐츠 상태 흐름을 공유하지만 화면�
 ```powershell
 adb devices -l
 adb reverse tcp:8000 tcp:8000
+adb reverse tcp:9000 tcp:9000
 adb install -r .\app\android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-개발용 APK는 `127.0.0.1:8000`을 사용하므로 USB 기기나 Emulator에서 `adb reverse`를 먼저 실행한다. 무선 설치에서는 PC의 LAN IP로 `API_BASE_URL`을 변경해야 한다.
+개발용 APK는 API `127.0.0.1:8000`과 Backend가 반환하는 Media `localhost:9000`을 사용하므로 USB 기기나 Emulator에서 두 Port의 `adb reverse`를 먼저 실행한다. 무선 설치에서는 PC의 LAN IP로 API와 Media 공개 주소를 함께 변경해야 한다.
 
 ## 알려진 공간 정합 제약
 

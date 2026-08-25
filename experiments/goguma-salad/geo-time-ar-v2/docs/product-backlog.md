@@ -23,7 +23,7 @@
 - [x] 조준을 방해하는 Preview Frame 장식 제거
 - [x] Glass 전체 재생 중 상하 15도 기울임으로 AR 복귀
 - [x] Phone·Glass 공통 대형 Compass Tape와 좌하단 Pitch·Roll 연동 Artificial Horizon HUD
-- [x] Backend 연결이 없어도 즉시 동작하는 기본 Local Demo와 Roll 영점 보정
+- [x] 을지로 타워 107 Backend 좌표를 조회하는 기본 Demo, 연결 실패 시 Local Fallback과 Roll 영점 보정
 
 ## P0 — 화면 구조와 디자인
 
