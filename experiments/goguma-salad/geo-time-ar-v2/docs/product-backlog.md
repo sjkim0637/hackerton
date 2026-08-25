@@ -21,8 +21,8 @@
 - [x] 시스템 뒤로가기의 Viewer·Creator·콘텐츠 단계별 내부 복귀 처리
 - [x] Phone·Glass 영상 자연 종료 후 AR Marker 화면 자동 복귀
 - [x] 조준을 방해하는 Preview Frame 장식 제거
-- [x] Glass 전체 재생 중 상하 15도 기울임으로 AR 복귀
-- [x] Phone·Glass 공통 대형 Compass Tape와 좌하단 Pitch·Roll 연동 Artificial Horizon HUD
+- [x] Glass 전체 재생 중 좌우 Roll 8도 기울임으로 AR 복귀
+- [x] Phone·Glass 공통 대형 Compass Tape와 좌하단 소형 원형 Artificial Horizon HUD
 - [x] 을지로 타워 107 Backend 좌표를 조회하는 기본 Demo, 연결 실패 시 Local Fallback과 Roll 영점 보정
 
 ## P0 — 화면 구조와 디자인

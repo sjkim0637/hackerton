@@ -35,17 +35,25 @@ class FlightHudView(context: Context) : View(context) {
         color = cyan
         style = Paint.Style.FILL
     }
+    private val skyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(70, 42, 154, 190)
+        style = Paint.Style.FILL
+    }
+    private val groundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(78, 150, 92, 35)
+        style = Paint.Style.FILL
+    }
 
     private var headingDegrees = 0f
     private var pitchDegrees = 0f
     private var rollDegrees = 0f
-    private var exitBaselinePitch: Float? = null
+    private var showRollExitCue = false
 
-    fun setPose(heading: Float, pitch: Float, roll: Float, exitBaselinePitch: Float?) {
+    fun setPose(heading: Float, pitch: Float, roll: Float, showRollExitCue: Boolean) {
         headingDegrees = normalizeHeading(heading)
         pitchDegrees = pitch.coerceIn(-45f, 45f)
         rollDegrees = roll.coerceIn(-60f, 60f)
-        this.exitBaselinePitch = exitBaselinePitch
+        this.showRollExitCue = showRollExitCue
         invalidate()
     }
 
@@ -96,85 +104,101 @@ class FlightHudView(context: Context) : View(context) {
     }
 
     private fun drawArtificialHorizon(canvas: Canvas) {
-        val centerX = width * 0.28f
-        val centerY = height * 0.73f
-        val pixelsPerDegree = dp(3.4f)
-        val clipTop = centerY - dp(115f)
-        val clipBottom = centerY + dp(115f)
+        val centerX = dp(76f)
+        val centerY = height - dp(154f)
+        val radius = dp(54f)
+        val pixelsPerDegree = dp(2.1f)
+
+        canvas.drawCircle(centerX, centerY, radius + dp(4f), backdropPaint)
+        val circularClip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
 
         canvas.save()
-        canvas.clipRect(dp(6f), clipTop, width - dp(6f), clipBottom)
+        canvas.clipPath(circularClip)
         canvas.translate(centerX, centerY + pitchDegrees * pixelsPerDegree)
         canvas.rotate(-rollDegrees)
+        canvas.drawRect(-radius * 2f, -radius * 2f, radius * 2f, 0f, skyPaint)
+        canvas.drawRect(-radius * 2f, 0f, radius * 2f, radius * 2f, groundPaint)
 
-        for (angle in -25..25 step 5) {
+        for (angle in -10..10 step 10) {
             val y = -angle * pixelsPerDegree
-            val major = angle % 10 == 0
             val horizon = angle == 0
-            val halfWidth = when {
-                horizon -> dp(82f)
-                major -> dp(54f)
-                else -> dp(36f)
-            }
-            val centerGap = if (horizon) dp(26f) else dp(21f)
-            linePaint.color = when {
-                horizon -> Color.argb(255, 210, 252, 255)
-                else -> Color.argb(220, 190, 244, 255)
-            }
-            linePaint.strokeWidth = when {
-                horizon -> dp(2.5f)
-                major -> dp(1.9f)
-                else -> dp(1.4f)
-            }
+            val halfWidth = if (horizon) radius * 0.9f else radius * 0.48f
+            val centerGap = if (horizon) dp(10f) else dp(8f)
+            linePaint.color = if (horizon) Color.WHITE else Color.argb(225, 210, 250, 255)
+            linePaint.strokeWidth = if (horizon) dp(2f) else dp(1.2f)
             canvas.drawLine(-halfWidth, y, -centerGap, y, linePaint)
             canvas.drawLine(centerGap, y, halfWidth, y, linePaint)
 
             if (!horizon) {
                 textPaint.color = linePaint.color
-                textPaint.textSize = sp(10.5f)
-                val label = kotlin.math.abs(angle).toString()
-                canvas.drawText(label, -halfWidth - dp(17f), y + dp(3.5f), textPaint)
-                canvas.drawText(label, halfWidth + dp(17f), y + dp(3.5f), textPaint)
+                textPaint.textSize = sp(8.5f)
+                canvas.drawText(kotlin.math.abs(angle).toString(), halfWidth + dp(9f), y + dp(3f), textPaint)
             }
-        }
-        exitBaselinePitch?.let { baseline ->
-            drawExitLine(canvas, baseline + 15f, pixelsPerDegree)
-            drawExitLine(canvas, baseline - 15f, pixelsPerDegree)
         }
         canvas.restore()
 
+        linePaint.color = Color.argb(235, 210, 250, 255)
+        linePaint.strokeWidth = dp(1.5f)
+        canvas.drawCircle(centerX, centerY, radius, linePaint)
+        listOf(-30f, -15f, 0f, 15f, 30f).forEach { angle ->
+            drawRollTick(canvas, centerX, centerY, radius, angle, highlighted = false)
+        }
+        if (showRollExitCue) {
+            drawRollTick(canvas, centerX, centerY, radius, -8f, highlighted = true)
+            drawRollTick(canvas, centerX, centerY, radius, 8f, highlighted = true)
+        }
+
         drawFixedAircraftSymbol(canvas, centerX, centerY)
         textPaint.color = Color.argb(245, 215, 250, 255)
-        textPaint.textSize = sp(11f)
+        textPaint.textSize = sp(9.5f)
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(String.format(Locale.US, "PITCH %+.1f°", pitchDegrees), centerX, centerY + dp(108f), textPaint)
-        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(
+            String.format(Locale.US, "P %+.0f°  R %+.0f°", pitchDegrees, rollDegrees),
+            centerX,
+            centerY + radius + dp(15f),
+            textPaint,
+        )
+        if (showRollExitCue) {
+            textPaint.color = amber
+            textPaint.textSize = sp(8.5f)
+            canvas.drawText("ROLL ±8° EXIT", centerX, centerY + radius + dp(28f), textPaint)
+        }
     }
 
-    private fun drawExitLine(canvas: Canvas, angle: Float, pixelsPerDegree: Float) {
-        val y = -angle * pixelsPerDegree
-        val halfWidth = dp(78f)
-        val centerGap = dp(25f)
-        linePaint.color = Color.argb(245, 255, 190, 82)
-        linePaint.strokeWidth = dp(2f)
-        canvas.drawLine(-halfWidth, y, -centerGap, y, linePaint)
-        canvas.drawLine(centerGap, y, halfWidth, y, linePaint)
-        textPaint.color = amber
-        textPaint.textSize = sp(11f)
-        canvas.drawText("EXIT", -halfWidth - dp(22f), y + dp(3.5f), textPaint)
-        canvas.drawText("EXIT", halfWidth + dp(22f), y + dp(3.5f), textPaint)
+    private fun drawRollTick(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+        angleDegrees: Float,
+        highlighted: Boolean,
+    ) {
+        val radians = Math.toRadians(angleDegrees.toDouble())
+        val innerRadius = radius - dp(if (highlighted) 9f else 6f)
+        val outerRadius = radius - dp(1f)
+        val sin = kotlin.math.sin(radians).toFloat()
+        val cos = kotlin.math.cos(radians).toFloat()
+        linePaint.color = if (highlighted) amber else Color.argb(220, 210, 250, 255)
+        linePaint.strokeWidth = dp(if (highlighted) 2.5f else 1.3f)
+        canvas.drawLine(
+            centerX + sin * innerRadius,
+            centerY - cos * innerRadius,
+            centerX + sin * outerRadius,
+            centerY - cos * outerRadius,
+            linePaint,
+        )
     }
 
     private fun drawFixedAircraftSymbol(canvas: Canvas, centerX: Float, centerY: Float) {
         linePaint.color = Color.argb(255, 225, 253, 255)
-        linePaint.strokeWidth = dp(2.5f)
-        val wing = dp(48f)
-        val gap = dp(10f)
+        linePaint.strokeWidth = dp(2f)
+        val wing = dp(31f)
+        val gap = dp(7f)
         canvas.drawLine(centerX - wing, centerY, centerX - gap, centerY, linePaint)
         canvas.drawLine(centerX + gap, centerY, centerX + wing, centerY, linePaint)
-        canvas.drawLine(centerX - wing, centerY, centerX - wing, centerY + dp(7f), linePaint)
-        canvas.drawLine(centerX + wing, centerY, centerX + wing, centerY + dp(7f), linePaint)
-        canvas.drawCircle(centerX, centerY, dp(3.2f), pointerPaint)
+        canvas.drawLine(centerX - wing, centerY, centerX - wing, centerY + dp(5f), linePaint)
+        canvas.drawLine(centerX + wing, centerY, centerX + wing, centerY + dp(5f), linePaint)
+        canvas.drawCircle(centerX, centerY, dp(2.5f), pointerPaint)
     }
 
     private fun headingLabel(degrees: Int): String = when (normalizeHeading(degrees.toFloat()).roundToInt() % 360) {

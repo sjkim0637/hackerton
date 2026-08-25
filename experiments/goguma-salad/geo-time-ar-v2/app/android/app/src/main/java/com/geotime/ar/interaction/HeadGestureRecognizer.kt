@@ -73,11 +73,11 @@ class HeadGestureRecognizer(
     }
 
     companion object {
-        fun hasReachedPitchTilt(
+        fun hasReachedRollTilt(
             baseline: HeadPose,
             pose: HeadPose,
             thresholdDegrees: Float,
-        ): Boolean = abs(pose.pitchDegrees - baseline.pitchDegrees) >= thresholdDegrees
+        ): Boolean = abs(angleDelta(baseline.rollDegrees, pose.rollDegrees)) >= thresholdDegrees
 
         fun angleDelta(fromDegrees: Float, toDegrees: Float): Float {
             var delta = (toDegrees - fromDegrees) % 360f

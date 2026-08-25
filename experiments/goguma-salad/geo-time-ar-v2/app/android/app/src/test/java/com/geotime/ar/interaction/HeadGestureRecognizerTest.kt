@@ -45,31 +45,31 @@ class HeadGestureRecognizerTest {
     }
 
     @Test
-    fun `전체 재생은 기준 자세에서 상하 15도 기울이면 종료 조건을 만족한다`() {
-        val baseline = HeadPose(yawDegrees = 20f, pitchDegrees = 3f)
+    fun `전체 재생은 기준 자세에서 좌우 Roll 8도 기울이면 종료 조건을 만족한다`() {
+        val baseline = HeadPose(yawDegrees = 20f, pitchDegrees = 3f, rollDegrees = 3f)
 
         assertEquals(
             true,
-            HeadGestureRecognizer.hasReachedPitchTilt(
+            HeadGestureRecognizer.hasReachedRollTilt(
                 baseline,
-                HeadPose(yawDegrees = 20f, pitchDegrees = 18f),
-                thresholdDegrees = 15f,
+                HeadPose(yawDegrees = 20f, pitchDegrees = 3f, rollDegrees = 11f),
+                thresholdDegrees = 8f,
             ),
         )
         assertEquals(
             true,
-            HeadGestureRecognizer.hasReachedPitchTilt(
+            HeadGestureRecognizer.hasReachedRollTilt(
                 baseline,
-                HeadPose(yawDegrees = 20f, pitchDegrees = -12f),
-                thresholdDegrees = 15f,
+                HeadPose(yawDegrees = 20f, pitchDegrees = 3f, rollDegrees = -5f),
+                thresholdDegrees = 8f,
             ),
         )
         assertEquals(
             false,
-            HeadGestureRecognizer.hasReachedPitchTilt(
+            HeadGestureRecognizer.hasReachedRollTilt(
                 baseline,
-                HeadPose(yawDegrees = 20f, pitchDegrees = 17.9f),
-                thresholdDegrees = 15f,
+                HeadPose(yawDegrees = 20f, pitchDegrees = 3f, rollDegrees = 10.9f),
+                thresholdDegrees = 8f,
             ),
         )
     }

@@ -73,3 +73,11 @@ Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase�
 - [Android Raw GNSS Measurements 공식 안내](https://developer.android.com/develop/sensors-and-location/sensors/gnss)
 - [ARCore Geospatial API 공식 안내](https://developers.google.com/ar/develop/geospatial)
 - [ARCore Geospatial Mode 정확도 설명](https://developers.google.com/ar/reference/java/com/google/ar/core/Config.GeospatialMode)
+
+## ADR-010 — Glass 전체 감상 종료를 Roll 8도로 보정
+
+**Status: Accepted**
+
+ADR-007에서 정한 전체 감상 종료의 상하 Pitch 15도 입력은 사용 의도 해석이 잘못된 것으로 확인되어 이 항목만 본 결정으로 대체한다. 전체 감상 중 재생 시작 자세에서 좌우 Roll이 어느 방향이든 8도에 도달하면 즉시 AR 탐색으로 복귀한다. 빠른 Yaw 왕복을 이용한 이전·다음 Moment 이동과 확인 화면의 Pitch·Yaw 왕복 입력은 그대로 유지한다.
+
+HUD는 넓은 Pitch Ladder 대신 좌하단의 작은 원형 Artificial Horizon을 사용한다. 원 내부 지평선은 Pitch에 따라 이동하고 Roll에 따라 회전하며, Glass 전체 감상에서는 원 둘레에 좌우 Roll 8도 종료 지점을 표시한다.
