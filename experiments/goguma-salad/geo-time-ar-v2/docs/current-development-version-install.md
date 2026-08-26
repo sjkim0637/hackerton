@@ -61,7 +61,7 @@ adb install -r .\app-debug.apk
 
 `Demo Preview`는 기본으로 활성화되어 실제 위치와 관계없이 을지로 타워 107의 운영 Seed를 조회한다. 실제 GPS 기준으로 시험하려면 설정에서 `Demo Preview`를 끈다.
 
-`0.1.1`부터 Demo Preview의 시간 기록 Marker는 AR 정렬이 끝난 시점의 Camera 정면 약 4m에 나타난다. 실제 GPS Mode에서 Marker가 시야 밖이면 상태 줄에 좌우 회전 안내가 표시된다.
+`0.1.1`부터 운영 API에는 타워 107 주변의 실제 좌표를 가진 테스트 POI Marker가 여러 방향으로 등록된다. Marker가 시야 밖이면 상태 줄에 좌우 회전 안내가 표시된다.
 
 ## 현재 확인할 수 있는 항목
 

@@ -45,6 +45,38 @@ DEMO_CONTROL_POINTS = [
         "status": "available",
     },
 ]
+DEMO_POI_MARKERS = [
+    {
+        "poi_id": uuid.UUID("00000000-0000-4000-8000-000000000302"),
+        "content_id": uuid.UUID("00000000-0000-4000-8000-000000000801"),
+        "placement_id": uuid.UUID("00000000-0000-4000-8000-000000000811"),
+        "moment_id": uuid.UUID("00000000-0000-4000-8000-000000000821"),
+        "name": "타워 107 동쪽 기록",
+        "longitude": 126.991318638001,
+        "latitude": 37.5648801960179,
+        "recorded_at": datetime(2024, 8, 26, tzinfo=UTC),
+    },
+    {
+        "poi_id": uuid.UUID("00000000-0000-4000-8000-000000000303"),
+        "content_id": uuid.UUID("00000000-0000-4000-8000-000000000802"),
+        "placement_id": uuid.UUID("00000000-0000-4000-8000-000000000812"),
+        "moment_id": uuid.UUID("00000000-0000-4000-8000-000000000822"),
+        "name": "타워 107 남쪽 기록",
+        "longitude": 126.991228638001,
+        "latitude": 37.5648081960179,
+        "recorded_at": datetime(2023, 8, 26, tzinfo=UTC),
+    },
+    {
+        "poi_id": uuid.UUID("00000000-0000-4000-8000-000000000304"),
+        "content_id": uuid.UUID("00000000-0000-4000-8000-000000000803"),
+        "placement_id": uuid.UUID("00000000-0000-4000-8000-000000000813"),
+        "moment_id": uuid.UUID("00000000-0000-4000-8000-000000000823"),
+        "name": "타워 107 서쪽 기록",
+        "longitude": 126.991138638001,
+        "latitude": 37.5648801960179,
+        "recorded_at": datetime(2022, 8, 26, tzinfo=UTC),
+    },
+]
 
 
 def demo_location() -> WKTElement:
@@ -71,6 +103,61 @@ def seed_control_points(db) -> None:
         )
 
 
+def seed_demo_poi_markers(db, settings) -> None:
+    for item in DEMO_POI_MARKERS:
+        db.merge(
+            POI(
+                id=item["poi_id"],
+                geo_zone_id=DEMO_ZONE_ID,
+                name=item["name"],
+                poi_type="demo_marker",
+                location=WKTElement(
+                    f"POINT({item['longitude']} {item['latitude']})",
+                    srid=4326,
+                ),
+                metadata_={"coordinate_frame": "wgs84_test_marker"},
+            )
+        )
+        db.merge(
+            Content(
+                id=item["content_id"],
+                content_type="image",
+                title=item["name"],
+                object_key="demo/placeholder.svg",
+                public_url=(
+                    f"{settings.minio_public_endpoint}/{settings.minio_bucket}/"
+                    "demo/placeholder.svg"
+                ),
+                mime_type="image/svg+xml",
+                metadata_={"placeholder": True, "test_marker": True},
+            )
+        )
+        db.merge(
+            SpatialPlacement(
+                id=item["placement_id"],
+                geo_zone_id=DEMO_ZONE_ID,
+                poi_id=item["poi_id"],
+                local_x=0.0,
+                local_y=1.4,
+                local_z=0.0,
+                max_visible_distance_m=30.0,
+                view_cone_degrees=120.0,
+            )
+        )
+        db.merge(
+            Moment(
+                id=item["moment_id"],
+                geo_zone_id=DEMO_ZONE_ID,
+                poi_id=item["poi_id"],
+                content_id=item["content_id"],
+                placement_id=item["placement_id"],
+                recorded_at=item["recorded_at"],
+                created_by=DEMO_USER_IDS[0],
+                rendering_metadata={"billboard": True, "test_marker": True},
+            )
+        )
+
+
 def seed() -> None:
     settings = get_settings()
     with SessionLocal() as db:
@@ -85,8 +172,15 @@ def seed() -> None:
                 existing_poi.name = "타워 107"
                 existing_poi.poi_type = "office"
                 existing_poi.location = demo_location()
+            latest_demo_placement = db.get(
+                SpatialPlacement,
+                uuid.UUID("00000000-0000-4000-8000-000000000508"),
+            )
+            if latest_demo_placement is not None:
+                latest_demo_placement.view_cone_degrees = 120.0
+            seed_demo_poi_markers(db, settings)
             db.commit()
-            print("Existing demo zone updated")
+            print("Existing demo zone and POI markers updated")
             return
 
         users = [
@@ -190,6 +284,7 @@ def seed() -> None:
             status="active",
         )
         db.add_all([campaign_content, campaign_placement, campaign, schedule])
+        seed_demo_poi_markers(db, settings)
         db.commit()
         print("Seed data created")
 
