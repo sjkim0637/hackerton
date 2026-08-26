@@ -49,6 +49,7 @@ import com.geotime.ar.interaction.HeadGestureRecognizer
 import com.geotime.ar.interaction.HeadMotionAxis
 import com.geotime.ar.interaction.HeadPose
 import com.geotime.ar.network.GeoTimeApiClient
+import com.geotime.ar.network.PoiLocation
 import com.geotime.ar.network.ServerConnectionTester
 import com.geotime.ar.network.ServerProfile
 import com.geotime.ar.network.ServerSettings
@@ -56,6 +57,11 @@ import com.geotime.ar.network.ServerSettingsStore
 import com.geotime.ar.time.MomentStack
 import com.geotime.ar.time.TimelineMoment
 import com.geotime.ar.ui.FlightHudView
+import com.geotime.ar.spatial.GeoArAlignment
+import com.geotime.ar.spatial.GeographicPosition
+import com.geotime.ar.spatial.HeadingReading
+import com.geotime.ar.spatial.TrueNorthHeadingProvider
+import com.geotime.ar.spatial.Vector3
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Session
@@ -98,6 +104,8 @@ class MainActivity : Activity() {
     private lateinit var arView: GeoTimeArView
     private lateinit var zoneLabel: TextView
     private lateinit var trackingLabel: TextView
+    private lateinit var alignmentLabel: TextView
+    private lateinit var controlPointLabel: TextView
     private lateinit var markerHint: TextView
     private lateinit var coachHint: TextView
     private lateinit var playerOverlay: FrameLayout
@@ -123,6 +131,7 @@ class MainActivity : Activity() {
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
         .withZone(ZoneId.systemDefault())
     private val stacksByMarkerId = mutableMapOf<String, MomentStack>()
+    private val poiLocationsById = mutableMapOf<String, PoiLocation>()
     private var arSession: Session? = null
     private var viewerSurfaceResumed = false
     private var installRequested = false
@@ -136,6 +145,12 @@ class MainActivity : Activity() {
     private var touchStartY = 0f
     private val headGestureRecognizer = HeadGestureRecognizer()
     private var lastHeadPose: HeadPose? = null
+    private var lastArCameraPosition: Vector3? = null
+    private var activeGeoReference: GeographicPosition? = null
+    private var activeLocationAccuracyM = Float.NaN
+    private var latestHeading: HeadingReading? = null
+    private var geoArAlignment: GeoArAlignment? = null
+    private lateinit var headingProvider: TrueNorthHeadingProvider
     private var hudRollBaselineDegrees: Float? = null
     private var glassContentBaselinePose: HeadPose? = null
     private var glassFocusedMarkerId: String? = null
@@ -182,6 +197,12 @@ class MainActivity : Activity() {
         clearLegacySavedLocation()
         serverSettingsStore = ServerSettingsStore(preferences())
         apiClient = GeoTimeApiClient(serverSettingsStore.load().apiBaseUrl)
+        headingProvider = TrueNorthHeadingProvider(this) { reading ->
+            runOnUiThread {
+                latestHeading = reading
+                maybeCreateGeoAlignment()
+            }
+        }
         buildUi()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
@@ -211,6 +232,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         stopGnssDiagnostics()
+        headingProvider.stop()
         player.pause()
         if (viewerSurfaceResumed) {
             arView.onPause()
@@ -227,6 +249,7 @@ class MainActivity : Activity() {
         arSession?.close()
         apiClient.close()
         serverConnectionTester.close()
+        headingProvider.stop()
         super.onDestroy()
     }
 
@@ -273,6 +296,7 @@ class MainActivity : Activity() {
             return
         }
         ensureArSession()
+        headingProvider.start()
         if (!viewerSurfaceResumed) {
             arView.onResume()
             viewerSurfaceResumed = true
@@ -354,6 +378,13 @@ class MainActivity : Activity() {
         }
         val latitude = if (demoPreviewEnabled) DEMO_ZONE_LATITUDE else location!!.latitude
         val longitude = if (demoPreviewEnabled) DEMO_ZONE_LONGITUDE else location!!.longitude
+        val ellipsoidHeight = location?.takeIf(Location::hasAltitude)?.altitude
+        prepareGeoReference(
+            GeographicPosition(latitude, longitude, ellipsoidHeight),
+            location?.accuracy ?: DEMO_REFERENCE_ACCURACY_M,
+            System.currentTimeMillis(),
+        )
+        loadNearestControlPoints(latitude, longitude)
         zoneLabel.text = if (demoPreviewEnabled) {
             "Demo Zone: 을지로 타워 107 조회 중…"
         } else {
@@ -404,13 +435,26 @@ class MainActivity : Activity() {
         markerHint.text = "이 장소의 시간 기록 조회 중…"
         markerHint.visibility = View.VISIBLE
         coachHint.visibility = View.GONE
+        apiClient.loadPois(zoneId) { poiResult ->
+            runOnUiThread {
+                poiResult.onSuccess { pois ->
+                    poiLocationsById.clear()
+                    pois.associateByTo(poiLocationsById, PoiLocation::id)
+                    loadTimelineForAlignedPois(zoneId)
+                }.onFailure { error ->
+                    activateLocalDemo(error)
+                }
+            }
+        }
+    }
+
+    private fun loadTimelineForAlignedPois(zoneId: String) {
         apiClient.loadTimeline(zoneId) { result ->
             runOnUiThread {
                 result.onSuccess { moments ->
                     val stacks = MomentStack.group(moments)
                     stacksByMarkerId.clear()
                     stacks.associateByTo(stacksByMarkerId, MomentStack::id)
-                    arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
                     if (stacks.isEmpty()) {
                         markerHint.text = "이 장소에는 아직 시간 기록이 없습니다"
                         markerHint.visibility = View.VISIBLE
@@ -422,18 +466,135 @@ class MainActivity : Activity() {
                             "Creator 열기",
                         ) { showCreatorScreen() }
                     } else {
-                        markerHint.visibility = View.GONE
-                        hideViewerState()
-                        showCoach(worldGuideText())
+                        updateAlignedMomentCandidates()
                     }
+                }.onFailure(::activateLocalDemo)
+            }
+        }
+    }
+
+    private fun prepareGeoReference(
+        position: GeographicPosition,
+        accuracyM: Float,
+        timestampMs: Long,
+    ) {
+        if (activeGeoReference != null) return
+        activeGeoReference = position
+        activeLocationAccuracyM = accuracyM
+        latestHeading = null
+        headingProvider.updateLocation(position, timestampMs)
+        alignmentLabel.text = "GPS ±${"%.1f".format(accuracyM)}m · True North 수집 중"
+        alignmentLabel.setTextColor(if (accuracyM <= LOCATION_WARNING_ACCURACY_M) COLOR_CYAN else COLOR_AMBER)
+        maybeCreateGeoAlignment()
+    }
+
+    private fun loadNearestControlPoints(latitude: Double, longitude: Double) {
+        controlPointLabel.text = "국가기준점 조회 중…"
+        apiClient.loadNearestControlPoints(latitude, longitude) { result ->
+            runOnUiThread {
+                result.onSuccess { points ->
+                    controlPointLabel.text = if (points.isEmpty()) {
+                        "반경 50km 내 사용 가능한 국가기준점 없음"
+                    } else {
+                        "국가기준점 · " + points.joinToString(" · ") {
+                            "${it.id} ${"%.2f".format(it.distanceM / 1_000.0)}km"
+                        }
+                    }
+                    controlPointLabel.setTextColor(if (points.size >= 2) COLOR_CYAN else COLOR_AMBER)
                 }.onFailure {
-                    activateLocalDemo(it)
+                    controlPointLabel.text = "국가기준점 조회 실패 · POI 자동 정렬은 계속 사용"
+                    controlPointLabel.setTextColor(COLOR_AMBER)
                 }
             }
         }
     }
 
+    private fun maybeCreateGeoAlignment() {
+        if (geoArAlignment != null) return
+        val reference = activeGeoReference ?: return
+        val heading = latestHeading?.takeIf { it.sampleCount >= MIN_HEADING_SAMPLES } ?: return
+        val cameraPosition = lastArCameraPosition ?: return
+        val cameraPose = lastHeadPose ?: return
+        geoArAlignment = GeoArAlignment(
+            reference = reference,
+            referenceAccuracyM = activeLocationAccuracyM,
+            trueHeadingDegrees = heading.trueHeadingDegrees,
+            headingAccuracyDegrees = heading.accuracyDegrees,
+            arCameraPosition = cameraPosition,
+            arCameraYawDegrees = cameraPose.yawDegrees,
+        ).also { alignment ->
+            val headingAccuracy = heading.accuracyDegrees?.let { " ±${it.toInt()}°" }.orEmpty()
+            alignmentLabel.text =
+                "자동 정렬 · GPS ±${"%.1f".format(activeLocationAccuracyM)}m · " +
+                "True ${"%03d".format(heading.trueHeadingDegrees.toInt())}°$headingAccuracy · " +
+                "Yaw ${"%+.1f".format(alignment.yawOffsetDegrees)}°"
+            alignmentLabel.setTextColor(
+                if (
+                    activeLocationAccuracyM <= LOCATION_WARNING_ACCURACY_M &&
+                    (heading.accuracyDegrees ?: Float.MAX_VALUE) <= HEADING_WARNING_ACCURACY_DEGREES
+                ) COLOR_CYAN else COLOR_AMBER
+            )
+        }
+        updateAlignedMomentCandidates()
+    }
+
+    private fun updateAlignedMomentCandidates() {
+        if (stacksByMarkerId.isEmpty()) return
+        val alignment = geoArAlignment
+        if (alignment == null) {
+            arView.updateCandidates(emptyList())
+            markerHint.text = "GPS와 True North를 AR 공간에 정렬하는 중…"
+            markerHint.visibility = View.VISIBLE
+            showViewerState(
+                ViewerUiState.LOADING,
+                "현실 좌표를 AR에 맞추는 중",
+                "Phone을 정면으로 들고 잠시 유지해 주세요. GPS는 위치, Compass는 방향 기준으로 한 번만 사용합니다.",
+            )
+            return
+        }
+        val candidates = stacksByMarkerId.values.map { stack ->
+            val candidate = stack.asSpatialCandidate()
+            val poi = stack.moments.first().poiId?.let(poiLocationsById::get)
+            if (poi == null) {
+                candidate
+            } else {
+                candidate.copy(
+                    position = alignment.transform(
+                        GeographicPosition(
+                            latitude = poi.latitude,
+                            longitude = poi.longitude,
+                            ellipsoidHeightM = poi.ellipsoidHeightM,
+                        ),
+                        candidate.position,
+                    )
+                )
+            }
+        }
+        arView.updateCandidates(candidates)
+        markerHint.visibility = View.GONE
+        hideViewerState()
+        showCoach(worldGuideText())
+    }
+
+    private fun resetGeoAlignment() {
+        activeGeoReference = null
+        activeLocationAccuracyM = Float.NaN
+        latestHeading = null
+        geoArAlignment = null
+        headingProvider.invalidateLocation()
+        if (::alignmentLabel.isInitialized) {
+            alignmentLabel.text = "GPS · True North 정렬 준비 중"
+            alignmentLabel.setTextColor(COLOR_AMBER)
+        }
+        if (::controlPointLabel.isInitialized) {
+            controlPointLabel.text = "국가기준점 준비 중"
+            controlPointLabel.setTextColor(COLOR_AMBER)
+        }
+        if (::arView.isInitialized) arView.updateCandidates(emptyList())
+    }
+
     private fun activateLocalDemo(error: Throwable? = null) {
+        poiLocationsById.clear()
         val moments = listOf(
             TimelineMoment(
                 id = "local-demo-2024",
@@ -453,6 +614,10 @@ class MainActivity : Activity() {
         stacks.associateByTo(stacksByMarkerId, MomentStack::id)
         arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
         zoneLabel.text = "현재 장소: 을지로 타워 107 · Local Demo"
+        alignmentLabel.text = "Local Demo · GPS·Compass 자동 정렬 미사용"
+        alignmentLabel.setTextColor(0xFFB7C9D8.toInt())
+        controlPointLabel.text = "Local Demo · 국가기준점 조회 미사용"
+        controlPointLabel.setTextColor(0xFFB7C9D8.toInt())
         markerHint.visibility = View.GONE
         hideViewerState()
         showCoach("DEMO · Server 연결 없이 로컬 시간 기록을 표시합니다")
@@ -462,6 +627,7 @@ class MainActivity : Activity() {
     private fun clearMomentStacks() {
         resetGlassDwell()
         stacksByMarkerId.clear()
+        poiLocationsById.clear()
         arView.updateCandidates(emptyList())
     }
 
@@ -648,8 +814,15 @@ class MainActivity : Activity() {
         showCoach(worldGuideText())
     }
 
-    private fun processGlassFrame(markerId: String?, pose: HeadPose, timestampMs: Long) {
+    private fun processGlassFrame(
+        markerId: String?,
+        pose: HeadPose,
+        cameraPosition: Vector3,
+        timestampMs: Long,
+    ) {
         lastHeadPose = pose
+        lastArCameraPosition = cameraPosition
+        maybeCreateGeoAlignment()
         updateViewerHud(pose)
         if (experienceMode != ExperienceMode.GLASS_DEMO) return
         when (experienceState) {
@@ -712,7 +885,9 @@ class MainActivity : Activity() {
         }
         runOnUiThread {
             flightHud.setPose(
-                heading = pose.yawDegrees,
+                heading = geoArAlignment?.let {
+                    pose.yawDegrees - it.yawOffsetDegrees
+                } ?: pose.yawDegrees,
                 pitch = pose.pitchDegrees,
                 roll = HeadGestureRecognizer.angleDelta(rollBaseline, pose.rollDegrees),
                 showRollExitCue = isGlassFullscreen,
@@ -794,11 +969,15 @@ class MainActivity : Activity() {
             if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기",
         ) {
             demoPreviewEnabled = !demoPreviewEnabled
+            resetGeoAlignment()
             if (appScreen == AppScreen.VIEWER) loadZoneAndMoments()
             demoControl.text = if (demoPreviewEnabled) "Demo 미리보기 끄기" else "Demo 미리보기 켜기"
         }
         val reloadControl = actionButton("현재 장소 다시 조회") {
-            if (appScreen == AppScreen.VIEWER) loadZoneAndMoments()
+            if (appScreen == AppScreen.VIEWER) {
+                resetGeoAlignment()
+                loadZoneAndMoments()
+            }
         }
         val gnssControl = actionButton("GNSS 진단 열기") { showGnssDiagnostics() }
         val content = LinearLayout(this).apply {
@@ -1037,8 +1216,10 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            onSpatialFrame = { markerId, pose, timestampMs ->
-                runOnUiThread { processGlassFrame(markerId, pose, timestampMs) }
+            onSpatialFrame = { markerId, pose, cameraPosition, timestampMs ->
+                runOnUiThread {
+                    processGlassFrame(markerId, pose, cameraPosition, timestampMs)
+                }
             }
             setOnTouchListener { _, event -> handleWorldTouch(event) }
         }
@@ -1047,6 +1228,14 @@ class MainActivity : Activity() {
             setTextColor(COLOR_CYAN)
         }
         trackingLabel = overlayText("ARCore 준비 중").apply { textSize = 12f }
+        alignmentLabel = overlayText("GPS · True North 정렬 준비 중").apply {
+            textSize = 11f
+            setTextColor(COLOR_AMBER)
+        }
+        controlPointLabel = overlayText("국가기준점 준비 중").apply {
+            textSize = 11f
+            setTextColor(COLOR_AMBER)
+        }
         markerHint = overlayText("시간 기록을 불러오는 중…").apply {
             gravity = Gravity.CENTER
             textSize = 14f
@@ -1078,6 +1267,8 @@ class MainActivity : Activity() {
                 setPadding(dp(8), 0, 0, 0)
                 addView(zoneLabel)
                 addView(trackingLabel)
+                addView(alignmentLabel)
+                addView(controlPointLabel)
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         viewerRoot.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
@@ -1243,6 +1434,7 @@ class MainActivity : Activity() {
         experienceMode = mode
         experienceState = ExperienceState.WORLD_SCAN
         hudRollBaselineDegrees = null
+        resetGeoAlignment()
         startScreen.visibility = View.GONE
         creatorScreen.visibility = View.GONE
         viewerRoot.visibility = View.VISIBLE
@@ -1267,6 +1459,7 @@ class MainActivity : Activity() {
             clearMomentStacks()
         }
         stopGnssDiagnostics()
+        headingProvider.stop()
         appScreen = AppScreen.START
         viewerRoot.visibility = View.GONE
         creatorScreen.visibility = View.GONE
@@ -1286,6 +1479,7 @@ class MainActivity : Activity() {
         if (leavingViewer) {
             clearMomentStacks()
         }
+        headingProvider.stop()
         appScreen = AppScreen.CREATOR
         viewerRoot.visibility = View.GONE
         startScreen.visibility = View.GONE
@@ -1640,6 +1834,10 @@ class MainActivity : Activity() {
         private const val GLASS_EXIT_ROLL_DEGREES = 15f
         private const val DEMO_ZONE_LATITUDE = 37.5648801960179
         private const val DEMO_ZONE_LONGITUDE = 126.991228638001
+        private const val DEMO_REFERENCE_ACCURACY_M = 0.5f
+        private const val MIN_HEADING_SAMPLES = 5
+        private const val LOCATION_WARNING_ACCURACY_M = 20f
+        private const val HEADING_WARNING_ACCURACY_DEGREES = 15f
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"

@@ -87,13 +87,18 @@ adb install -r .\app\android\app\build\outputs\apk\debug\app-debug.apk
 
 앱의 초기 Profile은 기존 개발 흐름을 유지하는 `USB`다. USB 기기나 Emulator에서 두 Port의 `adb reverse`를 먼저 실행한다. 무선 연결에서는 설정의 API와 Media 주소를 PC의 LAN IP로 함께 변경한다.
 
-## 알려진 공간 정합 제약
+## GPS·Compass 자동 공간 정렬
 
-현재 `SpatialPlacement`와 ARCore Session 좌표의 변환은 Identity Demo다. 실제 장소에서 지속 가능한 배치를 위해 다음 중 하나가 필요하다.
+Backend의 POI WGS84 좌표를 현재 Phone 기준 ENU 미터 좌표로 변환한다. Rotation Vector Sensor Heading은 GPS 위치와 시각에 해당하는 Magnetic Declination을 더해 True North로 바꾸고 최근 1초 표본을 Circular Mean으로 평균한다. GPS Snapshot, True Heading, ARCore Camera Position·Yaw가 준비되면 `GeoArAlignment`를 한 번 생성한다.
 
-- ARCore Geospatial Anchor
-- Cloud Anchor
-- QR/Visual Marker 기반 현장 Calibration
-- 측량된 POI 기준점과 초기 Heading Calibration
+```text
+POI WGS84 - Phone WGS84
+→ ENU East/North/선택 Up
+→ POI local_x/y/z 결합
+→ True North와 ARCore Yaw 차이만큼 회전
+→ ARCore Session 좌표
+```
 
-이 변환이 추가돼도 Backend 후보 검색과 6DoF 가시성 선택의 경계는 유지된다.
+상단 진단에는 GPS Accuracy, True Heading과 추정 정확도, Yaw Offset, 현재 위치에서 가까운 사용 가능 국가기준점 두 점을 표시한다. GPS Accuracy 20m 초과 또는 Heading 정확도 15도 초과는 경고하지만 Demo 진행을 막지 않는다. 정렬 후에는 GPS·Compass 값을 계속 적용하지 않아 Marker Jump를 방지하고 ARCore 6DoF Tracking만 유지한다.
+
+POI와 Phone에 타원체고가 모두 있을 때만 상대 Up을 적용한다. 국가 표고와 Android GNSS 타원체고를 직접 빼지 않는다. 현재 남은 검증은 국가기준점 성과로 Tower 107 POI 좌표·표고를 교체하고 현장에서 수평·수직 오차를 측정하는 작업이다.

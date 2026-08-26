@@ -28,7 +28,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     @Volatile private var contentAlpha = 1f
     @Volatile private var focusedCandidateId: String? = null
     @Volatile var onTrackingUpdate: ((String) -> Unit)? = null
-    @Volatile var onSpatialFrame: ((String?, HeadPose, Long) -> Unit)? = null
+    @Volatile var onSpatialFrame: ((String?, HeadPose, Vector3, Long) -> Unit)? = null
     private var lastSpatialFrameAtMs = 0L
     private var viewportWidth = 1
     private var viewportHeight = 1
@@ -123,6 +123,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
                             atan2(xAxis[1].toDouble(), yAxis[1].toDouble())
                         ).toFloat(),
                     ),
+                    Vector3(translation[0], translation[1], translation[2]),
                     nowMs,
                 )
             }

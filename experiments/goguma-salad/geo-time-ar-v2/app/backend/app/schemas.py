@@ -44,6 +44,29 @@ class GeoZoneNearbyRead(ApiModel):
     distance_m: float
 
 
+class PoiRead(ApiModel):
+    id: uuid.UUID
+    geo_zone_id: uuid.UUID
+    name: str
+    poi_type: str
+    latitude: float
+    longitude: float
+    ellipsoid_height_m: float | None = None
+    orthometric_height_m: float | None = None
+
+
+class SurveyControlPointRead(ApiModel):
+    id: str
+    point_type: str
+    latitude: float
+    longitude: float
+    ellipsoid_height_m: float | None = None
+    orthometric_height_m: float | None = None
+    geoid_height_m: float | None = None
+    status: str
+    distance_m: float
+
+
 class MomentCreate(ApiModel):
     geo_zone_id: uuid.UUID
     poi_id: uuid.UUID | None = None

@@ -20,6 +20,22 @@ data class NearbyZone(
     val radiusM: Double,
 )
 
+data class PoiLocation(
+    val id: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    val ellipsoidHeightM: Double?,
+    val orthometricHeightM: Double?,
+)
+
+data class SurveyControlPoint(
+    val id: String,
+    val distanceM: Double,
+    val ellipsoidHeightM: Double?,
+    val orthometricHeightM: Double?,
+)
+
 class GeoTimeApiClient(
     private val baseUrl: String,
     private val executor: ExecutorService = Executors.newSingleThreadExecutor(),
@@ -78,6 +94,62 @@ class GeoTimeApiClient(
                                 "campaign" -> SpatialSourceType.CAMPAIGN
                                 else -> SpatialSourceType.MOMENT
                             },
+                        )
+                    )
+                }
+            }
+        }.also(onResult)
+    }
+
+    fun loadPois(
+        zoneId: String,
+        onResult: (Result<List<PoiLocation>>) -> Unit,
+    ) = executor.execute {
+        runCatching {
+            val items = JSONArray(get("/geozones/$zoneId/pois?limit=500"))
+            buildList {
+                repeat(items.length()) { index ->
+                    val item = items.getJSONObject(index)
+                    add(
+                        PoiLocation(
+                            id = item.getString("id"),
+                            name = item.getString("name"),
+                            latitude = item.getDouble("latitude"),
+                            longitude = item.getDouble("longitude"),
+                            ellipsoidHeightM = item.optDouble("ellipsoid_height_m")
+                                .takeUnless(Double::isNaN),
+                            orthometricHeightM = item.optDouble("orthometric_height_m")
+                                .takeUnless(Double::isNaN),
+                        )
+                    )
+                }
+            }
+        }.also(onResult)
+    }
+
+    fun loadNearestControlPoints(
+        latitude: Double,
+        longitude: Double,
+        onResult: (Result<List<SurveyControlPoint>>) -> Unit,
+    ) = executor.execute {
+        runCatching {
+            val items = JSONArray(
+                get(
+                    "/control-points/nearest?latitude=$latitude&longitude=$longitude" +
+                        "&radius_m=50000&limit=2"
+                )
+            )
+            buildList {
+                repeat(items.length()) { index ->
+                    val item = items.getJSONObject(index)
+                    add(
+                        SurveyControlPoint(
+                            id = item.getString("id"),
+                            distanceM = item.getDouble("distance_m"),
+                            ellipsoidHeightM = item.optDouble("ellipsoid_height_m")
+                                .takeUnless(Double::isNaN),
+                            orthometricHeightM = item.optDouble("orthometric_height_m")
+                                .takeUnless(Double::isNaN),
                         )
                     )
                 }

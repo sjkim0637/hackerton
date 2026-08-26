@@ -23,6 +23,22 @@ GET /geozones/{id}/timeline?from=2024-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&li
 
 Moment를 `recorded_at DESC, id` 순으로 반환한다.
 
+## POI 절대좌표
+
+```http
+GET /geozones/{id}/pois?limit=100
+```
+
+POI의 WGS84 위·경도와 선택적인 `ellipsoid_height_m`, `orthometric_height_m`를 반환한다. Android는 Timeline의 `poi_id`와 이 응답을 결합해 POI를 현재 ARCore Session 좌표로 변환한다.
+
+## 가까운 국가기준점
+
+```http
+GET /control-points/nearest?latitude=37.5648801960179&longitude=126.991228638001&radius_m=50000&limit=2
+```
+
+`available` 상태인 국가기준점을 PostGIS 거리순으로 반환한다. Tower 107 Demo에는 로컬로 등록한 `기준좌표 1`, `기준좌표 2`가 선택된다. 원본 성과표와 실제 국가기준점 명칭은 저장소에 보관하지 않는다.
+
 ## Moment
 
 - `GET /moments/{id}`

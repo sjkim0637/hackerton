@@ -13,6 +13,8 @@ from app.schemas import (
     MomentCreate,
     MomentRead,
     PlacementRead,
+    PoiRead,
+    SurveyControlPointRead,
 )
 
 ZONE_ID = uuid.UUID("10000000-0000-4000-8000-000000000001")
@@ -93,6 +95,47 @@ class FakeRepository:
     def timeline(self, geo_zone_id, from_at, to_at, limit):
         self.timeline_args = (geo_zone_id, from_at, to_at, limit)
         return [moment()]
+
+    def pois(self, geo_zone_id, limit):
+        return [
+            PoiRead(
+                id=uuid.UUID("10000000-0000-4000-8000-000000000007"),
+                geo_zone_id=geo_zone_id,
+                name="Test POI",
+                poi_type="control-point-surveyed",
+                latitude=37.5648801960179,
+                longitude=126.991228638001,
+                ellipsoid_height_m=52.4,
+                orthometric_height_m=29.1,
+            )
+        ][:limit]
+
+    def nearest_control_points(self, latitude, longitude, radius_m, limit):
+        points = [
+            SurveyControlPointRead(
+                id="기준좌표 1",
+                point_type="integrated",
+                latitude=37.55735084722222,
+                longitude=126.99438868888889,
+                ellipsoid_height_m=83.4359,
+                orthometric_height_m=60.0883,
+                geoid_height_m=23.364,
+                status="available",
+                distance_m=882.3,
+            ),
+            SurveyControlPointRead(
+                id="기준좌표 2",
+                point_type="integrated",
+                latitude=37.566232525,
+                longitude=126.97020440555556,
+                ellipsoid_height_m=68.0229,
+                orthometric_height_m=44.7049,
+                geoid_height_m=23.3031,
+                status="available",
+                distance_m=1859.2,
+            ),
+        ]
+        return points[:limit]
 
     def get_moment(self, moment_id):
         return moment(moment_id) if moment_id == MOMENT_ID else None

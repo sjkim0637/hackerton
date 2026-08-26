@@ -22,7 +22,7 @@ Geo + Time
 
 ## 지속 좌표와 세션 좌표
 
-ARCore 원시 Pose는 앱 세션마다 달라질 수 있다. DB에는 안정적인 Zone/Geospatial/Cloud Anchor 좌표만 저장하고, 기기에서 현재 세션 좌표로 변환한다.
+ARCore 원시 Pose는 앱 세션마다 달라질 수 있다. DB에는 국가기준점 성과로 측량 가능한 POI WGS84 절대좌표와 POI 상대 Placement만 저장한다. Android는 GPS, True North와 ARCore Camera Pose로 현재 Session Transform을 한 번 만들며, 정렬 후 GPS·Compass 변화로 Marker를 계속 이동시키지 않는다.
 
 ## 시간 탐색 UX
 

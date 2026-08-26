@@ -60,6 +60,8 @@ class POI(TimestampMixin, Base):
     location: Mapped[Any] = mapped_column(
         Geography(geometry_type="POINT", srid=4326), nullable=False
     )
+    ellipsoid_height_m: Mapped[float | None] = mapped_column(Float)
+    orthometric_height_m: Mapped[float | None] = mapped_column(Float)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, default=dict, nullable=False
     )
@@ -67,6 +69,25 @@ class POI(TimestampMixin, Base):
     geo_zone: Mapped[GeoZone] = relationship(back_populates="pois")
 
     __table_args__ = (Index("ix_pois_location_gist", "location", postgresql_using="gist"),)
+
+
+class SurveyControlPoint(TimestampMixin, Base):
+    __tablename__ = "survey_control_points"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    point_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    location: Mapped[Any] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=False
+    )
+    ellipsoid_height_m: Mapped[float | None] = mapped_column(Float)
+    orthometric_height_m: Mapped[float | None] = mapped_column(Float)
+    geoid_height_m: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="available")
+    source_document: Mapped[str | None] = mapped_column(String(300))
+
+    __table_args__ = (
+        Index("ix_survey_control_points_location_gist", "location", postgresql_using="gist"),
+    )
 
 
 class Content(TimestampMixin, Base):

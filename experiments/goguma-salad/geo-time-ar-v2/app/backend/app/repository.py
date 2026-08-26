@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from geoalchemy2 import Geography
+from geoalchemy2 import Geography, Geometry
 from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -13,6 +13,8 @@ from app.schemas import (
     GeoZoneNearbyRead,
     MomentCreate,
     PlacementRead,
+    PoiRead,
+    SurveyControlPointRead,
 )
 
 
@@ -40,6 +42,72 @@ class PostgresRepository:
                 distance_m=round(float(distance_m), 2),
             )
             for zone, distance_m in self.db.execute(statement).all()
+        ]
+
+    def pois(self, geo_zone_id: uuid.UUID, limit: int) -> list[PoiRead]:
+        geometry = cast(models.POI.location, Geometry(geometry_type="POINT", srid=4326))
+        statement = (
+            select(
+                models.POI,
+                func.ST_Y(geometry).label("latitude"),
+                func.ST_X(geometry).label("longitude"),
+            )
+            .where(models.POI.geo_zone_id == geo_zone_id)
+            .order_by(models.POI.name, models.POI.id)
+            .limit(limit)
+        )
+        return [
+            PoiRead(
+                id=poi.id,
+                geo_zone_id=poi.geo_zone_id,
+                name=poi.name,
+                poi_type=poi.poi_type,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                ellipsoid_height_m=poi.ellipsoid_height_m,
+                orthometric_height_m=poi.orthometric_height_m,
+            )
+            for poi, latitude, longitude in self.db.execute(statement).all()
+        ]
+
+    def nearest_control_points(
+        self, latitude: float, longitude: float, radius_m: float, limit: int
+    ) -> list[SurveyControlPointRead]:
+        target = cast(func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326), Geography)
+        distance = func.ST_Distance(models.SurveyControlPoint.location, target)
+        geometry = cast(
+            models.SurveyControlPoint.location,
+            Geometry(geometry_type="POINT", srid=4326),
+        )
+        statement = (
+            select(
+                models.SurveyControlPoint,
+                func.ST_Y(geometry).label("latitude"),
+                func.ST_X(geometry).label("longitude"),
+                distance.label("distance_m"),
+            )
+            .where(
+                models.SurveyControlPoint.status == "available",
+                func.ST_DWithin(models.SurveyControlPoint.location, target, radius_m),
+            )
+            .order_by(distance, models.SurveyControlPoint.id)
+            .limit(limit)
+        )
+        return [
+            SurveyControlPointRead(
+                id=point.id,
+                point_type=point.point_type,
+                latitude=float(point_latitude),
+                longitude=float(point_longitude),
+                ellipsoid_height_m=point.ellipsoid_height_m,
+                orthometric_height_m=point.orthometric_height_m,
+                geoid_height_m=point.geoid_height_m,
+                status=point.status,
+                distance_m=round(float(distance_m), 2),
+            )
+            for point, point_latitude, point_longitude, distance_m in self.db.execute(
+                statement
+            ).all()
         ]
 
     def timeline(

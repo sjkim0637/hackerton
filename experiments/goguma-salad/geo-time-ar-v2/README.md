@@ -35,6 +35,8 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - 현재 동작에 맞춰 바뀌는 Coach Mark와 설정의 안내 On/Off
 - Demo·USB·운영 Server Profile, API·Media 주소 저장과 연결 실패 원인 진단
 - 선택한 Media 주소로 Backend 공개 Asset URL의 Origin을 교체하는 재생 경로
+- POI WGS84 절대좌표, True North Heading과 ARCore Camera Pose 기반 자동 Session 정렬
+- 정렬 후 GPS·Compass를 계속 적용하지 않는 ARCore Local 6DoF Marker 고정
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 

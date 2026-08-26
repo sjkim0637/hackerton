@@ -17,6 +17,8 @@ from app.schemas import (
     HealthRead,
     MomentCreate,
     MomentRead,
+    PoiRead,
+    SurveyControlPointRead,
     VisibilityRequest,
     VisibilityResponse,
     VisibleCandidate,
@@ -62,6 +64,30 @@ def nearby_geozones(
     repository: PostgresRepository = Depends(get_repository),
 ) -> list[GeoZoneNearbyRead]:
     return repository.nearby_geozones(latitude, longitude, radius_m, limit)
+
+
+@app.get("/geozones/{geo_zone_id}/pois", response_model=list[PoiRead], tags=["geo"])
+def geozone_pois(
+    geo_zone_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    repository: PostgresRepository = Depends(get_repository),
+) -> list[PoiRead]:
+    return repository.pois(geo_zone_id, limit)
+
+
+@app.get(
+    "/control-points/nearest",
+    response_model=list[SurveyControlPointRead],
+    tags=["geo"],
+)
+def nearest_control_points(
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_m: float = Query(default=50_000, gt=0, le=100_000),
+    limit: int = Query(default=2, ge=1, le=20),
+    repository: PostgresRepository = Depends(get_repository),
+) -> list[SurveyControlPointRead]:
+    return repository.nearest_control_points(latitude, longitude, radius_m, limit)
 
 
 @app.get("/geozones/{geo_zone_id}/timeline", response_model=list[MomentRead], tags=["time"])

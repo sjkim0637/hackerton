@@ -71,24 +71,30 @@
 ```text
 Android GPS
   → 주변 GeoZone 검색
-  → GeoZone의 Timeline과 POI ID 조회
+  → GeoZone의 POI 절대좌표와 Timeline 조회
   → POI별 Moment 묶음
-  → SpatialPlacement.local_x/y/z를 ARCore Session 좌표에 그대로 배치
+  → POI WGS84를 Phone 기준 ENU로 변환
+  → True North와 ARCore Camera Yaw로 Session Transform 생성
+  → POI 상대 SpatialPlacement를 ARCore Session 좌표에 배치
 ```
 
 - GPS는 현재 사용자가 어느 `GeoZone` 주변에 있는지 찾는 데 사용한다.
 - Android가 제공하는 최근 위치 기록만 사용한다. 위치 좌표를 앱 설정이나 Database에 별도로 저장하지 않으며, Android에서 기록을 받지 못하면 임의의 기본 좌표로 조회하지 않는다.
-- `POI.location`에도 GPS 위·경도가 저장되지만 Android Marker 배치 계산에는 아직 사용하지 않는다.
-- Marker 위치는 Seed의 `local_x/y/z`를 사용한다.
-- Zone-local 좌표와 ARCore Session 좌표 변환은 현재 Identity로 가정한다.
-- 따라서 앱을 다시 실행하거나 다른 기기로 접속했을 때 같은 물리 위치를 정확히 재현한다고 보장할 수 없다.
+- `POI.location`의 WGS84 위·경도와 `SpatialPlacement.local_x/y/z`를 결합한다.
+- Rotation Vector Sensor는 Magnetic Declination을 적용해 True North로 변환하고 최근 1초 표본을 평균한다.
+- GPS·Heading·ARCore Camera Pose가 준비되면 Session Transform을 한 번 만들고 이후 ARCore 6DoF만 사용한다.
+- POI 국가좌표는 향후 가까운 국가기준점 성과를 이용해 생성하며 현재 Tower 107은 Seed 좌표로 변환 계층을 검증한다.
 
 ### 남은 작업
 
-- [ ] 현재 GPS 기준 주변 POI 조회 API 구현
-- [ ] GeoZone 중심과 POI GPS를 Zone-local 동·북 좌표로 변환
-- [ ] 기기 Heading과 ARCore Session 원점 Calibration
-- [ ] QR·Visual Marker, Geospatial Anchor, Cloud Anchor 비교
+- [x] GeoZone POI 절대 위·경도·선택 표고 조회 API 구현
+- [x] Phone GPS와 POI WGS84를 ENU 동·북 좌표로 변환
+- [x] Magnetic Declination·True North와 ARCore Camera Pose로 Session Transform 생성
+- [x] 정렬 후 GPS·Compass 갱신 대신 ARCore 6DoF Tracking 유지
+- [x] 사용 가능한 두 점을 `기준좌표 1`, `기준좌표 2`로 Backend Seed
+- [x] 현재 위치에서 가까운 사용 가능 국가기준점 두 점 PostGIS 선택
+- [ ] 국가기준점 Open API 인증키 연결과 주기적 전체 성과 동기화
+- [ ] Tower 107 POI 좌표와 표고를 실제 국가기준점 측량 성과로 교체
 - [ ] Creator가 배치한 Anchor를 다음 Session에서 복원
 - [ ] GPS 오차가 큰 실내·도심 환경의 보정 방식 결정
 - [ ] 여러 기기에서 동일 POI Marker 위치 현장 Test
@@ -107,7 +113,7 @@ Android GPS
 
 RTK는 야외 절대 위치를 정밀하게 잡는 수단이며 Camera 방향, 공간 특징 추적, 실내 위치를 단독으로 해결하지 않는다. 제품 구조는 RTK로 세계 좌표의 기준점을 잡고 ARCore가 근거리의 부드러운 6DoF 움직임을 담당하도록 분리한다.
 
-POI 기반 Creator를 시작하기 전에 최소한 하나의 Calibration 방식을 선택해야 한다. 초기 Demo는 QR 또는 명확한 POI 기준점을 이용한 Calibration이 가장 재현하기 쉽다.
+POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동 Session Transform을 기준으로 한다. QR 또는 수동 Visual Anchor는 기본 흐름에 포함하지 않는다. 수평 오차가 제품 허용 범위를 넘을 때만 별도 보강 계층을 검토한다.
 
 ## P1 — Creator Mode
 

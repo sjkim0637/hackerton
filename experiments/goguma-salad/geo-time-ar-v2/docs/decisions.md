@@ -18,6 +18,8 @@ Moment와 Campaign 원본을 중복 저장하지 않는다. 필요성이 확인�
 
 ## ADR-005 — Android의 Zone-local MVP
 
+**Status: Superseded by ADR-011**
+
 초기 빌드는 콘텐츠 선택과 Anchor 렌더링을 검증하기 위해 Zone/Session 변환을 Identity로 둔다. 현장 영속 배치 단계에서 Calibration 전략을 별도 추가한다.
 
 ## ADR-006 — Time Slider 대신 Reality Rewind Gesture
@@ -81,3 +83,15 @@ Android는 여러 기기에서 Raw GNSS 측정을 제공하지만 Carrier Phase�
 ADR-007에서 정한 전체 감상 종료의 상하 Pitch 15도 입력은 사용 의도 해석이 잘못된 것으로 확인되어 이 항목만 본 결정으로 대체한다. 전체 감상 중 재생 시작 자세에서 좌우 Roll이 어느 방향이든 15도에 도달하면 즉시 AR 탐색으로 복귀한다. 빠른 Yaw 왕복을 이용한 이전·다음 Moment 이동과 확인 화면의 Pitch·Yaw 왕복 입력은 그대로 유지한다.
 
 HUD는 넓은 Pitch Ladder 대신 좌하단의 작은 원형 Artificial Horizon을 사용한다. 원 내부 지평선은 Pitch에 따라 이동하고 Roll에 따라 회전하며, Glass 전체 감상에서는 원 둘레에 좌우 Roll 15도 종료 지점을 표시한다.
+
+## ADR-011 — 국가기준점 POI와 GPS·True North 자동 Session 정렬
+
+**Status: Accepted for Prototype**
+
+QR이나 사용자가 랜드마크를 화면에 맞추는 수동 Calibration을 기본 흐름으로 사용하지 않는다. POI 절대좌표는 공개된 국가기준점 성과를 기준으로 생성하고, Viewer는 Phone GPS, Magnetic Declination을 적용한 True North Heading과 ARCore Camera Pose로 Session Transform을 한 번 만든다.
+
+POI WGS84 좌표는 Phone 기준 ENU로 변환하고 POI 상대 `SpatialPlacement`를 더한 뒤 `+X East, +Y Up, -Z North` ARCore 좌표로 회전한다. Transform 생성 이후에는 GPS·Compass 갱신으로 Marker를 이동시키지 않고 ARCore Local 6DoF를 사용한다.
+
+국가기준점 Open API는 인증키가 필요하므로 Android가 직접 호출하지 않는다. Backend가 공개 성과를 동기화하고 PostGIS에서 가까운 기준점을 선택할 수 있는 Provider 경계를 둔다. Prototype은 Tower 107 Seed POI 좌표로 변환을 검증하며 실제 국가기준점 성과와 현장 오차 측정은 후속 데이터 작업으로 남긴다.
+
+수직축은 WGS84 타원체고와 국가 표고를 구분한다. POI와 Phone 양쪽에 타원체고가 있을 때만 자동 Up 차이를 적용하고, 표고·지면·Camera 높이는 별도 보정 계층으로 유지한다.

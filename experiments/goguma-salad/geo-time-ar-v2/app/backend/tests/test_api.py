@@ -32,6 +32,28 @@ def test_nearby_rejects_invalid_latitude(client):
     assert response.status_code == 422
 
 
+def test_geozone_pois_include_absolute_position_and_elevation(client):
+    response = client.get(f"/geozones/{ZONE_ID}/pois")
+
+    assert response.status_code == 200
+    poi = response.json()[0]
+    assert poi["latitude"] == 37.5648801960179
+    assert poi["longitude"] == 126.991228638001
+    assert poi["ellipsoid_height_m"] == 52.4
+    assert poi["orthometric_height_m"] == 29.1
+
+
+def test_nearest_control_points_returns_available_points_by_distance(client):
+    response = client.get(
+        "/control-points/nearest",
+        params={"latitude": 37.5648801960179, "longitude": 126.991228638001},
+    )
+
+    assert response.status_code == 200
+    assert [point["id"] for point in response.json()] == ["기준좌표 1", "기준좌표 2"]
+    assert response.json()[0]["ellipsoid_height_m"] == 83.4359
+
+
 def test_timeline_passes_filters(client, fake_repository):
     from_at = "2025-01-01T00:00:00Z"
     to_at = "2026-01-01T00:00:00Z"

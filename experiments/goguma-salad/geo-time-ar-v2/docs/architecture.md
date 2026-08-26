@@ -11,7 +11,9 @@ flowchart TD
     PG --> Candidates
     Candidates --> Assets[(MinIO)]
     Candidates --> Selector[Android 6DoF Visibility Selector]
-    Pose[ARCore Camera Pose] --> Transform[Zone/Session 좌표 정합]
+    GPS --> Transform[WGS84 ENU + True North Session Transform]
+    Compass[Rotation Vector + Magnetic Declination] --> Transform
+    Pose[ARCore Camera Pose] --> Transform
     Transform --> Selector
     Selector --> Anchor[ARCore Anchor]
     Anchor --> Render[Camera + Spatial Marker]
@@ -25,4 +27,6 @@ Backend는 현재 위치와 선택 시간에 유효한 후보만 반환한다. �
 
 ## 좌표계
 
-DB의 `SpatialPlacement.local_x/y/z`는 GeoZone 원점을 기준으로 `+X 동쪽, +Y 위쪽, -Z 북쪽`인 Zone-local AR 좌표를 사용한다. ARCore Pose는 세션 로컬 좌표이므로 현장 Calibration 결과를 통해 이 좌표계로 변환해야 한다. 초기 앱은 변환 행렬이 Identity라고 가정하는 Demo 단계다.
+DB의 `POI.location`은 WGS84 절대 위·경도이며 `SpatialPlacement.local_x/y/z`는 POI를 기준으로 `+X 동쪽, +Y 위쪽, -Z 북쪽`인 상대 좌표를 사용한다. Android는 Session 시작 시 Phone GPS, True North Heading과 ARCore Camera Pose를 한 번 결합한다. POI를 Phone 기준 ENU 미터 좌표로 변환한 뒤 POI 상대 배치를 더하고, 고정된 Transform으로 ARCore Session 좌표를 만든다. 이후 GPS·Compass 갱신은 Marker에 계속 적용하지 않고 ARCore 6DoF Tracking을 유지한다.
+
+POI와 Phone 양쪽에 WGS84 타원체고가 있을 때만 수직 차이를 자동 적용한다. 국가 표고인 `orthometric_height_m`는 타원체고와 섞지 않고 지면·층고 보정을 위한 별도 기준으로 유지한다.
