@@ -1,0 +1,51 @@
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --border: #e4dfd3;
+  --text: #2b2620;
+  --text-muted: #756f63;
+  --primary: #d97a4d;
+  --primary-dark: #b8623a;
+  --map-ground: #eef3e6;
+  --pin-empty: #b7b0a1;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow: 0 4px 16px rgba(43, 38, 32, 0.08);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
