@@ -7,6 +7,7 @@
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
+| shinym87 + Claude | `agent/shinym87/ar-memory` | `experiments/shinym87/ar-memory/` | 단지 추억 공유 소셜 AR | 지도(단지 배치도) 위 핀·타임라인 기반으로 장소별 추억 기록/공유 컨셉을 웹 프로토타입으로 검증한다. | `IN_PROGRESS` | [ar-memory](docs/workstreams/ar-memory.md) | 2026-08-26 |
 
 ## 사용 방법
 
