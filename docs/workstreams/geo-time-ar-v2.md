@@ -121,6 +121,7 @@ TBD
 - WGS84 ENU, True North, ARCore Session Transform과 고정 6DoF 배치 적용 후 Android Unit Test 20개와 `assembleDebug`: 통과
 - 로컬 `기준좌표 1`, `기준좌표 2` 등록과 사용 가능 기준점 거리순 조회 API 추가 후 Ruff와 Backend Pytest 17개: 통과
 - Compass Tape·상단 안내 분리, Pitch·Roll HUD 축소와 Popup 최상위 계층 정리 후 Android Unit Test 20개, `assembleDebug`, 실기기 APK 설치: 통과
+- Display Cutout 아래 Compass 배치와 홈 버튼 없는 3줄 Compact 안내 적용 후 Android Unit Test 20개, `assembleDebug`, 실기기 APK 설치: 통과
 
 ## Known Issues
 
@@ -173,6 +174,7 @@ TBD
 - `e44f8e7` feat(android): Server Profile 설정과 연결 진단 추가
 - `eba517e` feat(spatial): 익명 기준좌표 기반 자동 AR 정렬 구현
 - `9e37e16` fix(android): Viewer HUD 겹침과 Popup 계층 정리
+- `c917b86` fix(android): Pinhole 아래로 Viewer 안내 축소
 
 ## Updated
 
