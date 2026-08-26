@@ -4,6 +4,8 @@
 
 현재는 **Phase 1 - Planning & Exploration** 단계이다. 공통 Application, 기술 Stack, Architecture는 아직 정하지 않았으며 각 팀의 구현은 독립 실험으로 관리한다.
 
+> 현재 `agent/goguma-salad/geo-time-ar-v2` 개발 버전은 [APK 설치와 운영 Server 테스트 안내](experiments/goguma-salad/geo-time-ar-v2/docs/current-development-version-install.md)에 따라 로컬 Backend 없이 시험할 수 있다.
+
 ## 처음 참여할 때
 
 다음 문서를 순서대로 읽는다.

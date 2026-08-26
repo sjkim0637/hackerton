@@ -10,6 +10,8 @@ Rendering: ARCore + Anchor
 
 이 문서는 `goguma-salad`의 Workstream 전용 실행 안내이다. 저장소 전체 협업 안내는 [루트 README](../../../README.md), 공통 작업 규칙은 [루트 AGENTS](../../../AGENTS.md)를 따른다.
 
+> 로컬 Backend 없이 APK를 설치해 시험하려면 [현재 개발 버전 설치와 운영 Server 테스트](docs/current-development-version-install.md)를 먼저 확인한다.
+
 아래 명령은 Repository Root에서 이 실험 폴더로 이동한 뒤 실행한다.
 
 ```powershell
@@ -117,6 +119,7 @@ Repository Root를 연 상태에서 `터미널 → 작업 실행`을 선택하�
 
 ## Workstream 문서
 
+- [현재 개발 버전 설치와 운영 Server 테스트](docs/current-development-version-install.md)
 - [현재 Workstream 상태](../../../docs/workstreams/geo-time-ar-v2.md)
 - [개발 계획](docs/development-plan.md)
 - [원본 구축 지시문](docs/original-instructions.md)
