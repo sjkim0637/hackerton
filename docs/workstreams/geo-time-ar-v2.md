@@ -76,7 +76,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - 조작 안내는 Popup이 아니라 현재 상태에 맞춰 바뀌는 Coach Mark로 표시하며 앱 설정에서 숨길 수 있다.
 - 실제 제품은 공통 상태 흐름 위에 Phone과 Glass Presentation·Tracking Adapter를 분리한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
-- QR이나 수동 Landmark Calibration 대신 국가기준점으로 산출한 POI 좌표와 GPS·True North 자동 Session 정렬을 사용한다.
+- QR이나 수동 Landmark Calibration 대신 두 기준좌표로 산출한 POI 좌표와 GPS·True North 자동 Session 정렬을 사용한다.
 
 ## Dependencies
 
@@ -122,18 +122,18 @@ TBD
 - 로컬 `기준좌표 1`, `기준좌표 2` 등록과 사용 가능 기준점 거리순 조회 API 추가 후 Ruff와 Backend Pytest 17개: 통과
 - Compass Tape·상단 안내 분리, Pitch·Roll HUD 축소와 Popup 최상위 계층 정리 후 Android Unit Test 20개, `assembleDebug`, 실기기 APK 설치: 통과
 - Display Cutout 아래 Compass 배치와 홈 버튼 없는 3줄 Compact 안내 적용 후 Android Unit Test 20개, `assembleDebug`, 실기기 APK 설치: 통과
+- 마지막 Viewer Mode, Preview 음소거·자동재생, 권한 상태, App·Backend Version 적용 후 Ruff, Backend Pytest 17개, Android Unit Test 20개와 `assembleDebug`: 통과
 
 ## Known Issues
 
 - 실기기 잠금 해제 후 Phone과 Glass 데모 전체 흐름을 사람 눈으로 보는 최종 UX 평가는 남아 있다.
 - Creator 진입 화면과 3단계 Flow는 준비됐지만 촬영·Gallery 선택·공간 배치·Upload 동작은 P1 구현 전이다.
 - 현재 Seed는 영상이 아닌 SVG Placeholder라 Phone UX 데모는 외부 Media3 테스트 영상을 대신 사용한다.
-- Tower 107 POI는 아직 실제 국가기준점 성과로 측량한 좌표·표고가 아니라 기존 Seed 좌표를 사용한다.
-- 원본 국가기준점 성과표는 저장소에 보관하지 않으며, 전국 성과 자동 동기화와 Open API 인증키 연결은 후속 작업이다.
+- Tower 107 POI는 아직 실제 기준좌표 측량 결과가 아니라 기존 Seed 좌표를 사용한다.
+- 원본 좌표 성과표는 저장소에 보관하지 않으며, 외부 좌표 자동 동기화와 Open API 인증키 연결은 후속 작업이다.
 - 수직 위치는 POI와 Phone 양쪽에 타원체고가 있을 때만 자동 반영하며 국가 표고, 지면 Plane과 Camera 높이의 현장 보정은 남아 있다.
 - 주변 GeoZone 조회는 Android가 제공하는 최근 GPS 기록을 사용하며 앱에 위치를 별도 저장하거나 임의의 기본 좌표로 대체하지 않는다.
-- RTK는 ARCore를 대체하지 않고 절대 위치 기준을 보강하는 선택지로 검증한다.
-- `SM-S908N` 야외 실측에서는 L1/L5 신호를 수신했지만 유효 ADR이 0개라 내장 Carrier Phase RTK를 사용할 수 없다.
+- `SM-S908N` 야외 실측에서 유효 ADR이 0개로 확인되어 RTK는 P0·P1에서 `SKIP`한다.
 - 기존 저장소의 기술 선택은 아직 다른 Workstream과 비교·검토되지 않았다.
 
 ## Next
@@ -142,8 +142,10 @@ TBD
 
 1. `기준좌표 1`, `기준좌표 2`와 Tower 107 사이 측량 관측값으로 POI 좌표·표고를 확정한다.
 2. Tower 107에서 자동 Session 정렬의 수평·수직 오차를 측정한다.
-3. 실제 Demo 영상을 교체하고 Preload와 Cache를 적용한다.
-4. Creator 촬영·공간 배치·Upload MVP를 구현한다.
+3. POI·Moment API, Media Storage와 Upload 흐름의 책임·배포 구조를 결정한다.
+4. 외부 Backend와 Object Storage 최소 운영 환경을 구성한다.
+5. 실제 Demo 영상을 교체하고 Preload와 Cache를 적용한다.
+6. Creator 촬영·공간 배치·Upload MVP를 구현한다.
 
 ## Relevant Commits
 
@@ -175,6 +177,7 @@ TBD
 - `eba517e` feat(spatial): 익명 기준좌표 기반 자동 AR 정렬 구현
 - `9e37e16` fix(android): Viewer HUD 겹침과 Popup 계층 정리
 - `c917b86` fix(android): Pinhole 아래로 Viewer 안내 축소
+- `7082d41` feat(p0): Viewer 설정과 Version 진단 마무리
 
 ## Updated
 
