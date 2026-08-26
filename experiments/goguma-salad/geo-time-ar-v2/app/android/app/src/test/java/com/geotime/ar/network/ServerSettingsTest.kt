@@ -7,6 +7,18 @@ import org.junit.Test
 
 class ServerSettingsTest {
     @Test
+    fun `production profile uses deployed public endpoints`() {
+        val settings = ServerSettings.defaults(ServerProfile.PRODUCTION)
+
+        assertEquals("https://geo-time-ar-v2.vercel.app", settings.apiBaseUrl)
+        assertEquals(
+            "https://rsmdmqhmerjiaqoyefhs.supabase.co/storage/v1/object",
+            settings.mediaBaseUrl,
+        )
+        assertNull(settings.validationError())
+    }
+
+    @Test
     fun `base URLs are trimmed and normalized`() {
         val settings = ServerSettings(ServerProfile.USB, " http://127.0.0.1:8000/ ", "http://127.0.0.1:9000/")
 

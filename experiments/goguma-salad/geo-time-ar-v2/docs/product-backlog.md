@@ -113,8 +113,8 @@ Creator 구현 전에 POI·Moment Metadata와 영상 원본·변환본을 어디
 - [ ] POI·Moment API와 Media 공개 URL의 책임 경계 결정
 - [ ] 단일 배포와 API·Worker·Object Storage 분리 배포 비교
 - [ ] Upload 등록 → 영상 전송 → 검증·변환 → Moment 발행 상태 흐름 확정
-- [ ] HTTPS API Domain과 운영 환경 배포
-- [ ] PostgreSQL/PostGIS 운영 DB
+- [x] HTTPS API Domain과 운영 환경 배포
+- [x] PostgreSQL/PostGIS 운영 DB
 - [ ] S3 호환 Object Storage와 CDN
 - [ ] 사용자 로그인, Token과 Creator 소유권
 - [ ] Thumbnail 생성, Metadata 추출과 영상 변환 Worker

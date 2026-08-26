@@ -34,9 +34,9 @@ enum class ServerProfile(
     ),
     PRODUCTION(
         label = "운영",
-        description = "인터넷에서 접근 가능한 HTTPS API와 Media를 사용합니다.",
-        defaultApiUrl = "https://api.example.com",
-        defaultMediaUrl = "https://media.example.com",
+        description = "Vercel API와 Supabase Media Endpoint를 사용합니다.",
+        defaultApiUrl = "https://geo-time-ar-v2.vercel.app",
+        defaultMediaUrl = "https://rsmdmqhmerjiaqoyefhs.supabase.co/storage/v1/object",
         usesNetwork = true,
     ),
 }
@@ -93,8 +93,16 @@ class ServerSettingsStore(private val preferences: SharedPreferences) {
 
     fun load(profile: ServerProfile = selectedProfile()): ServerSettings = ServerSettings(
         profile = profile,
-        apiBaseUrl = preferences.getString(apiKey(profile), profile.defaultApiUrl) ?: profile.defaultApiUrl,
-        mediaBaseUrl = preferences.getString(mediaKey(profile), profile.defaultMediaUrl) ?: profile.defaultMediaUrl,
+        apiBaseUrl = loadEndpoint(
+            apiKey(profile),
+            profile.defaultApiUrl,
+            if (profile == ServerProfile.PRODUCTION) LEGACY_PRODUCTION_API_URL else null,
+        ),
+        mediaBaseUrl = loadEndpoint(
+            mediaKey(profile),
+            profile.defaultMediaUrl,
+            if (profile == ServerProfile.PRODUCTION) LEGACY_PRODUCTION_MEDIA_URL else null,
+        ),
     ).normalized()
 
     fun save(settings: ServerSettings) {
@@ -109,8 +117,15 @@ class ServerSettingsStore(private val preferences: SharedPreferences) {
     private fun apiKey(profile: ServerProfile) = "server_api_${profile.name.lowercase()}"
     private fun mediaKey(profile: ServerProfile) = "server_media_${profile.name.lowercase()}"
 
+    private fun loadEndpoint(key: String, defaultValue: String, legacyValue: String?): String {
+        val saved = preferences.getString(key, defaultValue) ?: defaultValue
+        return if (saved == legacyValue) defaultValue else saved
+    }
+
     companion object {
         private const val KEY_PROFILE = "server_profile"
+        private const val LEGACY_PRODUCTION_API_URL = "https://api.example.com"
+        private const val LEGACY_PRODUCTION_MEDIA_URL = "https://media.example.com"
     }
 }
 

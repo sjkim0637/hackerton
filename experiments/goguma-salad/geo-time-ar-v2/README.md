@@ -96,6 +96,8 @@ app/android/app/build/outputs/apk/debug/app-debug.apk
 
 앱의 초기 Server Profile은 `USB`이며 API `http://127.0.0.1:8000`, Media `http://127.0.0.1:9000`을 사용한다. 시작 화면의 `설정 · 연결 상태`에서 Server 없이 동작하는 `Demo`, USB 개발 환경, 직접 주소를 입력하는 `운영` Profile을 전환하고 API·Media 연결을 따로 시험할 수 있다. USB 실기기와 Emulator에서는 다음 Reverse 명령을 먼저 실행한다.
 
+`운영` Profile의 기본 API는 `https://geo-time-ar-v2.vercel.app`, Media Endpoint는 Supabase Storage로 설정되어 있다. 두 주소는 Client가 접속해야 하는 공개 Endpoint이므로 앱과 APK에 포함해도 된다. DB 비밀번호, Supabase Service Role Key와 기타 비밀값은 Android 앱에 포함하지 않는다. 현재 비공개 Storage의 실제 재생 URL 발급은 후속 서명 URL API 작업 범위다.
+
 ```powershell
 adb reverse tcp:8000 tcp:8000
 adb reverse tcp:9000 tcp:9000

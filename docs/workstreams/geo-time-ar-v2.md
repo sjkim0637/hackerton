@@ -191,3 +191,4 @@ TBD
 - Production `/health`, `/health/ready`, 주변 GeoZone, POI, Timeline, 가까운 기준좌표 조회 확인
 - Backend Ruff 통과, Pytest 19개 통과
 - Storage Bucket은 구성했으며 Creator Upload API와 접근 정책 연결은 P1 전 후속 작업
+- Android `운영` Profile 기본 API를 Vercel Production으로, Media Endpoint를 Supabase Storage로 연결
