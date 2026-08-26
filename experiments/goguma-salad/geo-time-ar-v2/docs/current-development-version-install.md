@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 |---|---|
-| Android App Version | `0.1.1` (`versionCode 2`) |
+| Android App Version | `0.1.2` (`versionCode 3`) |
 | Backend Version | `0.1.0` |
 | Build 기준 | 이 문서를 포함한 Branch 최신 HEAD |
 | Production API | `https://geo-time-ar-v2.vercel.app` |
@@ -62,6 +62,8 @@ adb install -r .\app-debug.apk
 `Demo Preview`는 기본으로 활성화되어 실제 위치와 관계없이 을지로 타워 107의 운영 Seed를 조회한다. 실제 GPS 기준으로 시험하려면 설정에서 `Demo Preview`를 끈다.
 
 `0.1.1`부터 운영 API에는 타워 107 주변의 실제 좌표를 가진 테스트 POI Marker가 여러 방향으로 등록된다. Marker가 시야 밖이면 상태 줄에 좌우 회전 안내가 표시된다.
+
+`0.1.2`부터 Glass Demo에서 Preview 또는 전체 재생을 종료하고 AR로 복귀해도 같은 Marker를 다시 5초간 응시할 수 있다.
 
 ## 현재 확인할 수 있는 항목
 

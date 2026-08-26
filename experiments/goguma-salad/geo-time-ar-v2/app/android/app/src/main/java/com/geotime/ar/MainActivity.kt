@@ -830,7 +830,14 @@ class MainActivity : Activity() {
         experienceState = ExperienceState.WORLD_SCAN
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         resetGlassInteraction()
-        showCoach(worldGuideText())
+        arView.resetInteractionFocus()
+        showCoach(
+            if (experienceMode == ExperienceMode.GLASS_DEMO) {
+                "GLASS · AR 복귀 완료 · 마커를 중앙에서 다시 5초간 응시하세요"
+            } else {
+                worldGuideText()
+            }
+        )
     }
 
     private fun processGlassFrame(
@@ -864,7 +871,7 @@ class MainActivity : Activity() {
             showCoach("GLASS · 마커를 화면 중앙에 맞춰 주세요")
             return
         }
-        if (markerId != glassFocusedMarkerId) {
+        if (markerId != glassFocusedMarkerId || glassFocusStartedAtMs <= 0L) {
             glassFocusedMarkerId = markerId
             glassFocusStartedAtMs = timestampMs
             lastDwellSecond = -1

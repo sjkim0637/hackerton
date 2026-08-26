@@ -64,6 +64,11 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
 
     fun focusedCandidateId(): String? = focusedCandidateId
 
+    fun resetInteractionFocus() {
+        focusedCandidateId = null
+        queueEvent { lastSpatialFrameAtMs = 0L }
+    }
+
     fun detachAllAnchors() = queueEvent {
         anchors.values.forEach(Anchor::detach)
         anchors.clear()
