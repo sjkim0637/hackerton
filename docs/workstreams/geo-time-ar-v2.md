@@ -44,6 +44,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - 콘텐츠 집중 화면의 실제 Moment 간 좌우 Swipe 이동
 - Phone·Glass 데모 Mode 전환과 ARCore Pose 기반 응시·Head Gesture 입력
 - 거리와 Camera View Cone 기반 가시성 선택
+- POI WGS84, GPS·True North와 ARCore Camera Pose 기반 자동 Session 좌표 정렬
 - 재현 가능한 로컬 실행, 자동 테스트 및 관련 설계 문서
 - 기존 로컬 Git Commit 이력의 공식 Branch 이전
 
@@ -75,6 +76,7 @@ FastAPI, PostgreSQL/PostGIS, MinIO를 이용해 `Geo + Time` 후보를 조회하
 - 조작 안내는 Popup이 아니라 현재 상태에 맞춰 바뀌는 Coach Mark로 표시하며 앱 설정에서 숨길 수 있다.
 - 실제 제품은 공통 상태 흐름 위에 Phone과 Glass Presentation·Tracking Adapter를 분리한다.
 - 기존 기술 선택은 Workstream 내부 가설이며 프로젝트 전체 결정으로 간주하지 않는다.
+- QR이나 수동 Landmark Calibration 대신 국가기준점으로 산출한 POI 좌표와 GPS·True North 자동 Session 정렬을 사용한다.
 
 ## Dependencies
 
@@ -115,13 +117,18 @@ TBD
 - Demo의 을지로 타워 107 Backend 좌표 조회와 USB API·Media 이중 Reverse 자동화 후 Backend Health·Nearby·Timeline API 확인: 통과
 - Glass 전체 재생 Roll 15도 AR 복귀와 좌하단 소형 원형 Artificial Horizon 적용 후 Android Unit Test 12개, `assembleDebug`, 실기기 Backend·화면 확인: 통과
 - Demo·USB·운영 Server Profile, API·Media 주소 저장, 이중 연결 Test와 실패 원인 표시, Media Origin 재작성 적용 후 Android Unit Test 16개와 `assembleDebug`: 통과
+- POI 절대좌표·선택 표고 API와 Migration 적용 후 Ruff와 Backend Pytest 16개: 통과
+- WGS84 ENU, True North, ARCore Session Transform과 고정 6DoF 배치 적용 후 Android Unit Test 20개와 `assembleDebug`: 통과
+- 로컬 `기준좌표 1`, `기준좌표 2` 등록과 사용 가능 기준점 거리순 조회 API 추가 후 Ruff와 Backend Pytest 17개: 통과
 
 ## Known Issues
 
 - 실기기 잠금 해제 후 Phone과 Glass 데모 전체 흐름을 사람 눈으로 보는 최종 UX 평가는 남아 있다.
 - Creator 진입 화면과 3단계 Flow는 준비됐지만 촬영·Gallery 선택·공간 배치·Upload 동작은 P1 구현 전이다.
 - 현재 Seed는 영상이 아닌 SVG Placeholder라 Phone UX 데모는 외부 Media3 테스트 영상을 대신 사용한다.
-- 현재 Zone-local 좌표와 ARCore Session 좌표의 정합은 시작 위치·방향이 맞는 것으로 가정한다.
+- Tower 107 POI는 아직 실제 국가기준점 성과로 측량한 좌표·표고가 아니라 기존 Seed 좌표를 사용한다.
+- 원본 국가기준점 성과표는 저장소에 보관하지 않으며, 전국 성과 자동 동기화와 Open API 인증키 연결은 후속 작업이다.
+- 수직 위치는 POI와 Phone 양쪽에 타원체고가 있을 때만 자동 반영하며 국가 표고, 지면 Plane과 Camera 높이의 현장 보정은 남아 있다.
 - 주변 GeoZone 조회는 Android가 제공하는 최근 GPS 기록을 사용하며 앱에 위치를 별도 저장하거나 임의의 기본 좌표로 대체하지 않는다.
 - RTK는 ARCore를 대체하지 않고 절대 위치 기준을 보강하는 선택지로 검증한다.
 - `SM-S908N` 야외 실측에서는 L1/L5 신호를 수신했지만 유효 ADR이 0개라 내장 Carrier Phase RTK를 사용할 수 없다.
@@ -131,9 +138,10 @@ TBD
 
 상세 우선순위와 Checkbox는 [`제품 TODO`](../../experiments/goguma-salad/geo-time-ar-v2/docs/product-backlog.md)에서 관리한다.
 
-1. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
-2. 실제 Demo 영상을 교체하고 Preload와 Cache를 적용한다.
-3. Creator 촬영·공간 배치·Upload MVP를 구현한다.
+1. `기준좌표 1`, `기준좌표 2`와 Tower 107 사이 측량 관측값으로 POI 좌표·표고를 확정한다.
+2. Tower 107에서 자동 Session 정렬의 수평·수직 오차를 측정한다.
+3. 실제 Demo 영상을 교체하고 Preload와 Cache를 적용한다.
+4. Creator 촬영·공간 배치·Upload MVP를 구현한다.
 
 ## Relevant Commits
 
@@ -162,6 +170,7 @@ TBD
 - `e30a30c` docs: 사이버펑크 UI 전체 디자인 프롬프트 작성
 - `156916d` docs: UI용 이미지 조각 생성 프롬프트 추가
 - `e44f8e7` feat(android): Server Profile 설정과 연결 진단 추가
+- `eba517e` feat(spatial): 익명 기준좌표 기반 자동 AR 정렬 구현
 
 ## Updated
 
