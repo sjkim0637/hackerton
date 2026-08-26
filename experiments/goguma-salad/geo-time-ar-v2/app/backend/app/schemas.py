@@ -143,3 +143,4 @@ class VisibilityResponse(ApiModel):
 class HealthRead(ApiModel):
     status: str
     environment: str
+    version: str

@@ -197,6 +197,7 @@ class MainActivity : Activity() {
         clearLegacySavedLocation()
         serverSettingsStore = ServerSettingsStore(preferences())
         apiClient = GeoTimeApiClient(serverSettingsStore.load().apiBaseUrl)
+        experienceMode = loadExperienceMode()
         headingProvider = TrueNorthHeadingProvider(this) { reading ->
             runOnUiThread {
                 latestHeading = reading
@@ -213,6 +214,12 @@ class MainActivity : Activity() {
             playerView.player = it
             it.repeatMode = Player.REPEAT_MODE_ONE
             it.addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (experienceState != ExperienceState.PREVIEW) return
+                    mainHandler.removeCallbacks(finishPreview)
+                    if (isPlaying) mainHandler.postDelayed(finishPreview, PREVIEW_DURATION_MS)
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (
                         playbackState == Player.STATE_ENDED &&
@@ -489,20 +496,20 @@ class MainActivity : Activity() {
     }
 
     private fun loadNearestControlPoints(latitude: Double, longitude: Double) {
-        controlPointLabel.text = "국가기준점 조회 중…"
+        controlPointLabel.text = "기준좌표 조회 중…"
         apiClient.loadNearestControlPoints(latitude, longitude) { result ->
             runOnUiThread {
                 result.onSuccess { points ->
                     controlPointLabel.text = if (points.isEmpty()) {
-                        "반경 50km 내 사용 가능한 국가기준점 없음"
+                        "반경 50km 내 사용 가능한 기준좌표 없음"
                     } else {
-                        "국가기준점 · " + points.joinToString(" · ") {
+                        "기준좌표 · " + points.joinToString(" · ") {
                             "${it.id} ${"%.2f".format(it.distanceM / 1_000.0)}km"
                         }
                     }
                     controlPointLabel.setTextColor(if (points.size >= 2) COLOR_CYAN else COLOR_AMBER)
                 }.onFailure {
-                    controlPointLabel.text = "국가기준점 조회 실패 · POI 자동 정렬은 계속 사용"
+                    controlPointLabel.text = "기준좌표 조회 실패 · POI 자동 정렬은 계속 사용"
                     controlPointLabel.setTextColor(COLOR_AMBER)
                 }
             }
@@ -587,7 +594,7 @@ class MainActivity : Activity() {
             alignmentLabel.setTextColor(COLOR_AMBER)
         }
         if (::controlPointLabel.isInitialized) {
-            controlPointLabel.text = "국가기준점 준비 중"
+            controlPointLabel.text = "기준좌표 준비 중"
             controlPointLabel.setTextColor(COLOR_AMBER)
         }
         if (::arView.isInitialized) arView.updateCandidates(emptyList())
@@ -616,7 +623,7 @@ class MainActivity : Activity() {
         zoneLabel.text = "현재 장소: 을지로 타워 107 · Local Demo"
         alignmentLabel.text = "Local Demo · GPS·Compass 자동 정렬 미사용"
         alignmentLabel.setTextColor(0xFFB7C9D8.toInt())
-        controlPointLabel.text = "Local Demo · 국가기준점 조회 미사용"
+        controlPointLabel.text = "Local Demo · 기준좌표 조회 미사용"
         controlPointLabel.setTextColor(0xFFB7C9D8.toInt())
         markerHint.visibility = View.GONE
         hideViewerState()
@@ -666,13 +673,16 @@ class MainActivity : Activity() {
         playerOverlay.setBackgroundColor(0x66000000)
         promptPanel.visibility = View.GONE
         playbackDate.visibility = View.GONE
-        playbackHint.text = if (experienceMode == ExperienceMode.GLASS_DEMO) {
-            "GLASS · 5초 미리보기 · 소리 없음"
-        } else {
-            "5초 미리보기 · 소리 없음"
+        val previewMuted = preferences().getBoolean(PREF_PREVIEW_MUTED, true)
+        val previewAutoplay = preferences().getBoolean(PREF_PREVIEW_AUTOPLAY, true)
+        playbackHint.text = buildString {
+            if (experienceMode == ExperienceMode.GLASS_DEMO) append("GLASS · ")
+            append("5초 미리보기 · ")
+            append(if (previewMuted) "소리 없음" else "소리 켜짐")
+            if (!previewAutoplay) append(" · ▶ 재생")
         }
         playbackHint.visibility = View.VISIBLE
-        playerView.useController = false
+        playerView.useController = !previewAutoplay
         player.repeatMode = Player.REPEAT_MODE_ONE
         playerView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -682,9 +692,13 @@ class MainActivity : Activity() {
             marginStart = dp(18)
             marginEnd = dp(18)
         }
-        playMoment(stack.momentAt(selectedMomentIndex), muted = true, restart = true)
         mainHandler.removeCallbacks(finishPreview)
-        mainHandler.postDelayed(finishPreview, PREVIEW_DURATION_MS)
+        playMoment(
+            stack.momentAt(selectedMomentIndex),
+            muted = previewMuted,
+            restart = true,
+            autoPlay = previewAutoplay,
+        )
     }
 
     private fun showPlaybackConfirmation() {
@@ -776,7 +790,12 @@ class MainActivity : Activity() {
         showMomentDate()
     }
 
-    private fun playMoment(moment: TimelineMoment, muted: Boolean, restart: Boolean) {
+    private fun playMoment(
+        moment: TimelineMoment,
+        muted: Boolean,
+        restart: Boolean,
+        autoPlay: Boolean = true,
+    ) {
         val source = if (moment.mimeType?.startsWith("video/") == true && moment.mediaUrl != null) {
             Uri.parse(serverSettingsStore.load().resolveMediaUrl(moment.mediaUrl))
         } else {
@@ -787,7 +806,7 @@ class MainActivity : Activity() {
             player.setMediaItem(MediaItem.fromUri(source))
             player.prepare()
         }
-        player.play()
+        if (autoPlay) player.play() else player.pause()
     }
 
     private fun showMomentDate() {
@@ -903,6 +922,7 @@ class MainActivity : Activity() {
         } else {
             ExperienceMode.PHONE
         }
+        saveExperienceMode(experienceMode)
         flightHud.visibility = View.VISIBLE
         resetGlassInteraction()
         showCoach(worldGuideText())
@@ -924,6 +944,24 @@ class MainActivity : Activity() {
             setTextColor(0xFF4B5563.toInt())
             textSize = 13f
             setPadding(dp(8), dp(4), dp(8), dp(8))
+        }
+        val previewMutedSwitch = Switch(this).apply {
+            text = "Preview 음소거"
+            textSize = 16f
+            isChecked = preferences().getBoolean(PREF_PREVIEW_MUTED, true)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setOnCheckedChangeListener { _, enabled ->
+                preferences().edit().putBoolean(PREF_PREVIEW_MUTED, enabled).apply()
+            }
+        }
+        val previewAutoplaySwitch = Switch(this).apply {
+            text = "Preview 자동 재생"
+            textSize = 16f
+            isChecked = preferences().getBoolean(PREF_PREVIEW_AUTOPLAY, true)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setOnCheckedChangeListener { _, enabled ->
+                preferences().edit().putBoolean(PREF_PREVIEW_AUTOPLAY, enabled).apply()
+            }
         }
         val toolsTitle = TextView(this).apply {
             text = "Viewer 도구"
@@ -980,11 +1018,26 @@ class MainActivity : Activity() {
             }
         }
         val gnssControl = actionButton("GNSS 진단 열기") { showGnssDiagnostics() }
+        val permissionSummary = TextView(this).apply {
+            text = permissionStatusText()
+            setTextColor(0xFFB7C9D8.toInt())
+            textSize = 13f
+            setPadding(dp(8), dp(12), dp(8), dp(6))
+        }
+        val permissionControl = actionButton("권한 설정 열기") { openAppSettings() }
+        val versionSummary = TextView(this).apply {
+            text = "App ${appVersionName()} · Backend Version은 연결 Test에서 확인"
+            setTextColor(0xFF8598A8.toInt())
+            textSize = 12f
+            setPadding(dp(8), dp(12), dp(8), dp(8))
+        }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(4), dp(16), dp(4))
             addView(guideSwitch, LinearLayout.LayoutParams(-1, -2))
             addView(note, LinearLayout.LayoutParams(-1, -2))
+            addView(previewMutedSwitch, LinearLayout.LayoutParams(-1, -2))
+            addView(previewAutoplaySwitch, LinearLayout.LayoutParams(-1, -2))
             addView(serverTitle, LinearLayout.LayoutParams(-1, -2))
             addView(serverSummary, LinearLayout.LayoutParams(-1, -2))
             addView(serverControl, LinearLayout.LayoutParams(-1, -2))
@@ -993,10 +1046,13 @@ class MainActivity : Activity() {
             addView(demoControl, LinearLayout.LayoutParams(-1, -2))
             addView(reloadControl, LinearLayout.LayoutParams(-1, -2))
             addView(gnssControl, LinearLayout.LayoutParams(-1, -2))
+            addView(permissionSummary, LinearLayout.LayoutParams(-1, -2))
+            addView(permissionControl, LinearLayout.LayoutParams(-1, -2))
+            addView(versionSummary, LinearLayout.LayoutParams(-1, -2))
         }
         AlertDialog.Builder(this)
             .setTitle("Geo-Time AR 설정")
-            .setView(content)
+            .setView(ScrollView(this).apply { addView(content) })
             .setPositiveButton("완료", null)
             .show()
     }
@@ -1165,6 +1221,27 @@ class MainActivity : Activity() {
 
     private fun preferences() = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
 
+    private fun loadExperienceMode(): ExperienceMode = runCatching {
+        ExperienceMode.valueOf(preferences().getString(PREF_LAST_VIEWER_MODE, null).orEmpty())
+    }.getOrDefault(ExperienceMode.PHONE)
+
+    private fun saveExperienceMode(mode: ExperienceMode) {
+        preferences().edit().putString(PREF_LAST_VIEWER_MODE, mode.name).apply()
+    }
+
+    private fun permissionStatusText(): String = listOf(
+        "Camera" to Manifest.permission.CAMERA,
+        "위치" to Manifest.permission.ACCESS_FINE_LOCATION,
+        "마이크" to Manifest.permission.RECORD_AUDIO,
+    ).joinToString(" · ") { (label, permission) ->
+        "$label ${if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) "허용" else "필요"}"
+    }
+
+    private fun appVersionName(): String = packageManager
+        .getPackageInfo(packageName, 0)
+        .versionName
+        .orEmpty()
+
     private fun clearLegacySavedLocation() {
         preferences().edit()
             .remove("last_latitude_bits")
@@ -1233,7 +1310,7 @@ class MainActivity : Activity() {
             textSize = 10f
             setTextColor(COLOR_AMBER)
         }
-        controlPointLabel = overlayText("국가기준점 준비 중").apply {
+        controlPointLabel = overlayText("기준좌표 준비 중").apply {
             textSize = 10f
             setTextColor(COLOR_AMBER)
         }
@@ -1433,6 +1510,7 @@ class MainActivity : Activity() {
     private fun openViewer(mode: ExperienceMode) {
         appScreen = AppScreen.VIEWER
         experienceMode = mode
+        saveExperienceMode(mode)
         experienceState = ExperienceState.WORLD_SCAN
         hudRollBaselineDegrees = null
         resetGeoAlignment()
@@ -1736,7 +1814,16 @@ class MainActivity : Activity() {
             setShutterBackgroundColor(Color.TRANSPARENT)
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             useController = false
-            setOnTouchListener { _, event -> handleContentTouch(event) }
+            setOnTouchListener { _, event ->
+                if (
+                    experienceState == ExperienceState.PREVIEW &&
+                    !preferences().getBoolean(PREF_PREVIEW_AUTOPLAY, true)
+                ) {
+                    false
+                } else {
+                    handleContentTouch(event)
+                }
+            }
         }
         playerOverlay.addView(playerView, FrameLayout.LayoutParams(-1, dp(240), Gravity.CENTER))
         playbackDate = overlayText("").apply {
@@ -1842,6 +1929,9 @@ class MainActivity : Activity() {
         private const val GNSS_SIGNAL_TIMEOUT_MS = 10_000L
         private const val PREFERENCES_NAME = "geo_time_ar_settings"
         private const val PREF_SHOW_GUIDES = "show_guides"
+        private const val PREF_LAST_VIEWER_MODE = "last_viewer_mode"
+        private const val PREF_PREVIEW_MUTED = "preview_muted"
+        private const val PREF_PREVIEW_AUTOPLAY = "preview_autoplay"
         private const val COLOR_BACKGROUND = 0xFF050811.toInt()
         private const val COLOR_SURFACE = 0xDD101827.toInt()
         private const val COLOR_CYAN = 0xFF38D9FF.toInt()

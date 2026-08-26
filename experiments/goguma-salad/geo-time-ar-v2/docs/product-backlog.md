@@ -29,7 +29,6 @@
 
 - [x] 앱 실행 후 바로 AR로 들어가지 않는 시작 화면 구현
 - [x] 시작 화면에서 `Phone Viewer`, `Glass Demo`, `Creator` 진입 분기
-- [ ] 실제 Glass Runtime에서는 기기 특성에 따라 Glass 화면 자동 진입
 - [x] 전체 화면 Flow와 Navigation 확정
 - [x] 화면별 Cyberpunk UI 지시서와 이미지 생성 Prompt 작성
 - [x] Native UI에 사용할 Cyberpunk 이미지 Asset 생성 Prompt 작성
@@ -55,14 +54,12 @@
 - [x] Media Server 주소와 공개 Asset 주소 설정 및 Backend 공개 URL의 Origin 재작성
 - [x] API·Media Server 연결 Test와 DNS·Timeout·HTTP·주소 오류 원인 표시
 - [x] Demo·USB·운영 Server Profile 전환과 USB Reverse 의존성 표시
-- [ ] 기본 시작 Mode 또는 마지막 Mode 기억
+- [x] 마지막으로 사용한 Phone Viewer·Glass Demo Mode 기억
 - [x] 동작별 Coach Mark 표시 On/Off
 - [x] Viewer의 Mode 전환·Demo Preview·재조회·GNSS 진단 도구를 설정으로 이동
-- [ ] Preview 음소거와 자동 재생 설정
-- [ ] Upload 화질과 Wi-Fi 전용 Upload 설정
-- [ ] Media Cache 용량 확인과 삭제
-- [ ] Camera·위치·마이크 권한 상태와 설정 바로가기
-- [ ] App·Backend Version 표시
+- [x] Preview 음소거와 자동 재생 설정
+- [x] Camera·위치·마이크 권한 상태와 설정 바로가기
+- [x] App·Backend Version 표시
 
 ## P0 — POI와 공간 위치 재현
 
@@ -83,7 +80,7 @@ Android GPS
 - `POI.location`의 WGS84 위·경도와 `SpatialPlacement.local_x/y/z`를 결합한다.
 - Rotation Vector Sensor는 Magnetic Declination을 적용해 True North로 변환하고 최근 1초 표본을 평균한다.
 - GPS·Heading·ARCore Camera Pose가 준비되면 Session Transform을 한 번 만들고 이후 ARCore 6DoF만 사용한다.
-- POI 국가좌표는 향후 가까운 국가기준점 성과를 이용해 생성하며 현재 Tower 107은 Seed 좌표로 변환 계층을 검증한다.
+- POI 절대좌표는 검증된 두 기준좌표를 이용해 생성하며 현재 Tower 107은 Seed 좌표로 변환 계층을 검증한다.
 
 ### 남은 작업
 
@@ -92,28 +89,36 @@ Android GPS
 - [x] Magnetic Declination·True North와 ARCore Camera Pose로 Session Transform 생성
 - [x] 정렬 후 GPS·Compass 갱신 대신 ARCore 6DoF Tracking 유지
 - [x] 사용 가능한 두 점을 `기준좌표 1`, `기준좌표 2`로 Backend Seed
-- [x] 현재 위치에서 가까운 사용 가능 국가기준점 두 점 PostGIS 선택
-- [ ] 국가기준점 Open API 인증키 연결과 주기적 전체 성과 동기화
-- [ ] Tower 107 POI 좌표와 표고를 실제 국가기준점 측량 성과로 교체
-- [ ] Creator가 배치한 Anchor를 다음 Session에서 복원
-- [ ] GPS 오차가 큰 실내·도심 환경의 보정 방식 결정
+- [x] 현재 위치에서 가까운 사용 가능 기준좌표 두 점 PostGIS 선택
+- [x] GPS 오차가 크면 경고하고 Session Transform 생성 후 GPS를 계속 적용하지 않는 정책 결정
+- [ ] Tower 107 POI 좌표와 표고를 실제 기준좌표 측량 성과로 교체
 - [ ] 여러 기기에서 동일 POI Marker 위치 현장 Test
 
-### RTK와 6DoF 결합 후보
+### RTK와 6DoF 결합 후보 — SKIP
 
-- [ ] 외장 RTK GNSS 수신기와 Android 연결 방식(Bluetooth, USB, Vendor SDK) 검증
-- [ ] NTRIP 보정정보 공급망과 현장 통신 안정성 검증
-- [x] Phone 내장 GNSS의 L1/L5·ADR와 Cycle Slip 진단
-- [x] `SM-S908N` 야외 진단 결과 내장 ADR 미제공 확인
-- [ ] ADR 제공이 확인된 다른 Phone 또는 Glass 후보 기기 비교
-- [ ] RTK Fix 상태, 수평·수직 정확도와 측정 시각을 현재 Session에서 관리
-- [ ] RTK 절대 위치와 ARCore의 연속 6DoF Pose를 결합하는 좌표 변환 계층 설계
-- [ ] GNSS Antenna와 Camera 사이 Offset, 기기 방향, 높이 Calibration
-- [ ] RTK 음영·Fix 해제 시 ARCore·VPS·일반 GNSS로 단계적 전환
+현재 대상 기기의 내장 ADR 미제공으로 RTK 경로는 P0·P1 범위에서 제외한다. 외장 수신기나 ADR 제공 기기가 제품 전제로 확정될 때만 별도 Workstream으로 재개한다.
 
-RTK는 야외 절대 위치를 정밀하게 잡는 수단이며 Camera 방향, 공간 특징 추적, 실내 위치를 단독으로 해결하지 않는다. 제품 구조는 RTK로 세계 좌표의 기준점을 잡고 ARCore가 근거리의 부드러운 6DoF 움직임을 담당하도록 분리한다.
+- 완료 기록: Phone 내장 GNSS의 L1/L5·ADR와 Cycle Slip 진단
+- 완료 기록: `SM-S908N` 야외 진단 결과 내장 ADR 미제공 확인
+- SKIP: 외장 RTK 연결, NTRIP, RTK Fix 관리와 ARCore 결합
+- SKIP: Antenna·Camera Offset과 RTK 음영 전환 검증
 
-POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동 Session Transform을 기준으로 한다. QR 또는 수동 Visual Anchor는 기본 흐름에 포함하지 않는다. 수평 오차가 제품 허용 범위를 넘을 때만 별도 보강 계층을 검토한다.
+POI 기반 Creator는 두 기준좌표로 산출한 POI 절대좌표와 자동 Session Transform을 기준으로 한다. QR 또는 수동 Visual Anchor는 기본 흐름에 포함하지 않는다. 수평 오차가 제품 허용 범위를 넘을 때만 별도 보강 계층을 검토한다.
+
+## P1 진입 Gate — Backend와 Media Pipeline
+
+Creator 구현 전에 POI·Moment Metadata와 영상 원본·변환본을 어디에서 받고 저장할지 먼저 결정한다. API, POI Database, Media Object Storage를 논리적으로 분리하되 실제 운영 Server를 물리적으로 나눌지는 이 Gate에서 검토한다.
+
+- [ ] Android가 영상을 Backend 경유로 보낼지 서명 URL로 Object Storage에 직접 Upload할지 결정
+- [ ] POI·Moment API와 Media 공개 URL의 책임 경계 결정
+- [ ] 단일 배포와 API·Worker·Object Storage 분리 배포 비교
+- [ ] Upload 등록 → 영상 전송 → 검증·변환 → Moment 발행 상태 흐름 확정
+- [ ] HTTPS API Domain과 운영 환경 배포
+- [ ] PostgreSQL/PostGIS 운영 DB
+- [ ] S3 호환 Object Storage와 CDN
+- [ ] 사용자 로그인, Token과 Creator 소유권
+- [ ] Thumbnail 생성, Metadata 추출과 영상 변환 Worker
+- [ ] Backup, Log, Monitoring과 장애 알림
 
 ## P1 — Creator Mode
 
@@ -126,24 +131,10 @@ POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동
 - [ ] 공개·비공개 또는 공유 범위 설정
 - [ ] Upload 진행률, 취소, 실패 재시도
 - [ ] Network 단절 시 임시저장과 이어 올리기
+- [ ] Upload 화질과 Wi-Fi 전용 Upload 설정
+- [ ] Creator가 배치한 Anchor를 다음 Session에서 복원
 - [ ] Upload 완료 직후 현재 공간에서 Moment 확인
 - [ ] 내가 만든 Moment 목록·수정·삭제
-
-## P1 — 외부 Backend와 Media Pipeline
-
-다른 사용자와 Moment를 공유하려면 인터넷에서 접근 가능한 Backend와 Object Storage가 필요하다. 현재 Local Docker 환경은 구조 검증용으로 재사용할 수 있다.
-
-- [ ] HTTPS API Domain과 운영 환경 배포
-- [ ] PostgreSQL/PostGIS 운영 DB
-- [ ] S3 호환 Object Storage와 CDN
-- [ ] 사용자 로그인, Token과 Creator 소유권
-- [ ] 서명 URL 기반 영상 직접 Upload
-- [ ] Content 등록과 Moment 발행을 분리한 안전한 절차
-- [ ] Thumbnail 생성과 영상 Metadata 추출
-- [ ] 영상 압축·다중 화질 변환 Worker
-- [ ] Upload·변환 상태 조회 API
-- [ ] 운영 Backup, Log, Monitoring과 장애 알림
-- [ ] 향후 DASH 또는 HLS 적용
 
 ## P1 — 영상 반응 속도
 
@@ -151,12 +142,14 @@ POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동
 - [ ] Preview → 집중 재생 전환 시 Player와 Buffer 재사용
 - [ ] 이전·다음 Moment 사전 준비
 - [ ] Local Media Cache와 만료 정책
+- [ ] Media Cache 용량 확인과 삭제
 - [ ] 첫 Frame, Loading과 재생 실패 UI
 - [ ] 외부 Test MP4를 자체 Demo 영상으로 교체
 
 ## P2 — 실제 Glass Runtime
 
 - [ ] Target Glass Hardware 확정
+- [ ] 기기 특성에 따른 Glass 화면 자동 진입
 - [ ] Standalone/Compute-pack 방식과 Phone Tethered 방식 결정
 - [ ] OpenXR 또는 Vendor SDK 검증
 - [ ] Glass 전용 App Module 또는 Build Variant 분리
@@ -165,6 +158,10 @@ POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동
 - [ ] 실제 Head Gesture 오인식과 피로도 Test
 - [ ] 발열, 배터리와 장시간 실행 안정성 Test
 - [ ] Phone 설정·계정·Media와 Glass 동기화
+
+## P2 — 외부 좌표 Provider
+
+- [ ] 외부 좌표 Open API 인증키 연결과 주기적 전체 성과 동기화
 
 ## P2 — 운영과 안전
 
@@ -182,7 +179,8 @@ POI 기반 Creator는 국가기준점으로 산출한 POI 절대좌표와 자동
 2. UI 지시서 작성과 디자인 Asset 제작
 3. Server 설정과 연결 Test 구현
 4. POI·Session Calibration 최소 방식 검증
-5. 실제 영상 Preload와 Cache 적용
-6. Creator 촬영·배치·Upload MVP
-7. 외부 Backend와 Object Storage 배포
-8. 실제 Glass Hardware 확정과 별도 Runtime 개발
+5. Backend·Media Pipeline 책임과 배포 구조 결정
+6. 외부 Backend와 Object Storage 최소 운영 환경 구성
+7. 실제 영상 Preload와 Cache 적용
+8. Creator 촬영·배치·Upload MVP
+9. 실제 Glass Hardware 확정과 별도 Runtime 개발

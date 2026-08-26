@@ -26,9 +26,10 @@ from app.schemas import (
 from app.spatial import Point3, select_visible
 
 settings = get_settings()
+APP_VERSION = "0.1.0"
 app = FastAPI(
     title="Geo-Time AR Platform API",
-    version="0.1.0",
+    version=APP_VERSION,
     description="Geo + Time candidate retrieval with 6DoF spatial visibility selection.",
 )
 app.add_middleware(
@@ -46,13 +47,13 @@ def get_repository(db: Session = Depends(get_db)) -> PostgresRepository:
 
 @app.get("/health", response_model=HealthRead, tags=["health"])
 def health() -> HealthRead:
-    return HealthRead(status="ok", environment=settings.app_env)
+    return HealthRead(status="ok", environment=settings.app_env, version=APP_VERSION)
 
 
 @app.get("/health/ready", response_model=HealthRead, tags=["health"])
 def readiness(db: Session = Depends(get_db)) -> HealthRead:
     db.execute(text("SELECT 1"))
-    return HealthRead(status="ready", environment=settings.app_env)
+    return HealthRead(status="ready", environment=settings.app_env, version=APP_VERSION)
 
 
 @app.get("/geozones/nearby", response_model=list[GeoZoneNearbyRead], tags=["geo"])

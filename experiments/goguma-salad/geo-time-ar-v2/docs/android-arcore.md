@@ -64,6 +64,8 @@ Compass Tape는 `DisplayCutout.safeInsetTop`을 반영해 Pinhole 아래에 배�
 
 설명서 Popup을 먼저 보여주지 않고 현재 상태에 맞는 Coach Mark를 화면에 표시한다. 마커 선택, 응시 유지 시간, 미리보기, 재생 승인, 기록 이동과 AR 복귀 순서에 맞춰 안내 문구가 바뀐다. 하단 `설정`에서 `동작별 조작 안내 표시`를 끄면 Coach Mark만 숨기며, 조회 상태·진행 상황·오류와 실제 선택이 필요한 재생 확인창은 계속 표시한다.
 
+마지막으로 연 Phone Viewer·Glass Demo Mode를 저장한다. 설정에서 5초 Preview의 음소거와 자동 재생을 각각 바꿀 수 있으며, 자동 재생을 끄면 Player의 재생 Button을 눌렀을 때 5초 Timer가 시작된다. Camera·위치·마이크 권한 상태와 App 설정 바로가기, App Version도 같은 설정 화면에서 확인한다. Backend Version은 Server 연결 Test의 `/health` 응답에 표시한다.
+
 ## Server 연결 설정
 
 시작 화면의 `설정 · 연결 상태`에서 다음 Profile을 선택한다.
@@ -103,6 +105,6 @@ POI WGS84 - Phone WGS84
 → ARCore Session 좌표
 ```
 
-상단 진단에는 GPS Accuracy, True Heading과 추정 정확도, Yaw Offset, 현재 위치에서 가까운 사용 가능 국가기준점 두 점을 표시한다. GPS Accuracy 20m 초과 또는 Heading 정확도 15도 초과는 경고하지만 Demo 진행을 막지 않는다. 정렬 후에는 GPS·Compass 값을 계속 적용하지 않아 Marker Jump를 방지하고 ARCore 6DoF Tracking만 유지한다.
+상단 진단에는 GPS Accuracy, True Heading과 추정 정확도, Yaw Offset, 현재 위치에서 가까운 사용 가능 기준좌표 두 점을 표시한다. GPS Accuracy 20m 초과 또는 Heading 정확도 15도 초과는 경고하지만 Demo 진행을 막지 않는다. 정렬 후에는 GPS·Compass 값을 계속 적용하지 않아 Marker Jump를 방지하고 ARCore 6DoF Tracking만 유지한다.
 
-POI와 Phone에 타원체고가 모두 있을 때만 상대 Up을 적용한다. 국가 표고와 Android GNSS 타원체고를 직접 빼지 않는다. 현재 남은 검증은 국가기준점 성과로 Tower 107 POI 좌표·표고를 교체하고 현장에서 수평·수직 오차를 측정하는 작업이다.
+POI와 Phone에 타원체고가 모두 있을 때만 상대 Up을 적용한다. 국가 표고와 Android GNSS 타원체고를 직접 빼지 않는다. 현재 남은 검증은 실제 기준좌표 측량 결과로 Tower 107 POI 좌표·표고를 교체하고 현장에서 수평·수직 오차를 측정하는 작업이다.

@@ -160,7 +160,9 @@ class ServerConnectionTester(
         val health = JSONObject(body)
         val status = health.optString("status", "응답")
         val environment = health.optString("environment").takeIf(String::isNotBlank)
-        "API 연결됨 · $status${environment?.let { " · $it" }.orEmpty()}"
+        val version = health.optString("version").takeIf(String::isNotBlank)
+        "API 연결됨 · $status${environment?.let { " · $it" }.orEmpty()}" +
+            version?.let { " · Backend $it" }.orEmpty()
     }
 
     private fun testMedia(baseUrl: String): EndpointTestResult = request(
