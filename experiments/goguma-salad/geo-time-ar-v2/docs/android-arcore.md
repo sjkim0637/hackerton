@@ -60,6 +60,16 @@ AR 앱이 화면에 활성화된 동안에는 Android의 자동 화면 꺼짐을
 
 설명서 Popup을 먼저 보여주지 않고 현재 상태에 맞는 Coach Mark를 화면에 표시한다. 마커 선택, 응시 유지 시간, 미리보기, 재생 승인, 기록 이동과 AR 복귀 순서에 맞춰 안내 문구가 바뀐다. 하단 `설정`에서 `동작별 조작 안내 표시`를 끄면 Coach Mark만 숨기며, 조회 상태·진행 상황·오류와 실제 선택이 필요한 재생 확인창은 계속 표시한다.
 
+## Server 연결 설정
+
+시작 화면의 `설정 · 연결 상태`에서 다음 Profile을 선택한다.
+
+- `Demo`: Server 없이 앱의 Local Moment Stack을 사용한다.
+- `USB`: 기본 API `http://127.0.0.1:8000`, Media `http://127.0.0.1:9000`에 연결한다. 개발 PC에서 Docker 서비스와 API·Media 두 Port의 `adb reverse`가 모두 필요하다.
+- `운영`: 인터넷에서 접근 가능한 API·Media 주소를 직접 지정한다. 운영 주소는 HTTPS 사용을 권장한다.
+
+API와 Media 주소는 Profile별로 저장된다. `연결 테스트`는 API `/health`와 Media 주소를 각각 확인하고 DNS 실패, Timeout, 잘못된 주소, HTTP 응답 오류를 구분해 표시한다. Backend의 `public_url`이 `localhost`를 가리켜도 Object Path와 Query는 유지하고 선택한 Media 주소의 Origin으로 바꿔 재생한다.
+
 ## 실제 Glass와 현재 데모의 차이
 
 현재 Glass 데모는 폰 Camera와 ARCore Pose를 사용한다. 폰의 AR 영상을 실제 Glass로 Streaming하는 구현은 아니다. 실제 Glass 제품에서는 Hardware 유형에 따라 Glass 또는 전용 Computing 장치에서 별도 Runtime을 실행하거나, Phone이 유선 Display Host가 되고 Vendor SDK를 통해 Glass Pose를 받는다.
@@ -75,7 +85,7 @@ adb reverse tcp:9000 tcp:9000
 adb install -r .\app\android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-개발용 APK는 API `127.0.0.1:8000`과 Backend가 반환하는 Media `localhost:9000`을 사용하므로 USB 기기나 Emulator에서 두 Port의 `adb reverse`를 먼저 실행한다. 무선 설치에서는 PC의 LAN IP로 API와 Media 공개 주소를 함께 변경해야 한다.
+앱의 초기 Profile은 기존 개발 흐름을 유지하는 `USB`다. USB 기기나 Emulator에서 두 Port의 `adb reverse`를 먼저 실행한다. 무선 연결에서는 설정의 API와 Media 주소를 PC의 LAN IP로 함께 변경한다.
 
 ## 알려진 공간 정합 제약
 

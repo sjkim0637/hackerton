@@ -14,8 +14,6 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // USB devices and emulators use `adb reverse tcp:8000 tcp:8000` in development.
-        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8000\"")
     }
 
     buildTypes {
@@ -33,9 +31,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures {
-        buildConfig = true
-    }
 }
 
 dependencies {

@@ -20,6 +20,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.InputType
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -28,10 +29,13 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.window.OnBackInvokedDispatcher
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -45,6 +49,10 @@ import com.geotime.ar.interaction.HeadGestureRecognizer
 import com.geotime.ar.interaction.HeadMotionAxis
 import com.geotime.ar.interaction.HeadPose
 import com.geotime.ar.network.GeoTimeApiClient
+import com.geotime.ar.network.ServerConnectionTester
+import com.geotime.ar.network.ServerProfile
+import com.geotime.ar.network.ServerSettings
+import com.geotime.ar.network.ServerSettingsStore
 import com.geotime.ar.time.MomentStack
 import com.geotime.ar.time.TimelineMoment
 import com.geotime.ar.ui.FlightHudView
@@ -108,7 +116,9 @@ class MainActivity : Activity() {
     private lateinit var viewerStateAction: Button
     private lateinit var player: ExoPlayer
 
-    private val apiClient = GeoTimeApiClient(BuildConfig.API_BASE_URL)
+    private lateinit var apiClient: GeoTimeApiClient
+    private lateinit var serverSettingsStore: ServerSettingsStore
+    private val serverConnectionTester = ServerConnectionTester()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
         .withZone(ZoneId.systemDefault())
@@ -170,6 +180,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         clearLegacySavedLocation()
+        serverSettingsStore = ServerSettingsStore(preferences())
+        apiClient = GeoTimeApiClient(serverSettingsStore.load().apiBaseUrl)
         buildUi()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
@@ -214,6 +226,7 @@ class MainActivity : Activity() {
         if (arSession != null) arView.detachAllAnchors()
         arSession?.close()
         apiClient.close()
+        serverConnectionTester.close()
         super.onDestroy()
     }
 
@@ -315,6 +328,10 @@ class MainActivity : Activity() {
     }
 
     private fun loadZoneAndMoments() {
+        if (!serverSettingsStore.load().profile.usesNetwork) {
+            activateLocalDemo()
+            return
+        }
         showViewerState(
             ViewerUiState.LOADING,
             "현재 장소의 시간을 찾는 중",
@@ -595,7 +612,7 @@ class MainActivity : Activity() {
 
     private fun playMoment(moment: TimelineMoment, muted: Boolean, restart: Boolean) {
         val source = if (moment.mimeType?.startsWith("video/") == true && moment.mediaUrl != null) {
-            Uri.parse(moment.mediaUrl)
+            Uri.parse(serverSettingsStore.load().resolveMediaUrl(moment.mediaUrl))
         } else {
             Uri.parse(DEMO_VIDEO_URL)
         }
@@ -740,6 +757,27 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(8), dp(14), dp(8), dp(6))
         }
+        val serverSettings = serverSettingsStore.load()
+        val serverTitle = TextView(this).apply {
+            text = "Server 연결"
+            setTextColor(COLOR_CYAN)
+            textSize = 14f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(8), dp(14), dp(8), dp(6))
+        }
+        val serverSummary = TextView(this).apply {
+            text = if (serverSettings.profile.usesNetwork) {
+                "${serverSettings.profile.label} · ${serverSettings.apiBaseUrl}"
+            } else {
+                "Demo · Local Moment · 네트워크 불필요"
+            }
+            setTextColor(0xFFB7C9D8.toInt())
+            textSize = 13f
+            setPadding(dp(8), dp(2), dp(8), dp(8))
+        }
+        val serverControl = actionButton("Profile · 주소 · 연결 테스트") {
+            showServerSettingsDialog()
+        }
         lateinit var modeControl: Button
         modeControl = actionButton(
             if (experienceMode == ExperienceMode.GLASS_DEMO) "현재 Glass Demo · Phone으로 변경" else "현재 Phone Viewer · Glass Demo로 변경",
@@ -768,6 +806,9 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(4), dp(16), dp(4))
             addView(guideSwitch, LinearLayout.LayoutParams(-1, -2))
             addView(note, LinearLayout.LayoutParams(-1, -2))
+            addView(serverTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(serverSummary, LinearLayout.LayoutParams(-1, -2))
+            addView(serverControl, LinearLayout.LayoutParams(-1, -2))
             addView(toolsTitle, LinearLayout.LayoutParams(-1, -2))
             addView(modeControl, LinearLayout.LayoutParams(-1, -2))
             addView(demoControl, LinearLayout.LayoutParams(-1, -2))
@@ -779,6 +820,136 @@ class MainActivity : Activity() {
             .setView(content)
             .setPositiveButton("완료", null)
             .show()
+    }
+
+    private fun showServerSettingsDialog() {
+        var selectedSettings = serverSettingsStore.load()
+        val profileGroup = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        val profileButtons = ServerProfile.entries.associateWith { profile ->
+            RadioButton(this).apply {
+                id = View.generateViewId()
+                text = "${profile.label}  ·  ${profile.description}"
+                textSize = 14f
+                isChecked = profile == selectedSettings.profile
+                setPadding(dp(4), dp(7), dp(4), dp(7))
+                profileGroup.addView(this, RadioGroup.LayoutParams(-1, -2))
+            }
+        }
+        val apiInput = serverUrlInput("API Server 주소")
+        val mediaInput = serverUrlInput("Media Server 주소")
+        val usbNote = TextView(this).apply {
+            text = "USB Profile 의존성\nPC에서 Backend를 실행한 뒤 아래 두 Reverse가 필요합니다.\n" +
+                "adb reverse tcp:8000 tcp:8000\n" +
+                "adb reverse tcp:9000 tcp:9000"
+            setTextColor(COLOR_AMBER)
+            textSize = 12f
+            setTypeface(Typeface.MONOSPACE)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = glassBackground(0xDD241A0D.toInt(), COLOR_AMBER)
+        }
+        val status = TextView(this).apply {
+            text = "저장 전에 연결 테스트를 실행할 수 있습니다."
+            setTextColor(0xFFB7C9D8.toInt())
+            textSize = 13f
+            setPadding(dp(8), dp(12), dp(8), dp(10))
+        }
+
+        fun showProfile(settings: ServerSettings) {
+            selectedSettings = settings
+            apiInput.setText(settings.apiBaseUrl)
+            mediaInput.setText(settings.mediaBaseUrl)
+            apiInput.isEnabled = settings.profile.usesNetwork
+            mediaInput.isEnabled = settings.profile.usesNetwork
+            usbNote.visibility = if (settings.profile == ServerProfile.USB) View.VISIBLE else View.GONE
+            status.text = if (settings.profile == ServerProfile.DEMO) {
+                "Local Demo는 API·Media Server에 연결하지 않습니다."
+            } else {
+                "${settings.profile.label} Profile · 저장 전 연결 테스트 권장"
+            }
+            status.setTextColor(0xFFB7C9D8.toInt())
+        }
+
+        showProfile(selectedSettings)
+        profileGroup.setOnCheckedChangeListener { _, checkedId ->
+            val profile = profileButtons.entries.firstOrNull { it.value.id == checkedId }?.key
+                ?: return@setOnCheckedChangeListener
+            showProfile(serverSettingsStore.load(profile))
+        }
+
+        fun currentInput(): ServerSettings = ServerSettings(
+            profile = selectedSettings.profile,
+            apiBaseUrl = apiInput.text.toString(),
+            mediaBaseUrl = mediaInput.text.toString(),
+        ).normalized()
+
+        val testButton = cyberButton("연결 테스트", COLOR_CYAN) {
+            val candidate = currentInput()
+            val error = candidate.validationError()
+            if (error != null) {
+                status.setTextColor(0xFFFF6B6B.toInt())
+                status.text = error
+            } else {
+                status.setTextColor(COLOR_CYAN)
+                status.text = "API와 Media 연결을 확인하는 중…"
+                serverConnectionTester.test(candidate) { result ->
+                    runOnUiThread {
+                        status.setTextColor(if (result.success) COLOR_CYAN else 0xFFFF6B6B.toInt())
+                        status.text = buildString {
+                            append(if (result.success) "연결 성공" else "연결 실패")
+                            append("\nAPI · ").append(result.api.message)
+                            append("\nMedia · ").append(result.media.message)
+                            if (!result.success && candidate.profile == ServerProfile.USB) {
+                                append("\n\nUSB Cable, Docker 실행 상태와 adb reverse를 확인하세요.")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        lateinit var dialog: AlertDialog
+        val saveButton = cyberButton("저장하고 적용", COLOR_AMBER) {
+            val candidate = currentInput()
+            val error = candidate.validationError()
+            if (error != null) {
+                status.setTextColor(0xFFFF6B6B.toInt())
+                status.text = error
+            } else {
+                serverSettingsStore.save(candidate)
+                applyServerSettings(candidate)
+                dialog.dismiss()
+            }
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(6), dp(16), dp(8))
+            addView(profileGroup, LinearLayout.LayoutParams(-1, -2))
+            addView(apiInput, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(mediaInput, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(usbNote, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+            addView(testButton, LinearLayout.LayoutParams(-1, -2))
+            addView(saveButton, LinearLayout.LayoutParams(-1, -2))
+        }
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Server 연결 설정")
+            .setView(ScrollView(this).apply { addView(content) })
+            .setNegativeButton("닫기", null)
+            .create()
+        dialog.show()
+    }
+
+    private fun serverUrlInput(label: String) = EditText(this).apply {
+        hint = label
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        setSingleLine(true)
+        textSize = 14f
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+    }
+
+    private fun applyServerSettings(settings: ServerSettings) {
+        apiClient.close()
+        apiClient = GeoTimeApiClient(settings.apiBaseUrl)
+        if (appScreen == AppScreen.VIEWER) loadZoneAndMoments()
     }
 
     private fun showCoach(message: String) {

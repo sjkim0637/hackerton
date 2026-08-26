@@ -33,6 +33,8 @@ cd experiments\goguma-salad\geo-time-ar-v2
 - Glass 데모의 5초 응시, 끄덕임·좌우 고개 확인, Head Gesture 기반 Moment 이동
 - 앱이 활성화된 동안 Android 자동 화면 꺼짐 방지
 - 현재 동작에 맞춰 바뀌는 Coach Mark와 설정의 안내 On/Off
+- Demo·USB·운영 Server Profile, API·Media 주소 저장과 연결 실패 원인 진단
+- 선택한 Media 주소로 Backend 공개 Asset URL의 Origin을 교체하는 재생 경로
 - Backend Pytest와 Android JUnit Test
 - Docker 및 Android Build Smoke Test
 
@@ -89,14 +91,14 @@ Debug APK 위치:
 app/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-개발용 APK는 `http://127.0.0.1:8000`을 사용한다. USB 실기기와 Emulator에서는 다음 Reverse 명령을 먼저 실행한다.
+앱의 초기 Server Profile은 `USB`이며 API `http://127.0.0.1:8000`, Media `http://127.0.0.1:9000`을 사용한다. 시작 화면의 `설정 · 연결 상태`에서 Server 없이 동작하는 `Demo`, USB 개발 환경, 직접 주소를 입력하는 `운영` Profile을 전환하고 API·Media 연결을 따로 시험할 수 있다. USB 실기기와 Emulator에서는 다음 Reverse 명령을 먼저 실행한다.
 
 ```powershell
 adb reverse tcp:8000 tcp:8000
 adb reverse tcp:9000 tcp:9000
 ```
 
-또는 `app/android/app/build.gradle.kts`의 `API_BASE_URL`을 개발 PC의 LAN IP로 변경한다.
+무선 개발이나 외부 Server는 앱 설정에서 API와 Media 주소를 함께 변경한다. 주소는 Profile별로 기기에 저장되며 APK를 다시 Build할 필요가 없다.
 
 ## Antigravity / VS Code 작업 실행
 

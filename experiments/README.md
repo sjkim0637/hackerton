@@ -21,7 +21,7 @@ experiments/
 │       ├── Source Code
 │       ├── 실행 설정
 │       └── 기술 문서
-└── README.md
+└── README.mdk
 ```
 
 예:

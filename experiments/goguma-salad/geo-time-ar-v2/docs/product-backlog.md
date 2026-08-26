@@ -51,10 +51,10 @@
 
 ## P0 — 설정
 
-- [ ] API Server 주소를 Build 고정값에서 앱 설정값으로 전환
-- [ ] Media Server 주소와 공개 Asset 주소 설정
-- [ ] Server 연결 Test와 결과 표시
-- [ ] Demo·개발·운영 Server Profile 전환
+- [x] API Server 주소를 Build 고정값에서 앱 설정값으로 전환
+- [x] Media Server 주소와 공개 Asset 주소 설정 및 Backend 공개 URL의 Origin 재작성
+- [x] API·Media Server 연결 Test와 DNS·Timeout·HTTP·주소 오류 원인 표시
+- [x] Demo·USB·운영 Server Profile 전환과 USB Reverse 의존성 표시
 - [ ] 기본 시작 Mode 또는 마지막 Mode 기억
 - [x] 동작별 Coach Mark 표시 On/Off
 - [x] Viewer의 Mode 전환·Demo Preview·재조회·GNSS 진단 도구를 설정으로 이동
