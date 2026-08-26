@@ -6,11 +6,13 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.os.Build
 import android.util.TypedValue
 import android.view.View
 import com.geotime.ar.interaction.HeadGestureRecognizer
 import java.util.Locale
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 class FlightHudView(context: Context) : View(context) {
@@ -65,7 +67,12 @@ class FlightHudView(context: Context) : View(context) {
 
     private fun drawCompassTape(canvas: Canvas) {
         val centerX = width / 2f
-        val top = dp(10f)
+        val displayCutoutTop = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            rootWindowInsets?.displayCutout?.safeInsetTop?.toFloat() ?: 0f
+        } else {
+            0f
+        }
+        val top = max(dp(34f), displayCutoutTop + dp(8f))
         val left = dp(10f)
         val right = width - dp(10f)
         val tapeBottom = top + dp(72f)

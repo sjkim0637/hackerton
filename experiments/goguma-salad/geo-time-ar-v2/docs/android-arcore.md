@@ -58,7 +58,7 @@ AR 앱이 화면에 활성화된 동안에는 Android의 자동 화면 꺼짐을
 
 ## Viewer HUD 계층
 
-Compass Tape는 Viewer 최상단에 고정하고 장소·Tracking·정렬 진단 안내는 그 아래에 배치한다. 좌하단 Pitch·Roll Artificial Horizon은 시야를 가리지 않도록 축소한다. HUD는 AR Camera보다 위, 상태 안내와 재생 확인 Popup보다 아래에 그려서 사용자의 선택이 필요한 Popup을 항상 최상단에 표시한다.
+Compass Tape는 `DisplayCutout.safeInsetTop`을 반영해 Pinhole 아래에 배치하고 장소·Tracking·정렬 진단 안내는 그 아래에 둔다. 안내 Panel은 별도 홈 버튼 없이 장소와 Tracking을 한 줄에 표시하는 3줄 Compact 구조다. 좌하단 Pitch·Roll Artificial Horizon은 시야를 가리지 않도록 축소한다. HUD는 AR Camera보다 위, 상태 안내와 재생 확인 Popup보다 아래에 그려서 사용자의 선택이 필요한 Popup을 항상 최상단에 표시한다.
 
 ## 앱 내 안내 설정
 

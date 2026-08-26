@@ -1224,16 +1224,17 @@ class MainActivity : Activity() {
             setOnTouchListener { _, event -> handleWorldTouch(event) }
         }
         zoneLabel = overlayText("현재 장소 확인 중").apply {
+            textSize = 13f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(COLOR_CYAN)
         }
-        trackingLabel = overlayText("ARCore 준비 중").apply { textSize = 12f }
+        trackingLabel = overlayText("ARCore 준비 중").apply { textSize = 10f }
         alignmentLabel = overlayText("GPS · True North 정렬 준비 중").apply {
-            textSize = 11f
+            textSize = 10f
             setTextColor(COLOR_AMBER)
         }
         controlPointLabel = overlayText("국가기준점 준비 중").apply {
-            textSize = 11f
+            textSize = 10f
             setTextColor(COLOR_AMBER)
         }
         markerHint = overlayText("시간 기록을 불러오는 중…").apply {
@@ -1258,24 +1259,24 @@ class MainActivity : Activity() {
         buildViewerHud()
 
         val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(12), dp(16), dp(12))
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(6), dp(12), dp(6))
             background = glassBackground(COLOR_SURFACE, COLOR_CYAN)
-            addView(compactButton("‹ 홈") { showStartScreen() })
             addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(8), 0, 0, 0)
-                addView(zoneLabel)
-                addView(trackingLabel)
-                addView(alignmentLabel)
-                addView(controlPointLabel)
-            }, LinearLayout.LayoutParams(0, -2, 1f))
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(zoneLabel, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(trackingLabel, LinearLayout.LayoutParams(-2, -2).apply {
+                    marginStart = dp(8)
+                })
+            }, LinearLayout.LayoutParams(-1, -2))
+            addView(alignmentLabel)
+            addView(controlPointLabel)
         }
         viewerRoot.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
             marginStart = dp(10)
             marginEnd = dp(10)
-            topMargin = dp(92)
+            topMargin = dp(124)
         })
 
         val bottom = LinearLayout(this).apply {
