@@ -1255,6 +1255,7 @@ class MainActivity : Activity() {
             visibility = View.GONE
             addView(arView, FrameLayout.LayoutParams(-1, -1))
         }
+        buildViewerHud()
 
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1274,7 +1275,7 @@ class MainActivity : Activity() {
         viewerRoot.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
             marginStart = dp(10)
             marginEnd = dp(10)
-            topMargin = dp(10)
+            topMargin = dp(92)
         })
 
         val bottom = LinearLayout(this).apply {
@@ -1297,7 +1298,6 @@ class MainActivity : Activity() {
 
         buildPlayerOverlay()
         viewerRoot.addView(playerOverlay, FrameLayout.LayoutParams(-1, -1))
-        buildViewerHud()
         root.addView(viewerRoot, FrameLayout.LayoutParams(-1, -1))
 
         startScreen = buildStartScreen()

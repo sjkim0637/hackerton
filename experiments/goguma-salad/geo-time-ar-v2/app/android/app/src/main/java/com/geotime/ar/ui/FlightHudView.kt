@@ -65,7 +65,7 @@ class FlightHudView(context: Context) : View(context) {
 
     private fun drawCompassTape(canvas: Canvas) {
         val centerX = width / 2f
-        val top = dp(112f)
+        val top = dp(10f)
         val left = dp(10f)
         val right = width - dp(10f)
         val tapeBottom = top + dp(72f)
@@ -104,10 +104,10 @@ class FlightHudView(context: Context) : View(context) {
     }
 
     private fun drawArtificialHorizon(canvas: Canvas) {
-        val centerX = dp(76f)
-        val centerY = height - dp(154f)
-        val radius = dp(54f)
-        val pixelsPerDegree = dp(2.1f)
+        val centerX = dp(58f)
+        val centerY = height - dp(132f)
+        val radius = dp(40f)
+        val pixelsPerDegree = dp(1.55f)
 
         canvas.drawCircle(centerX, centerY, radius + dp(4f), backdropPaint)
         val circularClip = Path().apply { addCircle(centerX, centerY, radius, Path.Direction.CW) }
@@ -131,8 +131,8 @@ class FlightHudView(context: Context) : View(context) {
 
             if (!horizon) {
                 textPaint.color = linePaint.color
-                textPaint.textSize = sp(8.5f)
-                canvas.drawText(kotlin.math.abs(angle).toString(), halfWidth + dp(9f), y + dp(3f), textPaint)
+                textPaint.textSize = sp(7f)
+                canvas.drawText(kotlin.math.abs(angle).toString(), halfWidth + dp(7f), y + dp(2.5f), textPaint)
             }
         }
         canvas.restore()
@@ -150,18 +150,18 @@ class FlightHudView(context: Context) : View(context) {
 
         drawFixedAircraftSymbol(canvas, centerX, centerY)
         textPaint.color = Color.argb(245, 215, 250, 255)
-        textPaint.textSize = sp(9.5f)
+        textPaint.textSize = sp(8f)
         textPaint.textAlign = Paint.Align.CENTER
         canvas.drawText(
             String.format(Locale.US, "P %+.0f°  R %+.0f°", pitchDegrees, rollDegrees),
             centerX,
-            centerY + radius + dp(15f),
+            centerY + radius + dp(12f),
             textPaint,
         )
         if (showRollExitCue) {
             textPaint.color = amber
-            textPaint.textSize = sp(8.5f)
-            canvas.drawText("ROLL ±15° EXIT", centerX, centerY + radius + dp(28f), textPaint)
+            textPaint.textSize = sp(7f)
+            canvas.drawText("ROLL ±15° EXIT", centerX, centerY + radius + dp(22f), textPaint)
         }
     }
 
@@ -192,13 +192,13 @@ class FlightHudView(context: Context) : View(context) {
     private fun drawFixedAircraftSymbol(canvas: Canvas, centerX: Float, centerY: Float) {
         linePaint.color = Color.argb(255, 225, 253, 255)
         linePaint.strokeWidth = dp(2f)
-        val wing = dp(31f)
-        val gap = dp(7f)
+        val wing = dp(23f)
+        val gap = dp(5f)
         canvas.drawLine(centerX - wing, centerY, centerX - gap, centerY, linePaint)
         canvas.drawLine(centerX + gap, centerY, centerX + wing, centerY, linePaint)
-        canvas.drawLine(centerX - wing, centerY, centerX - wing, centerY + dp(5f), linePaint)
-        canvas.drawLine(centerX + wing, centerY, centerX + wing, centerY + dp(5f), linePaint)
-        canvas.drawCircle(centerX, centerY, dp(2.5f), pointerPaint)
+        canvas.drawLine(centerX - wing, centerY, centerX - wing, centerY + dp(4f), linePaint)
+        canvas.drawLine(centerX + wing, centerY, centerX + wing, centerY + dp(4f), linePaint)
+        canvas.drawCircle(centerX, centerY, dp(2f), pointerPaint)
     }
 
     private fun headingLabel(degrees: Int): String = when (normalizeHeading(degrees.toFloat()).roundToInt() % 360) {
