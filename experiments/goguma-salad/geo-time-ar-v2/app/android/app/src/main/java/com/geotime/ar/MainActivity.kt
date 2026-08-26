@@ -54,14 +54,16 @@ import com.geotime.ar.network.ServerConnectionTester
 import com.geotime.ar.network.ServerProfile
 import com.geotime.ar.network.ServerSettings
 import com.geotime.ar.network.ServerSettingsStore
+import com.geotime.ar.spatial.CameraRelativePlacement
 import com.geotime.ar.time.MomentStack
 import com.geotime.ar.time.TimelineMoment
-import com.geotime.ar.ui.FlightHudView
 import com.geotime.ar.spatial.GeoArAlignment
 import com.geotime.ar.spatial.GeographicPosition
 import com.geotime.ar.spatial.HeadingReading
+import com.geotime.ar.spatial.SpatialCandidate
 import com.geotime.ar.spatial.TrueNorthHeadingProvider
 import com.geotime.ar.spatial.Vector3
+import com.geotime.ar.ui.FlightHudView
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Session
@@ -577,10 +579,40 @@ class MainActivity : Activity() {
                 )
             }
         }
-        arView.updateCandidates(candidates)
+        arView.updateCandidates(
+            if (demoPreviewEnabled) placePreviewCandidates(candidates) else candidates
+        )
         markerHint.visibility = View.GONE
         hideViewerState()
-        showCoach(worldGuideText())
+        showCoach(
+            if (demoPreviewEnabled) {
+                "DEMO · 시간 기록 마커를 정면 ${DEMO_MARKER_DISTANCE_M.toInt()}m에 표시했습니다"
+            } else {
+                worldGuideText()
+            }
+        )
+    }
+
+    private fun placePreviewCandidates(candidates: List<SpatialCandidate>): List<SpatialCandidate> {
+        val alignment = geoArAlignment
+        val cameraPosition = lastArCameraPosition ?: alignment?.arCameraPosition ?: Vector3(0f, 0f, 0f)
+        val cameraPose = lastHeadPose ?: HeadPose(
+            yawDegrees = alignment?.arCameraYawDegrees ?: 0f,
+            pitchDegrees = 0f,
+        )
+        val centerIndex = (candidates.lastIndex / 2f)
+        return candidates.mapIndexed { index, candidate ->
+            candidate.copy(
+                position = CameraRelativePlacement.inFront(
+                    cameraPosition = cameraPosition,
+                    cameraYawDegrees = cameraPose.yawDegrees +
+                        (index - centerIndex) * DEMO_MARKER_SPACING_DEGREES,
+                    cameraPitchDegrees = cameraPose.pitchDegrees,
+                    distanceM = DEMO_MARKER_DISTANCE_M,
+                ),
+                viewConeDegrees = DEMO_MARKER_VIEW_CONE_DEGREES,
+            )
+        }
     }
 
     private fun resetGeoAlignment() {
@@ -619,7 +651,7 @@ class MainActivity : Activity() {
         val stacks = MomentStack.group(moments)
         stacksByMarkerId.clear()
         stacks.associateByTo(stacksByMarkerId, MomentStack::id)
-        arView.updateCandidates(stacks.map(MomentStack::asSpatialCandidate))
+        arView.updateCandidates(placePreviewCandidates(stacks.map(MomentStack::asSpatialCandidate)))
         zoneLabel.text = "현재 장소: 을지로 타워 107 · Local Demo"
         alignmentLabel.text = "Local Demo · GPS·Compass 자동 정렬 미사용"
         alignmentLabel.setTextColor(0xFFB7C9D8.toInt())
@@ -1922,6 +1954,9 @@ class MainActivity : Activity() {
         private const val GLASS_EXIT_ROLL_DEGREES = 15f
         private const val DEMO_ZONE_LATITUDE = 37.5648801960179
         private const val DEMO_ZONE_LONGITUDE = 126.991228638001
+        private const val DEMO_MARKER_DISTANCE_M = 4f
+        private const val DEMO_MARKER_SPACING_DEGREES = 18f
+        private const val DEMO_MARKER_VIEW_CONE_DEGREES = 120f
         private const val DEMO_REFERENCE_ACCURACY_M = 0.5f
         private const val MIN_HEADING_SAMPLES = 5
         private const val LOCATION_WARNING_ACCURACY_M = 20f

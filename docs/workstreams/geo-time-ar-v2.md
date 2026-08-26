@@ -192,3 +192,4 @@ TBD
 - Backend Ruff 통과, Pytest 19개 통과
 - Storage Bucket은 구성했으며 Creator Upload API와 접근 정책 연결은 P1 전 후속 작업
 - Android `운영` Profile 기본 API를 Vercel Production으로, Media Endpoint를 Supabase Storage로 연결
+- Android `0.1.1` Demo Preview Marker를 초기 Camera 정면 4m에 배치하고 시야 밖 탐색 안내 추가

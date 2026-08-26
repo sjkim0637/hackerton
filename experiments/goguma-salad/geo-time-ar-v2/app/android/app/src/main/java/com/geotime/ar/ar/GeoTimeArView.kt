@@ -144,7 +144,11 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
                 }
             }
             val nearest = visible.minByOrNull { it.distanceM }
-            val detail = nearest?.let { " · ${it.candidate.title} ${"%.1f".format(it.distanceM)}m" }.orEmpty()
+            val detail = when {
+                nearest != null -> " · ${nearest.candidate.title} ${"%.1f".format(nearest.distanceM)}m"
+                candidates.isNotEmpty() -> " · 마커가 시야 밖 · 좌우로 천천히 회전"
+                else -> ""
+            }
             onTrackingUpdate?.invoke("6DoF 추적 · 표시 ${visible.size}/${candidates.size}$detail")
         } catch (error: Exception) {
             focusedCandidateId = null

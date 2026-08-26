@@ -6,9 +6,9 @@
 
 | 항목 | 값 |
 |---|---|
-| Android App Version | `0.1.0` (`versionCode 1`) |
+| Android App Version | `0.1.1` (`versionCode 2`) |
 | Backend Version | `0.1.0` |
-| 기준 기능 Commit | `392f490` |
+| Build 기준 | 이 문서를 포함한 Branch 최신 HEAD |
 | Production API | `https://geo-time-ar-v2.vercel.app` |
 | 운영 Database | Supabase PostgreSQL/PostGIS |
 | 확인일 | 2026-08-26 |
@@ -60,6 +60,8 @@ adb install -r .\app-debug.apk
 이전 개발 버전에서 `api.example.com` 또는 `media.example.com`을 저장한 기기는 현재 운영 기본 Endpoint로 자동 전환된다. 사용자가 직접 입력한 다른 운영 주소는 유지된다.
 
 `Demo Preview`는 기본으로 활성화되어 실제 위치와 관계없이 을지로 타워 107의 운영 Seed를 조회한다. 실제 GPS 기준으로 시험하려면 설정에서 `Demo Preview`를 끈다.
+
+`0.1.1`부터 Demo Preview의 시간 기록 Marker는 AR 정렬이 끝난 시점의 Camera 정면 약 4m에 나타난다. 실제 GPS Mode에서 Marker가 시야 밖이면 상태 줄에 좌우 회전 안내가 표시된다.
 
 ## 현재 확인할 수 있는 항목
 
