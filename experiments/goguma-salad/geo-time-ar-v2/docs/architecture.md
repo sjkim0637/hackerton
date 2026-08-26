@@ -40,3 +40,15 @@ Creator 구현 전에 POI·Moment Metadata, 영상 원본과 변환본의 수신
 - Media Storage·Delivery: 영상 원본·변환본·Thumbnail 저장과 공개 전달
 
 세 책임이 필요하다는 사실이 세 대의 물리 Server가 필요하다는 뜻은 아니다. 초기에는 API와 Worker를 한 배포 단위로 두고 관리형 PostgreSQL/PostGIS와 S3 호환 Object Storage를 연결하는 안, 모두 한 Host에 두는 안, 완전 분리하는 안을 비용·운영 난이도·확장성 기준으로 비교한다. Android 영상 Upload도 API Server 경유 방식과 서명 URL 기반 Object Storage 직접 Upload 방식을 비교한 뒤 Creator API를 확정한다.
+
+## 운영 Backend 현황
+
+2026-08-26 기준 FastAPI는 Vercel Production에 배포했고, PostgreSQL/PostGIS와 Demo Seed는 Supabase에 구성했다.
+
+- Production API: `https://geo-time-ar-v2.vercel.app`
+- Runtime DB 연결: Supabase Transaction Pooler와 `NullPool` 사용
+- Migration: Supabase Session Pooler를 사용하며 Alembic `0002`까지 적용
+- PostGIS: Supabase의 `extensions` Schema를 `search_path`에 추가
+- Storage Bucket 설정값은 준비했지만 Upload API와 Storage 정책 연결은 후속 작업
+
+실제 비밀번호와 Key는 Git에 저장하지 않고 Vercel Environment Variables와 무시된 `.env.supabase.local`에만 보관한다.

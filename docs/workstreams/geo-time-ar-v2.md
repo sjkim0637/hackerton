@@ -178,7 +178,16 @@ TBD
 - `9e37e16` fix(android): Viewer HUD 겹침과 Popup 계층 정리
 - `c917b86` fix(android): Pinhole 아래로 Viewer 안내 축소
 - `7082d41` feat(p0): Viewer 설정과 Version 진단 마무리
+- `4dce3ee` fix(backend): Supabase와 Vercel 운영 연결 안정화
 
 ## Updated
 
 2026-08-26
+
+## Backend Deployment Update — 2026-08-26
+
+- Vercel Production `https://geo-time-ar-v2.vercel.app` 배포 완료
+- Supabase PostgreSQL/PostGIS Migration `0002` 적용 및 Demo Seed 입력 완료
+- Production `/health`, `/health/ready`, 주변 GeoZone, POI, Timeline, 가까운 기준좌표 조회 확인
+- Backend Ruff 통과, Pytest 19개 통과
+- Storage Bucket은 구성했으며 Creator Upload API와 접근 정책 연결은 P1 전 후속 작업
