@@ -194,3 +194,4 @@ TBD
 - Android `운영` Profile 기본 API를 Vercel Production으로, Media Endpoint를 Supabase Storage로 연결
 - Android `0.1.1` 운영 API에 실제 좌표 기반 테스트 POI Marker를 추가하고 시야 밖 탐색 안내 적용
 - Android `0.1.2` Glass 재생 종료 후 AR 복귀 시 Marker Focus와 5초 Dwell 재활성화
+- Android `0.1.3` 상단 6DoF 진단 문구 제거 및 화면 가장자리 POI 방향 Indicator 적용

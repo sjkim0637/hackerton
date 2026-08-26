@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 |---|---|
-| Android App Version | `0.1.2` (`versionCode 3`) |
+| Android App Version | `0.1.3` (`versionCode 4`) |
 | Backend Version | `0.1.0` |
 | Build 기준 | 이 문서를 포함한 Branch 최신 HEAD |
 | Production API | `https://geo-time-ar-v2.vercel.app` |
@@ -64,6 +64,8 @@ adb install -r .\app-debug.apk
 `0.1.1`부터 운영 API에는 타워 107 주변의 실제 좌표를 가진 테스트 POI Marker가 여러 방향으로 등록된다. Marker가 시야 밖이면 상태 줄에 좌우 회전 안내가 표시된다.
 
 `0.1.2`부터 Glass Demo에서 Preview 또는 전체 재생을 종료하고 AR로 복귀해도 같은 Marker를 다시 5초간 응시할 수 있다.
+
+`0.1.3`부터 Viewer 상단의 `6DoF 추적 · 표시 N/M` 진단 문구를 제거했다. 화면 중앙 범위 밖의 POI는 화면 가장자리의 `◀`, `▶`, `▲`, `▼` Indicator와 방향별 개수로 안내한다.
 
 ## 현재 확인할 수 있는 항목
 

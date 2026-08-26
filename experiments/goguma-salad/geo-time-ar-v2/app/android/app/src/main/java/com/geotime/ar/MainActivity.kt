@@ -59,6 +59,7 @@ import com.geotime.ar.time.TimelineMoment
 import com.geotime.ar.spatial.GeoArAlignment
 import com.geotime.ar.spatial.GeographicPosition
 import com.geotime.ar.spatial.HeadingReading
+import com.geotime.ar.spatial.PoiDirectionCounts
 import com.geotime.ar.spatial.TrueNorthHeadingProvider
 import com.geotime.ar.spatial.Vector3
 import com.geotime.ar.ui.FlightHudView
@@ -103,9 +104,12 @@ class MainActivity : Activity() {
     private lateinit var creatorScreen: View
     private lateinit var arView: GeoTimeArView
     private lateinit var zoneLabel: TextView
-    private lateinit var trackingLabel: TextView
     private lateinit var alignmentLabel: TextView
     private lateinit var controlPointLabel: TextView
+    private lateinit var poiLeftHint: TextView
+    private lateinit var poiRightHint: TextView
+    private lateinit var poiUpHint: TextView
+    private lateinit var poiDownHint: TextView
     private lateinit var markerHint: TextView
     private lateinit var coachHint: TextView
     private lateinit var playerOverlay: FrameLayout
@@ -327,7 +331,6 @@ class MainActivity : Activity() {
             when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
                 ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
                     installRequested = true
-                    trackingLabel.text = "Google Play Services for AR 설치 중"
                     showViewerState(
                         ViewerUiState.LOADING,
                         "AR 환경을 준비하고 있습니다",
@@ -348,7 +351,6 @@ class MainActivity : Activity() {
             arSession = session
             arView.attachSession(session)
         } catch (error: Exception) {
-            trackingLabel.text = "ARCore 시작 실패: ${error.message}"
             showViewerState(
                 ViewerUiState.SERVER_ERROR,
                 "AR을 시작하지 못했습니다",
@@ -628,7 +630,6 @@ class MainActivity : Activity() {
         markerHint.visibility = View.GONE
         hideViewerState()
         showCoach("DEMO · Server 연결 없이 로컬 시간 기록을 표시합니다")
-        trackingLabel.text = error?.let { "Local Demo · ${it.javaClass.simpleName}" } ?: "Local Demo 준비 완료"
     }
 
     private fun clearMomentStacks() {
@@ -1293,12 +1294,14 @@ class MainActivity : Activity() {
         arView = GeoTimeArView(this).apply {
             onTrackingUpdate = { status ->
                 runOnUiThread {
-                    trackingLabel.text = status
                     if (!status.startsWith("6DoF")) {
                         resetGlassDwell()
                         hudRollBaselineDegrees = null
                     }
                 }
+            }
+            onPoiDirections = { directions ->
+                runOnUiThread { updatePoiDirectionHints(directions) }
             }
             onSpatialFrame = { markerId, pose, cameraPosition, timestampMs ->
                 runOnUiThread {
@@ -1312,7 +1315,6 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(COLOR_CYAN)
         }
-        trackingLabel = overlayText("ARCore 준비 중").apply { textSize = 10f }
         alignmentLabel = overlayText("GPS · True North 정렬 준비 중").apply {
             textSize = 10f
             setTextColor(COLOR_AMBER)
@@ -1334,6 +1336,10 @@ class MainActivity : Activity() {
             background = pillBackground(0xD9A16207.toInt(), dp(20).toFloat())
             visibility = View.GONE
         }
+        poiLeftHint = poiDirectionHint()
+        poiRightHint = poiDirectionHint()
+        poiUpHint = poiDirectionHint().apply { gravity = Gravity.CENTER }
+        poiDownHint = poiDirectionHint().apply { gravity = Gravity.CENTER }
 
         root = FrameLayout(this).apply { setBackgroundColor(COLOR_BACKGROUND) }
         viewerRoot = FrameLayout(this).apply {
@@ -1346,14 +1352,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(6), dp(12), dp(6))
             background = glassBackground(COLOR_SURFACE, COLOR_CYAN)
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(zoneLabel, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(trackingLabel, LinearLayout.LayoutParams(-2, -2).apply {
-                    marginStart = dp(8)
-                })
-            }, LinearLayout.LayoutParams(-1, -2))
+            addView(zoneLabel, LinearLayout.LayoutParams(-1, -2))
             addView(alignmentLabel)
             addView(controlPointLabel)
         }
@@ -1362,6 +1361,31 @@ class MainActivity : Activity() {
             marginEnd = dp(10)
             topMargin = dp(124)
         })
+
+        viewerRoot.addView(
+            poiLeftHint,
+            FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL).apply {
+                marginStart = dp(10)
+            },
+        )
+        viewerRoot.addView(
+            poiRightHint,
+            FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+                marginEnd = dp(10)
+            },
+        )
+        viewerRoot.addView(
+            poiUpHint,
+            FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = dp(214)
+            },
+        )
+        viewerRoot.addView(
+            poiDownHint,
+            FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                bottomMargin = dp(92)
+            },
+        )
 
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1901,6 +1925,26 @@ class MainActivity : Activity() {
         minimumHeight = 0
         setPadding(dp(10), dp(6), dp(10), dp(6))
         setOnClickListener { action() }
+    }
+
+    private fun poiDirectionHint() = overlayText("").apply {
+        setTextColor(COLOR_CYAN)
+        textSize = 12f
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(9), dp(6), dp(9), dp(6))
+        background = pillBackground(0xC9111827.toInt(), dp(14).toFloat())
+        visibility = View.GONE
+    }
+
+    private fun updatePoiDirectionHints(directions: PoiDirectionCounts) {
+        fun update(view: TextView, count: Int, label: (Int) -> String) {
+            view.visibility = if (count > 0) View.VISIBLE else View.GONE
+            if (count > 0) view.text = label(count)
+        }
+        update(poiLeftHint, directions.left) { "◀ POI $it" }
+        update(poiRightHint, directions.right) { "POI $it ▶" }
+        update(poiUpHint, directions.up) { "▲ POI $it" }
+        update(poiDownHint, directions.down) { "▼ POI $it" }
     }
 
     private fun overlayText(value: String) = TextView(this).apply {

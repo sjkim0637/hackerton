@@ -6,6 +6,8 @@ import android.opengl.GLSurfaceView
 import android.os.SystemClock
 import android.view.Surface
 import com.geotime.ar.interaction.HeadPose
+import com.geotime.ar.spatial.PoiDirectionCounts
+import com.geotime.ar.spatial.PoiDirectionResolver
 import com.geotime.ar.spatial.SpatialCandidate
 import com.geotime.ar.spatial.SpatialVisibilitySelector
 import com.geotime.ar.spatial.Vector3
@@ -28,6 +30,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     @Volatile private var contentAlpha = 1f
     @Volatile private var focusedCandidateId: String? = null
     @Volatile var onTrackingUpdate: ((String) -> Unit)? = null
+    @Volatile var onPoiDirections: ((PoiDirectionCounts) -> Unit)? = null
     @Volatile var onSpatialFrame: ((String?, HeadPose, Vector3, Long) -> Unit)? = null
     private var lastSpatialFrameAtMs = 0L
     private var viewportWidth = 1
@@ -97,6 +100,7 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val camera = frame.camera
             if (camera.trackingState != TrackingState.TRACKING) {
                 focusedCandidateId = null
+                onPoiDirections?.invoke(PoiDirectionCounts())
                 onTrackingUpdate?.invoke("AR 추적 대기 중")
                 return
             }
@@ -115,6 +119,18 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
             val nowMs = SystemClock.elapsedRealtime()
             if (nowMs - lastSpatialFrameAtMs >= 50L) {
                 lastSpatialFrameAtMs = nowMs
+                onPoiDirections?.invoke(
+                    PoiDirectionResolver.resolve(
+                        cameraPosition = Vector3(translation[0], translation[1], translation[2]),
+                        cameraForward = forward,
+                        cameraRight = Vector3(xAxis[0], xAxis[1], xAxis[2]),
+                        cameraUp = Vector3(yAxis[0], yAxis[1], yAxis[2]),
+                        candidates = candidates,
+                        visibleCandidateIds = visible
+                            .filter { it.angleDegrees <= POI_CENTER_GUIDE_DEGREES }
+                            .mapTo(hashSetOf()) { it.candidate.id },
+                    )
+                )
                 onSpatialFrame?.invoke(
                     focusedCandidateId,
                     HeadPose(
@@ -148,15 +164,10 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
                     markerRenderer.draw(it, item.candidate.title, view, projection, contentAlpha)
                 }
             }
-            val nearest = visible.minByOrNull { it.distanceM }
-            val detail = when {
-                nearest != null -> " · ${nearest.candidate.title} ${"%.1f".format(nearest.distanceM)}m"
-                candidates.isNotEmpty() -> " · 마커가 시야 밖 · 좌우로 천천히 회전"
-                else -> ""
-            }
-            onTrackingUpdate?.invoke("6DoF 추적 · 표시 ${visible.size}/${candidates.size}$detail")
+            onTrackingUpdate?.invoke("6DoF")
         } catch (error: Exception) {
             focusedCandidateId = null
+            onPoiDirections?.invoke(PoiDirectionCounts())
             onTrackingUpdate?.invoke("AR 오류: ${error.message}")
         }
     }
@@ -164,5 +175,9 @@ class GeoTimeArView(context: Context) : GLSurfaceView(context), GLSurfaceView.Re
     private fun updateDisplayGeometry(session: Session) {
         val rotation = display?.rotation ?: Surface.ROTATION_0
         session.setDisplayGeometry(rotation, viewportWidth, viewportHeight)
+    }
+
+    companion object {
+        private const val POI_CENTER_GUIDE_DEGREES = 25f
     }
 }
