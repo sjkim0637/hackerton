@@ -114,6 +114,7 @@ TBD
 - 기본 Local Demo 전환과 AR Tracking 시작 자세 기준 Roll 영점 보정 후 Android Unit Test 12개와 `assembleDebug`: 통과
 - Demo의 을지로 타워 107 Backend 좌표 조회와 USB API·Media 이중 Reverse 자동화 후 Backend Health·Nearby·Timeline API 확인: 통과
 - Glass 전체 재생 Roll 15도 AR 복귀와 좌하단 소형 원형 Artificial Horizon 적용 후 Android Unit Test 12개, `assembleDebug`, 실기기 Backend·화면 확인: 통과
+- Demo·USB·운영 Server Profile, API·Media 주소 저장, 이중 연결 Test와 실패 원인 표시, Media Origin 재작성 적용 후 Android Unit Test 16개와 `assembleDebug`: 통과
 
 ## Known Issues
 
@@ -130,10 +131,9 @@ TBD
 
 상세 우선순위와 Checkbox는 [`제품 TODO`](../../experiments/goguma-salad/geo-time-ar-v2/docs/product-backlog.md)에서 관리한다.
 
-1. Server 주소 설정과 연결 Test 화면을 구현한다.
-2. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
-3. 실제 영상 Preload와 Cache를 적용한다.
-4. Creator 촬영·공간 배치·Upload MVP를 구현한다.
+1. POI GPS와 ARCore Session 좌표의 Calibration 방식을 검증한다.
+2. 실제 Demo 영상을 교체하고 Preload와 Cache를 적용한다.
+3. Creator 촬영·공간 배치·Upload MVP를 구현한다.
 
 ## Relevant Commits
 
@@ -161,7 +161,8 @@ TBD
 - `8cf7961` fix(android): GNSS 진단 중 Full Tracking 활성화
 - `e30a30c` docs: 사이버펑크 UI 전체 디자인 프롬프트 작성
 - `156916d` docs: UI용 이미지 조각 생성 프롬프트 추가
+- `e44f8e7` feat(android): Server Profile 설정과 연결 진단 추가
 
 ## Updated
 
-2026-08-25
+2026-08-26
