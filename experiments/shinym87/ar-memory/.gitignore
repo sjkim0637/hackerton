@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 원본 촬영 영상 등 큰 용량의 원본 소스 자산(빌드에 쓰이는 최종본은 photo/ 바로 아래에 둔다)
+photo/_source/

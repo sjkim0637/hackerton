@@ -37,14 +37,16 @@ function nextId(prefix: string) {
 }
 
 function post(input: Omit<Post, "id" | "likedBy" | "comments"> & {
+  id?: string;
   likedBy?: string[];
   comments?: Post["comments"];
 }): Post {
+  const { id, likedBy, comments, ...rest } = input;
   return {
-    id: nextId("post"),
-    likedBy: input.likedBy ?? [],
-    comments: input.comments ?? [],
-    ...input,
+    id: id ?? nextId("post"),
+    likedBy: likedBy ?? [],
+    comments: comments ?? [],
+    ...rest,
   };
 }
 
@@ -113,6 +115,7 @@ export const SEED_POSTS: Post[] = [
     ],
   }),
   post({
+    id: "playground-swing",
     authorId: "u1",
     spotId: "playground",
     category: "kids",
@@ -123,6 +126,7 @@ export const SEED_POSTS: Post[] = [
     createdAt: "2025-08-12T17:15:00+09:00",
   }),
   post({
+    id: "playground-slide",
     authorId: "u2",
     spotId: "playground",
     category: "kids",
