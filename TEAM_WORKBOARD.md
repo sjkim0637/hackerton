@@ -7,6 +7,7 @@
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
+| sjkim0637 + Codex | `agent/sjkim0637/ar-life-service` | `experiments/sjkim0637/ar-life-service/` | AR Life Service | 단지 생활 정보를 AR 마커로 발견하고 행동으로 연결하는 흐름을 검증한다. | `IN_PROGRESS` | [ar-life-service](docs/workstreams/ar-life-service.md) | 2026-08-27 |
 
 ## 사용 방법
 
