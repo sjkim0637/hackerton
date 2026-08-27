@@ -378,26 +378,6 @@
   height: 200px;
 }
 
-.media-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.media-placeholder__emoji {
-  font-size: 2.6rem;
-}
-
-.media-placeholder__label {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
 .media-real {
   width: 100%;
   height: 100%;

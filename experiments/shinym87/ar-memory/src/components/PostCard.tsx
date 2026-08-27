@@ -3,7 +3,7 @@ import type { Post } from "../types";
 import { useApp } from "../state/AppContext";
 import CategoryBadge from "./CategoryBadge";
 import VisibilityBadge from "./VisibilityBadge";
-import MediaPlaceholder from "./MediaPlaceholder";
+import PostMedia from "./PostMedia";
 import { formatDateTime } from "../utils/format";
 
 export default function PostCard({ post }: { post: Post }) {
@@ -39,7 +39,7 @@ export default function PostCard({ post }: { post: Post }) {
         )}
       </header>
 
-      <MediaPlaceholder post={post} className="post-card__media" />
+      <PostMedia post={post} className="post-card__media" />
 
       <div className="post-card__body">
         <div className="post-card__badges">
