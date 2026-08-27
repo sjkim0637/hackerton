@@ -1,6 +1,6 @@
 import { useApp } from "../state/AppContext";
 
-export type ViewName = "map" | "create" | "account";
+export type ViewName = "map" | "create" | "account" | "ar";
 
 interface TopNavProps {
   view: ViewName;

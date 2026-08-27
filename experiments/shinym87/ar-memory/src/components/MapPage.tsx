@@ -5,16 +5,22 @@ import { CATEGORIES } from "../utils/category";
 
 interface MapPageProps {
   onCreateAt: (spotId: string) => void;
+  onOpenAR: () => void;
 }
 
-export default function MapPage({ onCreateAt }: MapPageProps) {
+export default function MapPage({ onCreateAt, onOpenAR }: MapPageProps) {
   const [openSpotId, setOpenSpotId] = useState<string | null>(null);
 
   return (
     <div className="map-page">
       <div className="map-page__intro">
-        <h1>단지 배치도</h1>
-        <p>핀을 눌러 그 장소에 쌓인 이웃들의 순간을 시간순으로 확인해보세요.</p>
+        <div className="map-page__intro-text">
+          <h1>단지 배치도</h1>
+          <p>핀을 눌러 그 장소에 쌓인 이웃들의 순간을 시간순으로 확인해보세요.</p>
+        </div>
+        <button className="btn-ar" onClick={onOpenAR}>
+          🥽 AR로 보기
+        </button>
       </div>
 
       <SiteMap mode="view" onSpotClick={setOpenSpotId} />

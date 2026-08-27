@@ -4,6 +4,7 @@ import TopNav, { type ViewName } from "./components/TopNav";
 import MapPage from "./components/MapPage";
 import PostForm from "./components/PostForm";
 import AccountPage from "./components/AccountPage";
+import ARView from "./components/ARView";
 import "./App.css";
 
 function AppShell() {
@@ -17,9 +18,12 @@ function AppShell() {
 
   return (
     <div className="app-shell">
-      <TopNav view={view} onNavigate={setView} />
-      <main className="app-main">
-        {view === "map" && <MapPage onCreateAt={(spotId) => goToCreate(spotId)} />}
+      {view !== "ar" && <TopNav view={view} onNavigate={setView} />}
+      <main className={`app-main${view === "ar" ? " app-main--ar" : ""}`}>
+        {view === "map" && (
+          <MapPage onCreateAt={(spotId) => goToCreate(spotId)} onOpenAR={() => setView("ar")} />
+        )}
+        {view === "ar" && <ARView onClose={() => setView("map")} />}
         {view === "create" && (
           <PostForm
             initialSpotId={createAtSpotId}
