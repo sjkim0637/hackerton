@@ -7,6 +7,7 @@
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
+| shinym87 + Claude | `agent/shinym87/ar2` | `experiments/shinym87/ar2/` | ARCore 최소 기능 검증 | 카메라·평면 격자·탭 큐브 배치 3가지 기본 동작을 실기기로 검증한다. | `IN_PROGRESS` | [ar-cube-min](docs/workstreams/ar-cube-min.md) | 2026-09-01 |
 
 ## 사용 방법
 
