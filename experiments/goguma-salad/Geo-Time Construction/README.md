@@ -40,6 +40,17 @@ Phase 1 세 파일만 DXF로 변환한다.
 
 변환 결과는 Git에서 제외되는 `data/derived/`에 생성된다.
 
+## VS Code Task
+
+저장소 Root를 VS Code로 연 뒤 `Terminal > Run Task`에서 다음 작업을 순서대로 사용할 수 있다.
+
+1. `Geo-Time: 1) 최초 준비`: Python 가상환경과 Backend·Web 의존성 설치
+2. `Geo-Time: 2) Phase 1 DXF 변환`: ODA File Converter로 대상 DWG 세 파일만 변환
+3. `Geo-Time: 3) 개발 화면 실행`: Backend와 Web 개발 서버를 동시에 실행하고 Browser 열기
+4. `Geo-Time: 4) 전체 검증`: Ruff·Pytest와 ESLint·Production Build 병렬 실행
+
+`Ctrl+Shift+B`는 기본 Build Task인 `Geo-Time: 4) 전체 검증`을 바로 실행한다. 실행 중인 개발 서버는 VS Code의 `Terminal > Terminate Task`에서 종료한다.
+
 ## Backend 실행
 
 ```powershell

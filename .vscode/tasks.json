@@ -1,0 +1,178 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Geo-Time: 1) 최초 준비",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Geo-Time: Backend 설치",
+        "Geo-Time: Web 설치"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Geo-Time: Backend 설치",
+      "type": "shell",
+      "command": "if (-not (Test-Path '.venv\\Scripts\\python.exe')) { py -3.11 -m venv .venv }; & .\\.venv\\Scripts\\python.exe -m pip install -e '.[dev]'",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Geo-Time: Web 설치",
+      "type": "shell",
+      "command": "npm install",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/web"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Geo-Time: 2) Phase 1 DXF 변환",
+      "type": "shell",
+      "command": "& .\\scripts\\convert-phase1.ps1",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Geo-Time: 3) 개발 화면 실행",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Geo-Time: 개발 서버 시작",
+        "Geo-Time: 브라우저 열기"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Geo-Time: 개발 서버 시작",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "Geo-Time: Backend 서버",
+        "Geo-Time: Web 서버"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Geo-Time: Backend 서버",
+      "type": "shell",
+      "isBackground": true,
+      "command": "& .\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/backend"
+      },
+      "problemMatcher": {
+        "owner": "geo-time-backend",
+        "pattern": {
+          "regexp": "^(?!)$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Started server process.*|.*Will watch for changes.*",
+          "endsPattern": ".*Uvicorn running on.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "geo-time-servers",
+        "clear": true
+      }
+    },
+    {
+      "label": "Geo-Time: Web 서버",
+      "type": "shell",
+      "isBackground": true,
+      "command": "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/web"
+      },
+      "problemMatcher": {
+        "owner": "geo-time-web",
+        "pattern": {
+          "regexp": "^(?!)$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*VITE.*ready in.*",
+          "endsPattern": ".*Local:.*http://127\\.0\\.0\\.1:5173.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "geo-time-servers",
+        "clear": true
+      }
+    },
+    {
+      "label": "Geo-Time: 브라우저 열기",
+      "type": "shell",
+      "command": "Start-Process 'http://127.0.0.1:5173'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Geo-Time: 4) 전체 검증",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "Geo-Time: Backend 검증",
+        "Geo-Time: Web 검증"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Geo-Time: Backend 검증",
+      "type": "shell",
+      "command": "& .\\.venv\\Scripts\\python.exe -m ruff check .; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & .\\.venv\\Scripts\\python.exe -m pytest -q",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "geo-time-verification",
+        "clear": true
+      }
+    },
+    {
+      "label": "Geo-Time: Web 검증",
+      "type": "shell",
+      "command": "npm run lint; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/web"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "geo-time-verification",
+        "clear": true
+      }
+    }
+  ]
+}
