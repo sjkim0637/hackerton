@@ -22,15 +22,29 @@ if (-not $sheetDwg -or -not $unitDwg) {
     throw 'Required XR_SHEET and unit-plan Xref DWG files were not found.'
 }
 
+$requestedConverterPath = $ConverterPath
+$command = Get-Command ODAFileConverter.exe -ErrorAction SilentlyContinue
+$candidatePaths = @(
+    $ConverterPath,
+    $(if ($command) { $command.Source }),
+    $(Join-Path $env:ProgramFiles 'ODA\ODAFileConverter\ODAFileConverter.exe'),
+    $(Join-Path ${env:ProgramFiles(x86)} 'ODA\ODAFileConverter\ODAFileConverter.exe'),
+    $(Join-Path $env:LOCALAPPDATA 'Programs\ODA\ODAFileConverter\ODAFileConverter.exe'),
+    $(Join-Path ([System.IO.Path]::GetTempPath()) 'ODAFileConverterPortable\ODAFileConverter.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+$ConverterPath = $candidatePaths | Select-Object -First 1
 if (-not $ConverterPath) {
-    $installed = Get-Command ODAFileConverter.exe -ErrorAction SilentlyContinue
-    if ($installed) {
-        $ConverterPath = $installed.Source
+    $requestedMessage = if ($requestedConverterPath) {
+        " Requested path was not found: $requestedConverterPath"
     }
+    else {
+        ''
+    }
+    throw "Install ODA File Converter or set ODA_FILE_CONVERTER to its executable path.$requestedMessage"
 }
-if (-not $ConverterPath -or -not (Test-Path -LiteralPath $ConverterPath)) {
-    throw 'Install ODA File Converter or set ODA_FILE_CONVERTER to its executable path.'
-}
+
+Write-Host "ODA File Converter: $ConverterPath"
 
 $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("gtc-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $temporaryOutput = Join-Path $temporaryRoot 'output'

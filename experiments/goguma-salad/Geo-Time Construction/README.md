@@ -18,10 +18,16 @@
 
 Python 3.11 이상, Node.js 20 이상이 필요하다. DWG를 DXF로 바꾸려면 ODA File Converter 또는 AutoCAD가 필요하다.
 
-ODA File Converter 경로가 PATH에 없다면 PowerShell 환경 변수로 지정한다.
+Script는 PATH, 일반 설치 경로와 로컬 임시 추출 경로를 순서대로 탐색한다. 자동으로 찾지 못하면 실제 `ODAFileConverter.exe` 위치를 PowerShell 환경 변수로 지정한다. 아래 경로는 예시이므로 설치 위치에 맞게 바꾼다.
 
 ```powershell
-$env:ODA_FILE_CONVERTER = 'C:\Program Files\ODA\ODAFileConverter.exe'
+$env:ODA_FILE_CONVERTER = 'C:\Path\To\ODAFileConverter.exe'
+```
+
+현재 저장소를 검증할 때처럼 Windows 임시 폴더에 압축을 풀었다면 다음 형식을 사용할 수 있다.
+
+```powershell
+$env:ODA_FILE_CONVERTER = "$env:TEMP\ODAFileConverterPortable\ODAFileConverter.exe"
 ```
 
 Phase 1 세 파일만 DXF로 변환한다.
