@@ -99,7 +99,7 @@
       "label": "Geo-Time: Web 서버",
       "type": "shell",
       "isBackground": true,
-      "command": "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort",
+      "command": "node node_modules/vite/bin/vite.js --host=127.0.0.1 --port=5173 --strictPort",
       "options": {
         "cwd": "${workspaceFolder}/experiments/goguma-salad/Geo-Time Construction/web"
       },
