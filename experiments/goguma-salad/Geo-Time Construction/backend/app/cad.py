@@ -287,6 +287,10 @@ def build_architecture_background(
             clipped = _clip_segment(start, end, min_x, min_y, max_x, max_y)
             if clipped is None:
                 continue
+            midpoint_x = (start[0] + end[0]) / 2
+            midpoint_y = (start[1] + end[1]) / 2
+            if not (min_x <= midpoint_x < max_x and min_y <= midpoint_y < max_y):
+                continue
             intersects_region = True
             if _distance(*clipped) < min_segment_length_mm:
                 continue
