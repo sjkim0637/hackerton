@@ -119,6 +119,7 @@ TBD
 ## Relevant Commits
 
 - `3bd0ef8` docs(cad): Geo-Time Construction Phase 1 검토 등록
+- `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
 
 ## Updated
 
