@@ -1,0 +1,7 @@
+backend/.venv/
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+data/derived/
+*.dxf
+*.log
