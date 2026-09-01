@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <io.github.sceneview.ar.ARSceneView
+        android:id="@+id/sceneView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 저장해 둔 "빈 배경" 사진을 카메라 위에 반투명으로 겹친다.
+         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다. -->
+    <ImageView
+        android:id="@+id/backgroundOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.5"
+        android:visibility="gone"
+        android:contentDescription="배경 오버레이"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:paddingTop="40dp"
+        android:paddingHorizontal="12dp">
+
+        <TextView
+            android:id="@+id/instructionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/instruction_scan"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:shadowColor="@android:color/black"
+            android:shadowRadius="6" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnCaptureBg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="배경 촬영" />
+
+            <Button
+                android:id="@+id/btnToggleBg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:enabled="false"
+                android:text="배경 표시" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/opacitySeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="100"
+            android:progress="50"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 큐브를 선택하면 나타나는 조작 패널 -->
+    <LinearLayout
+        android:id="@+id/selectionPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:background="#CC000000"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/selectedNameText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="15sp"
+            android:text="선택됨" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnShrink"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="56dp"
+                android:text="－" />
+
+            <Button
+                android:id="@+id/btnGrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="56dp"
+                android:text="＋" />
+
+            <Button
+                android:id="@+id/btnDelete"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="삭제" />
+
+            <Button
+                android:id="@+id/btnDeselect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="선택 해제" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>

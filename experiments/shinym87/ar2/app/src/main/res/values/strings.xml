@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AR Cubes</string>
+    <string name="instruction_scan">바닥이나 책상을 천천히 비추세요 · 격자가 보이면 화면을 탭</string>
+</resources>
