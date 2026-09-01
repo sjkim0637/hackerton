@@ -47,3 +47,14 @@ def test_architecture_background_upload(architecture_dxf_bytes):
 
     assert response.status_code == 200, response.text
     assert response.json()["rendered_segment_count"] == 4
+
+
+def test_architecture_background_upload_with_focus_bounds(architecture_dxf_bytes):
+    response = client.post(
+        "/api/cad/architecture-background"
+        "?unit_type=84A&focus_min_x=1.0&focus_min_y=0.5&focus_max_x=2.5&focus_max_y=1.5",
+        files={"file": ("XR-unit.dxf", architecture_dxf_bytes, "application/dxf")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["rendered_segment_count"] == 1

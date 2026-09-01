@@ -48,10 +48,18 @@ export async function buildCableObjects(
   );
 }
 
+export interface FocusBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export async function buildArchitectureBackground(
   file: File,
   unitType: string,
   minSegmentLengthMm = 100,
+  focusBounds?: FocusBounds,
 ): Promise<ArchitectureBackgroundResponse> {
   const body = new FormData();
   body.append("file", file);
@@ -59,6 +67,12 @@ export async function buildArchitectureBackground(
     unit_type: unitType,
     min_segment_length_mm: String(minSegmentLengthMm),
   });
+  if (focusBounds) {
+    query.set("focus_min_x", String(focusBounds.minX));
+    query.set("focus_min_y", String(focusBounds.minY));
+    query.set("focus_max_x", String(focusBounds.maxX));
+    query.set("focus_max_y", String(focusBounds.maxY));
+  }
   return parseResponse(
     await fetch(`${API_URL}/api/cad/architecture-background?${query}`, {
       method: "POST",

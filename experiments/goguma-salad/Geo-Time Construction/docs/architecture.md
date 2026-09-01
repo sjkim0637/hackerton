@@ -25,6 +25,8 @@ Frontend는 DXF Entity를 직접 해석하지 않는다. Backend가 반환한 Co
 
 건축 배경과 통신 배선은 동일한 평형 Local m 좌표를 사용한다. 배경은 바닥 높이의 회색 선으로만 표시하고, 사용자가 Toggle로 숨길 수 있다. 이 방식은 통신 경로의 공간 맥락을 제공하지만 벽, 문, 가구 등 건축 의미 분류를 보장하지 않는다.
 
+`XR_단위`는 평형 하나가 아니라 주변 통로·인접 세대까지 포함한 42,000×29,700mm Sheet 전체를 담고 있어, Sheet 경계 그대로 자르면 배선(수 m~수십 m)보다 훨씬 넓은 배경이 나온다. 이를 완화하기 위해 `/api/cad/architecture-background`는 선택적 `focus_min_x`, `focus_min_y`, `focus_max_x`, `focus_max_y`(평형 Local m) Query를 받아 Sheet Crop 이후 다시 한 번 그 상자로 선분을 Clip한다. Frontend는 이미 응답받은 배선·기기 좌표의 Bounding Box에 여백(`ARCHITECTURE_FOCUS_MARGIN_M` = 4m)을 더해 이 값을 계산해서 넘긴다. Backend는 여전히 DXF를 직접 해석하며, Frontend는 이미 받은 숫자 좌표의 최소·최대값만 계산해 전달하므로 DXF 직접 의존 금지 원칙은 유지된다.
+
 ## 평형 분리
 
 `ET-1101`의 일곱 평형은 Model Space에 가로로 배치되어 있다. `XR_SHEET`의 삽입점과 42,000 × 29,700mm 도곽을 평형 경계로 사용한다. 제목 TEXT의 `84㎡A 단위세대` 같은 값을 평형 Identifier로 사용한다.

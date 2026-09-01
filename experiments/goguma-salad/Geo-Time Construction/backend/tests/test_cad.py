@@ -72,6 +72,20 @@ def test_architecture_background_crops_filters_and_deduplicates(architecture_doc
     assert crossing.end.x == 0.2
 
 
+def test_architecture_background_applies_focus_bounds(architecture_doc):
+    response = build_architecture_background(
+        architecture_doc,
+        "XR-unit.dxf",
+        "84A",
+        focus_bounds_m=(1.0, 0.5, 2.5, 1.5),
+    )
+
+    assert response.rendered_segment_count == 1
+    only = response.segments[0]
+    assert only.start.x == 1 and only.start.y == 1
+    assert only.end.x == 2 and only.end.y == 1
+
+
 def test_architecture_background_rejects_unknown_unit(architecture_doc):
     try:
         build_architecture_background(architecture_doc, "XR-unit.dxf", "999Z")

@@ -260,6 +260,7 @@ def build_architecture_background(
     filename: str,
     unit_type: str,
     min_segment_length_mm: float = 100.0,
+    focus_bounds_m: tuple[float, float, float, float] | None = None,
 ) -> ArchitectureBackgroundResponse:
     try:
         unit_index = ARCHITECTURE_UNIT_ORDER.index(unit_type)
@@ -271,6 +272,12 @@ def build_architecture_background(
     min_y = 0.0
     max_x = min_x + SHEET_WIDTH_MM
     max_y = min_y + SHEET_HEIGHT_MM
+    focus_min_x, focus_min_y, focus_max_x, focus_max_y = focus_bounds_m or (
+        float("-inf"),
+        float("-inf"),
+        float("inf"),
+        float("inf"),
+    )
     segments: list[ArchitectureSegment] = []
     seen: set[tuple[tuple[float, float], tuple[float, float]]] = set()
     source_entity_count = 0
@@ -303,6 +310,21 @@ def build_architecture_background(
                 round((clipped_end[0] - min_x) / 1000.0, 6),
                 round((clipped_end[1] - min_y) / 1000.0, 6),
             )
+            focus_clipped = _clip_segment(
+                normalized_start,
+                normalized_end,
+                focus_min_x,
+                focus_min_y,
+                focus_max_x,
+                focus_max_y,
+            )
+            if focus_clipped is None:
+                continue
+            focus_start, focus_end = focus_clipped
+            normalized_start = (round(focus_start[0], 6), round(focus_start[1], 6))
+            normalized_end = (round(focus_end[0], 6), round(focus_end[1], 6))
+            if _distance(normalized_start, normalized_end) < min_segment_length_mm / 1000.0:
+                continue
             key = tuple(sorted((normalized_start, normalized_end)))
             if key in seen:
                 continue

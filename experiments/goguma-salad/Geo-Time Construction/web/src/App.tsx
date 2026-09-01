@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { analyzeDxf, buildArchitectureBackground, buildCableObjects } from "./api";
+import { analyzeDxf, buildArchitectureBackground, buildCableObjects, type FocusBounds } from "./api";
 import { CablePlan2D } from "./components/CablePlan2D";
 import { CableScene3D } from "./components/CableScene3D";
 import type {
@@ -11,6 +11,24 @@ import type {
 } from "./types";
 
 const CABLE_LAYERS = ["e-wire", "e-wire3s"];
+const ARCHITECTURE_FOCUS_MARGIN_M = 4;
+
+function focusBoundsFromResult(result: ConstructionObjectResponse): FocusBounds {
+  const xs = [
+    ...result.objects.flatMap((object) => object.geometry.points.map((point) => point.x)),
+    ...result.devices.map((device) => device.geometry.position.x),
+  ];
+  const ys = [
+    ...result.objects.flatMap((object) => object.geometry.points.map((point) => point.y)),
+    ...result.devices.map((device) => device.geometry.position.y),
+  ];
+  return {
+    minX: Math.min(...xs) - ARCHITECTURE_FOCUS_MARGIN_M,
+    minY: Math.min(...ys) - ARCHITECTURE_FOCUS_MARGIN_M,
+    maxX: Math.max(...xs) + ARCHITECTURE_FOCUS_MARGIN_M,
+    maxY: Math.max(...ys) + ARCHITECTURE_FOCUS_MARGIN_M,
+  };
+}
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -71,12 +89,15 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const [nextResult, nextArchitecture] = await Promise.all([
-        buildCableObjects(file, unitType, layers, elevation, diameter),
-        architectureFile
-          ? buildArchitectureBackground(architectureFile, unitType)
-          : Promise.resolve(null),
-      ]);
+      const nextResult = await buildCableObjects(file, unitType, layers, elevation, diameter);
+      const nextArchitecture = architectureFile
+        ? await buildArchitectureBackground(
+            architectureFile,
+            unitType,
+            undefined,
+            focusBoundsFromResult(nextResult),
+          )
+        : null;
       setResult(nextResult);
       setArchitecture(nextArchitecture);
       setSelectedObject(null);

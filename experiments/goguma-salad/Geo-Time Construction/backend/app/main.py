@@ -62,14 +62,22 @@ def architecture_background(
     file: Annotated[UploadFile, File()],
     unit_type: Annotated[str, Query(pattern=r"^\d+[A-Z]$")] = "84A",
     min_segment_length_mm: Annotated[float, Query(ge=10, le=5000)] = 100,
+    focus_min_x: Annotated[float | None, Query()] = None,
+    focus_min_y: Annotated[float | None, Query()] = None,
+    focus_max_x: Annotated[float | None, Query()] = None,
+    focus_max_y: Annotated[float | None, Query()] = None,
 ) -> ArchitectureBackgroundResponse:
     doc = _read_upload(file)
+    focus_bounds_m = None
+    if None not in (focus_min_x, focus_min_y, focus_max_x, focus_max_y):
+        focus_bounds_m = (focus_min_x, focus_min_y, focus_max_x, focus_max_y)
     try:
         return build_architecture_background(
             doc,
             file.filename or "architecture.dxf",
             unit_type=unit_type,
             min_segment_length_mm=min_segment_length_mm,
+            focus_bounds_m=focus_bounds_m,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
