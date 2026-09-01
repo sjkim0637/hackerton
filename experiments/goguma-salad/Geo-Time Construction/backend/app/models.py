@@ -40,6 +40,30 @@ class ConstructionObject(BaseModel):
     properties: CableProperties
 
 
+class PointGeometry(BaseModel):
+    type: Literal["point"] = "point"
+    position: Point3D
+
+
+class DeviceProperties(BaseModel):
+    subtype: str
+    display_name: str
+    block_name: str
+    elevation_m: float = Field(ge=0)
+    size_m: float = Field(gt=0)
+    rotation_deg: float
+
+
+class CommunicationDevice(BaseModel):
+    id: str
+    category: Literal["communication"] = "communication"
+    type: Literal["communication_device"] = "communication_device"
+    system: Literal["home_network"] = "home_network"
+    source: SourceReference
+    geometry: PointGeometry
+    properties: DeviceProperties
+
+
 class LayerSummary(BaseModel):
     name: str
     entity_count: int
@@ -71,6 +95,8 @@ class ConstructionObjectResponse(BaseModel):
     selected_layers: list[str]
     object_count: int
     objects: list[ConstructionObject]
+    device_count: int
+    devices: list[CommunicationDevice]
 
 
 class ArchitectureSegment(BaseModel):

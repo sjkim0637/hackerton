@@ -14,8 +14,14 @@ def sample_doc():
     doc.header["$INSUNITS"] = 4
     doc.layers.add("e-wire")
     doc.layers.add("e-wire3s")
+    doc.layers.add("통신단자함")
+    doc.layers.add("SYM")
     sheet = doc.blocks.new("XR_SHEET")
     sheet.add_line((0, 0), (42_000, 0))
+    panel = doc.blocks.new("100-57")
+    panel.add_lwpolyline([(0, 0), (300, 0), (300, 300), (0, 300)], close=True)
+    camera = doc.blocks.new("EFCL")
+    camera.add_circle((0, 0), 100)
     msp = doc.modelspace()
     for index, unit_type in enumerate(UNIT_TYPES):
         origin_x = 1_235 + index * 42_000
@@ -40,6 +46,9 @@ def sample_doc():
         (51_000, -100_000),
         dxfattribs={"layer": "e-wire"},
     )
+    msp.add_blockref("100-57", (6_000, -101_000), dxfattribs={"layer": "통신단자함"})
+    msp.add_blockref("EFCL", (10_000, -99_000), dxfattribs={"layer": "SYM"})
+    msp.add_blockref("100-57", (48_000, -101_000), dxfattribs={"layer": "통신단자함"})
     return doc
 
 

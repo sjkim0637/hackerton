@@ -5,9 +5,9 @@ import { CablePlan2D } from "./components/CablePlan2D";
 import { CableScene3D } from "./components/CableScene3D";
 import type {
   ArchitectureBackgroundResponse,
-  ConstructionObject,
   ConstructionObjectResponse,
   DrawingAnalysis,
+  SelectableObject,
 } from "./types";
 
 const CABLE_LAYERS = ["e-wire", "e-wire3s"];
@@ -19,7 +19,8 @@ export default function App() {
   const [result, setResult] = useState<ConstructionObjectResponse | null>(null);
   const [architecture, setArchitecture] = useState<ArchitectureBackgroundResponse | null>(null);
   const [showArchitecture, setShowArchitecture] = useState(true);
-  const [selectedObject, setSelectedObject] = useState<ConstructionObject | null>(null);
+  const [showDevices, setShowDevices] = useState(true);
+  const [selectedObject, setSelectedObject] = useState<SelectableObject | null>(null);
   const [unitType, setUnitType] = useState("84A");
   const [layers, setLayers] = useState(CABLE_LAYERS);
   const [elevation, setElevation] = useState(2.3);
@@ -161,6 +162,17 @@ export default function App() {
                 <small>{architecture?.rendered_segment_count.toLocaleString() ?? "-"}</small>
               </label>
 
+              <label className="check-row background-toggle">
+                <input
+                  type="checkbox"
+                  checked={showDevices}
+                  onChange={(event) => setShowDevices(event.target.checked)}
+                />
+                <span className="layer-dot green" />
+                <span>홈넷 설비</span>
+                <small>{result?.device_count.toLocaleString() ?? "-"}</small>
+              </label>
+
               <div className="parameter-grid">
                 <label>표시 높이 (m)<input type="number" min="0" max="20" step="0.1" value={elevation} onChange={(event) => setElevation(Number(event.target.value))} /></label>
                 <label>배선 지름 (m)<input type="number" min="0.005" max="1" step="0.005" value={diameter} onChange={(event) => setDiameter(Number(event.target.value))} /></label>
@@ -175,11 +187,22 @@ export default function App() {
                   <div><span>선택 객체</span><strong>{selectedObject.id}</strong></div>
                   <dl>
                     <dt>Layer</dt><dd>{selectedObject.source.cad_layer}</dd>
-                    <dt>Entity</dt><dd>{selectedObject.properties.source_entity_type}</dd>
                     <dt>Handle</dt><dd>{selectedObject.source.entity_handle || "-"}</dd>
                     <dt>Elevation</dt><dd>{selectedObject.properties.elevation_m} m</dd>
-                    <dt>Diameter</dt><dd>{selectedObject.properties.diameter_m} m</dd>
-                    <dt>Points</dt><dd>{selectedObject.geometry.points.length}</dd>
+                    {selectedObject.type === "cable_path" ? (
+                      <>
+                        <dt>Entity</dt><dd>{selectedObject.properties.source_entity_type}</dd>
+                        <dt>Diameter</dt><dd>{selectedObject.properties.diameter_m} m</dd>
+                        <dt>Points</dt><dd>{selectedObject.geometry.points.length}</dd>
+                      </>
+                    ) : (
+                      <>
+                        <dt>Device</dt><dd>{selectedObject.properties.display_name}</dd>
+                        <dt>Subtype</dt><dd>{selectedObject.properties.subtype}</dd>
+                        <dt>Block</dt><dd>{selectedObject.properties.block_name}</dd>
+                        <dt>Rotation</dt><dd>{selectedObject.properties.rotation_deg}°</dd>
+                      </>
+                    )}
                   </dl>
                 </section>
               )}
@@ -191,7 +214,7 @@ export default function App() {
         <section className="viewer-panel">
           <div className="viewer-toolbar">
             <div>
-              <strong>{result ? `${result.unit_region.unit_type} · ${result.object_count} paths` : "Viewer"}</strong>
+              <strong>{result ? `${result.unit_region.unit_type} · ${result.object_count} paths · ${result.device_count} devices` : "Viewer"}</strong>
               <span>{result ? `${result.objects.reduce((sum, item) => sum + item.geometry.points.length, 0)} points · ${architecture?.rendered_segment_count.toLocaleString() ?? 0} background segments` : "DXF 분석 후 객체를 생성하세요"}</span>
             </div>
             <div className="mode-switch">
@@ -204,6 +227,7 @@ export default function App() {
             {result && mode === "2d" && (
               <CablePlan2D
                 objects={result.objects}
+                devices={showDevices ? result.devices : []}
                 architecture={architecture?.segments ?? []}
                 showArchitecture={showArchitecture}
                 selectedId={selectedObject?.id ?? null}
@@ -213,6 +237,7 @@ export default function App() {
             {result && mode === "3d" && (
               <CableScene3D
                 objects={result.objects}
+                devices={showDevices ? result.devices : []}
                 architecture={architecture?.segments ?? []}
                 showArchitecture={showArchitecture}
                 selectedId={selectedObject?.id ?? null}
@@ -224,6 +249,8 @@ export default function App() {
             <span><i className="blue" />e-wire</span>
             <span><i className="orange" />e-wire3s</span>
             <span><i className="gray" />건축 배경</span>
+            <span><i className="purple" />통신단자함</span>
+            <span><i className="green" />홈넷 설비</span>
             <span className="coordinate-note">원본 mm → 평형 Local m</span>
           </footer>
         </section>

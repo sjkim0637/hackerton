@@ -16,11 +16,14 @@ from app.models import (
     ArchitectureBackgroundResponse,
     ArchitectureSegment,
     CableProperties,
+    CommunicationDevice,
     ConstructionObject,
     ConstructionObjectResponse,
+    DeviceProperties,
     DrawingAnalysis,
     LayerSummary,
     Point3D,
+    PointGeometry,
     PolylineGeometry,
     SourceReference,
     UnitRegion,
@@ -31,6 +34,18 @@ DEFAULT_CABLE_LAYERS = ("e-wire", "e-wire3s")
 SHEET_WIDTH_MM = 42_000.0
 SHEET_HEIGHT_MM = 29_700.0
 ARCHITECTURE_UNIT_ORDER = ("84A", "84B", "84C", "84D", "120A", "144P", "155P")
+DEVICE_LAYERS = {"통신단자함", "SYM", "E-SYM", "천정"}
+DEVICE_TYPES = {
+    "100-57": ("communication_panel", "통신단자함"),
+    "EFCL": ("entrance_camera", "세대 현관 카메라"),
+    "A$C6A344DFD": ("magnetic_sensor", "마그네틱 센서"),
+    "A$C4BEC3CC4": ("motion_detector", "동체 감지기"),
+    "A$CCCBF2ACF": ("infrared_detector", "적외선 감지기"),
+    "F19": ("batch_switch", "일괄소등 스위치"),
+    "100-89": ("joint_box", "Joint Box"),
+    "50J": ("joint_box", "Joint Box"),
+    "A$C5B1B9F38": ("ceiling_device", "천장 홈넷 설비"),
+}
 UNIT_TITLE_PATTERN = re.compile(r"(?P<area>\d+)㎡(?P<variant>[A-Z])\s*단위세대", re.IGNORECASE)
 
 
@@ -170,13 +185,67 @@ def build_cable_objects(
             )
         )
 
+    devices = _build_communication_devices(doc, filename, region)
     return ConstructionObjectResponse(
         drawing=analysis,
         unit_region=region,
         selected_layers=selected_layers,
         object_count=len(objects),
         objects=objects,
+        device_count=len(devices),
+        devices=devices,
     )
+
+
+def _build_communication_devices(
+    doc: Drawing,
+    filename: str,
+    region: UnitRegion,
+) -> list[CommunicationDevice]:
+    devices: list[CommunicationDevice] = []
+    for entity_index, entity in enumerate(doc.modelspace().query("INSERT")):
+        if entity.dxf.layer not in DEVICE_LAYERS:
+            continue
+        insert = entity.dxf.insert
+        if not (
+            region.origin_x_mm <= insert.x <= region.origin_x_mm + region.width_mm
+            and region.origin_y_mm <= insert.y <= region.origin_y_mm + region.height_mm
+        ):
+            continue
+        block_name = entity.dxf.name
+        subtype, display_name = DEVICE_TYPES.get(
+            block_name.upper(),
+            ("home_network_device", "홈넷 설비"),
+        )
+        elevation_m = 2.3 if entity.dxf.layer == "천정" else 1.4
+        handle = entity.dxf.get("handle", f"generated-device-{entity_index}")
+        devices.append(
+            CommunicationDevice(
+                id=f"communication-device-{region.unit_type.lower()}-{handle.lower()}",
+                source=SourceReference(
+                    drawing_name=Path(filename).name,
+                    entity_handle=handle,
+                    cad_layer=entity.dxf.layer,
+                    unit_type=region.unit_type,
+                ),
+                geometry=PointGeometry(
+                    position=Point3D(
+                        x=round((insert.x - region.origin_x_mm) / 1000.0, 6),
+                        y=round((insert.y - region.origin_y_mm) / 1000.0, 6),
+                        z=elevation_m,
+                    )
+                ),
+                properties=DeviceProperties(
+                    subtype=subtype,
+                    display_name=display_name,
+                    block_name=block_name,
+                    elevation_m=elevation_m,
+                    size_m=0.3,
+                    rotation_deg=float(entity.dxf.get("rotation", 0.0)),
+                ),
+            )
+        )
+    return devices
 
 
 def build_architecture_background(

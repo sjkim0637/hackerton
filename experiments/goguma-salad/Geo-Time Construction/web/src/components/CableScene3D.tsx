@@ -3,7 +3,13 @@ import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { BufferGeometry, Float32BufferAttribute, Quaternion, Vector3 } from "three";
 
-import type { ArchitectureSegment, ConstructionObject, Point3D } from "../types";
+import type {
+  ArchitectureSegment,
+  CommunicationDevice,
+  ConstructionObject,
+  Point3D,
+  SelectableObject,
+} from "../types";
 
 const COLORS: Record<string, string> = {
   "e-wire": "#22c7ff",
@@ -111,18 +117,56 @@ function ArchitectureLines({ segments }: { segments: ArchitectureSegment[] }) {
   );
 }
 
+function DeviceMarker({
+  device,
+  selected,
+  onSelect,
+}: {
+  device: CommunicationDevice;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const position = scenePoint(device.geometry.position);
+  const isPanel = device.properties.subtype === "communication_panel";
+  const color = isPanel ? "#b45cff" : "#6fe3a2";
+  return (
+    <mesh
+      position={position}
+      rotation={[0, -device.properties.rotation_deg * Math.PI / 180, 0]}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+    >
+      {isPanel ? (
+        <boxGeometry args={[0.45, 0.45, 0.18]} />
+      ) : (
+        <sphereGeometry args={[0.2, 16, 12]} />
+      )}
+      <meshStandardMaterial
+        color={color}
+        emissive={selected ? color : "#000000"}
+        emissiveIntensity={selected ? 1 : 0}
+        roughness={0.3}
+      />
+    </mesh>
+  );
+}
+
 export function CableScene3D({
   objects,
+  devices,
   architecture,
   showArchitecture,
   selectedId,
   onSelect,
 }: {
   objects: ConstructionObject[];
+  devices: CommunicationDevice[];
   architecture: ArchitectureSegment[];
   showArchitecture: boolean;
   selectedId: string | null;
-  onSelect: (object: ConstructionObject | null) => void;
+  onSelect: (object: SelectableObject | null) => void;
 }) {
   return (
     <Canvas
@@ -141,6 +185,14 @@ export function CableScene3D({
           object={object}
           selected={selectedId === object.id}
           onSelect={() => onSelect(object)}
+        />
+      ))}
+      {devices.map((device) => (
+        <DeviceMarker
+          key={device.id}
+          device={device}
+          selected={selectedId === device.id}
+          onSelect={() => onSelect(device)}
         />
       ))}
       <OrbitControls makeDefault target={[15, 2, -14]} />

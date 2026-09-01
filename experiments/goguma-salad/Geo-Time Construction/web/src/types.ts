@@ -58,7 +58,37 @@ export interface ConstructionObjectResponse {
   selected_layers: string[];
   object_count: number;
   objects: ConstructionObject[];
+  device_count: number;
+  devices: CommunicationDevice[];
 }
+
+export interface CommunicationDevice {
+  id: string;
+  category: "communication";
+  type: "communication_device";
+  system: "home_network";
+  source: {
+    type: "dxf";
+    drawing_name: string;
+    entity_handle: string;
+    cad_layer: string;
+    unit_type: string;
+  };
+  geometry: {
+    type: "point";
+    position: Point3D;
+  };
+  properties: {
+    subtype: string;
+    display_name: string;
+    block_name: string;
+    elevation_m: number;
+    size_m: number;
+    rotation_deg: number;
+  };
+}
+
+export type SelectableObject = ConstructionObject | CommunicationDevice;
 
 export interface ArchitectureSegment {
   id: string;

@@ -1,4 +1,9 @@
-import type { ArchitectureSegment, ConstructionObject } from "../types";
+import type {
+  ArchitectureSegment,
+  CommunicationDevice,
+  ConstructionObject,
+  SelectableObject,
+} from "../types";
 
 const COLORS: Record<string, string> = {
   "e-wire": "#56d6ff",
@@ -7,14 +12,16 @@ const COLORS: Record<string, string> = {
 
 interface Props {
   objects: ConstructionObject[];
+  devices: CommunicationDevice[];
   architecture: ArchitectureSegment[];
   showArchitecture: boolean;
   selectedId: string | null;
-  onSelect: (object: ConstructionObject | null) => void;
+  onSelect: (object: SelectableObject | null) => void;
 }
 
 export function CablePlan2D({
   objects,
+  devices,
   architecture,
   showArchitecture,
   selectedId,
@@ -22,6 +29,7 @@ export function CablePlan2D({
 }: Props) {
   const points = [
     ...objects.flatMap((item) => item.geometry.points),
+    ...devices.map((item) => item.geometry.position),
     ...(showArchitecture ? architecture.flatMap((item) => [item.start, item.end]) : []),
   ];
   if (!points.length) {
@@ -71,6 +79,46 @@ export function CablePlan2D({
             }}
           />
         ))}
+        {devices.map((device) => {
+          const position = device.geometry.position;
+          const selected = selectedId === device.id;
+          const isPanel = device.properties.subtype === "communication_panel";
+          return isPanel ? (
+            <rect
+              key={device.id}
+              x={position.x - 0.22}
+              y={position.y - 0.22}
+              width="0.44"
+              height="0.44"
+              rx="0.05"
+              fill="#b45cff"
+              stroke={selected ? "#ffffff" : "#e3baff"}
+              strokeWidth={selected ? 0.12 : 0.05}
+              vectorEffect="non-scaling-stroke"
+              className="selectable-path"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(device);
+              }}
+            />
+          ) : (
+            <circle
+              key={device.id}
+              cx={position.x}
+              cy={position.y}
+              r={selected ? 0.24 : 0.18}
+              fill="#6fe3a2"
+              stroke={selected ? "#ffffff" : "#b9ffd5"}
+              strokeWidth={selected ? 0.12 : 0.05}
+              vectorEffect="non-scaling-stroke"
+              className="selectable-path"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(device);
+              }}
+            />
+          );
+        })}
       </g>
     </svg>
   );

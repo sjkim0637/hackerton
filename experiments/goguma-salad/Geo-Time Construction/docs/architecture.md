@@ -60,4 +60,30 @@ Viewer에서 통신 경로를 선택하면 동일 Source 속성을 2D와 3D에�
 - `ARC`
 - `SPLINE`
 
-`INSERT`, `TEXT`, `MTEXT`는 배선 경로 3D화에서 제외한다. Block과 기호는 후속 Object Type으로 분리한다.
+`INSERT`, `TEXT`, `MTEXT`는 배선 경로 3D화에서 제외한다.
+
+## 통신 설비 Object (Device)
+
+통신단자함과 홈넷 기기는 선형이 아닌 점형 설비이므로 `cable_path`와 별도 Object Type으로 분리한다.
+
+```text
+category = communication
+type     = communication_device
+system   = home_network
+```
+
+Geometry는 `point`이며 `INSERT`의 삽입점을 평형 Local m 좌표로 변환한다. Layer가 `통신단자함`, `SYM`, `E-SYM`, `천정`인 `INSERT`만 대상으로 하고, Block 이름을 Subtype으로 매핑한다.
+
+```text
+100-57        → communication_panel  (통신단자함)
+EFCL          → entrance_camera      (세대 현관 카메라)
+A$C6A344DFD   → magnetic_sensor      (마그네틱 센서)
+A$C4BEC3CC4   → motion_detector      (동체 감지기)
+A$CCCBF2ACF   → infrared_detector    (적외선 감지기)
+F19           → batch_switch         (일괄소등 스위치)
+100-89 / 50J  → joint_box            (Joint Box)
+A$C5B1B9F38   → ceiling_device       (천장 홈넷 설비)
+그 외         → home_network_device  (매핑되지 않은 Block의 기본값)
+```
+
+표시 높이는 Layer가 `천정`이면 2.3m, 그 외에는 1.4m를 초기값으로 사용한다. 실제 시공 높이가 아니라 Viewer 표시용 가정값이다.

@@ -28,6 +28,17 @@ def test_build_cable_objects_crops_and_normalizes_84a(sample_doc):
     assert first.geometry.points[0].x == 3.765
     assert first.geometry.points[0].y == 15.494354
     assert first.geometry.points[0].z == 2.3
+    assert response.device_count == 2
+    assert {device.properties.subtype for device in response.devices} == {
+        "communication_panel",
+        "entrance_camera",
+    }
+    panel = next(
+        device for device in response.devices if device.properties.subtype == "communication_panel"
+    )
+    assert panel.geometry.position.x == 4.765
+    assert panel.geometry.position.y == 14.494354
+    assert panel.geometry.position.z == 1.4
 
 
 def test_build_cable_objects_rejects_unknown_unit(sample_doc):

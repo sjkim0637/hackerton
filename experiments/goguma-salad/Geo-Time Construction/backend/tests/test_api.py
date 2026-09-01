@@ -27,6 +27,7 @@ def test_construction_object_upload(sample_dxf_bytes):
 
     assert response.status_code == 200, response.text
     assert response.json()["object_count"] == 2
+    assert response.json()["device_count"] == 2
 
 
 def test_rejects_dwg_upload():

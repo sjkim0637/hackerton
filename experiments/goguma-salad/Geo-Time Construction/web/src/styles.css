@@ -44,6 +44,8 @@ select:focus, input[type="number"]:focus { border-color: #35caff; }
 .blue { background: #22c7ff; box-shadow: 0 0 9px #22c7ff; }
 .orange { background: #ffad33; box-shadow: 0 0 9px #ffad33; }
 .gray { background: #7791a3; box-shadow: none; }
+.purple { background: #b45cff; box-shadow: 0 0 9px #b45cff; }
+.green { background: #6fe3a2; box-shadow: 0 0 9px #6fe3a2; }
 .background-toggle { margin-top: 8px; color: #b5c7d4; }
 .parameter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .parameter-grid label { display: grid; gap: 7px; }
