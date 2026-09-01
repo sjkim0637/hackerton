@@ -1,0 +1,6 @@
+# 전체 CAD 원본은 로컬 참고자료로 유지하고 Phase 1 최소 재현 Dataset만 추적한다.
+*
+!.gitignore
+!ET-1101 단위세대 홈네트워크설비 평면도.dwg
+!XR_단위.dwg
+!XR_SHEET.dwg
