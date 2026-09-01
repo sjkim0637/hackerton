@@ -96,7 +96,7 @@ TBD
 
 ## Relevant Commits
 
-아직 없음.
+- `3bd0ef8` docs(cad): Geo-Time Construction Phase 1 검토 등록
 
 ## Updated
 
