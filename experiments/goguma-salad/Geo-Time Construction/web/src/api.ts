@@ -1,4 +1,8 @@
-import type { ConstructionObjectResponse, DrawingAnalysis } from "./types";
+import type {
+  ArchitectureBackgroundResponse,
+  ConstructionObjectResponse,
+  DrawingAnalysis,
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -38,6 +42,25 @@ export async function buildCableObjects(
   layers.forEach((layer) => query.append("layers", layer));
   return parseResponse(
     await fetch(`${API_URL}/api/cad/construction-objects?${query}`, {
+      method: "POST",
+      body,
+    }),
+  );
+}
+
+export async function buildArchitectureBackground(
+  file: File,
+  unitType: string,
+  minSegmentLengthMm = 100,
+): Promise<ArchitectureBackgroundResponse> {
+  const body = new FormData();
+  body.append("file", file);
+  const query = new URLSearchParams({
+    unit_type: unitType,
+    min_segment_length_mm: String(minSegmentLengthMm),
+  });
+  return parseResponse(
+    await fetch(`${API_URL}/api/cad/architecture-background?${query}`, {
       method: "POST",
       body,
     }),

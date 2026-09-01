@@ -1,4 +1,4 @@
-from app.cad import analyze_drawing, build_cable_objects
+from app.cad import analyze_drawing, build_architecture_background, build_cable_objects
 
 
 def test_analyze_detects_all_unit_regions(sample_doc):
@@ -33,6 +33,26 @@ def test_build_cable_objects_crops_and_normalizes_84a(sample_doc):
 def test_build_cable_objects_rejects_unknown_unit(sample_doc):
     try:
         build_cable_objects(sample_doc, "sample.dxf", "999Z")
+    except ValueError as exc:
+        assert "Unknown unit type" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_architecture_background_crops_filters_and_deduplicates(architecture_doc):
+    response = build_architecture_background(architecture_doc, "XR-unit.dxf", "84A")
+
+    assert response.source_path_entity_count == 5
+    assert response.rendered_segment_count == 4
+    assert response.source_units == "millimeter"
+    crossing = next(segment for segment in response.segments if segment.start.y == 3)
+    assert crossing.start.x == 0
+    assert crossing.end.x == 0.2
+
+
+def test_architecture_background_rejects_unknown_unit(architecture_doc):
+    try:
+        build_architecture_background(architecture_doc, "XR-unit.dxf", "999Z")
     except ValueError as exc:
         assert "Unknown unit type" in str(exc)
     else:

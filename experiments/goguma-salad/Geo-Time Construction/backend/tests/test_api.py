@@ -36,3 +36,13 @@ def test_rejects_dwg_upload():
     )
 
     assert response.status_code == 415
+
+
+def test_architecture_background_upload(architecture_dxf_bytes):
+    response = client.post(
+        "/api/cad/architecture-background?unit_type=84A&min_segment_length_mm=100",
+        files={"file": ("XR-unit.dxf", architecture_dxf_bytes, "application/dxf")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["rendered_segment_count"] == 4

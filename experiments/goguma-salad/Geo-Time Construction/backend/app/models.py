@@ -71,3 +71,22 @@ class ConstructionObjectResponse(BaseModel):
     selected_layers: list[str]
     object_count: int
     objects: list[ConstructionObject]
+
+
+class ArchitectureSegment(BaseModel):
+    id: str
+    cad_layer: str
+    entity_handle: str
+    source_entity_type: str
+    start: Point3D
+    end: Point3D
+
+
+class ArchitectureBackgroundResponse(BaseModel):
+    filename: str
+    unit_type: str
+    source_units: str
+    source_path_entity_count: int
+    rendered_segment_count: int
+    min_segment_length_mm: float
+    segments: list[ArchitectureSegment]

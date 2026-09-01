@@ -26,6 +26,7 @@ h1 { margin: 0; font-size: clamp(22px, 3vw, 36px); letter-spacing: -.04em; }
 .upload-box span, .field-group > label, .field-group legend, .parameter-grid label { color: #87a2b6; font-size: 12px; }
 .upload-box strong { overflow: hidden; color: #eaf7ff; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .upload-box input { display: none; }
+.upload-box.secondary { margin-top: 10px; padding: 13px 18px; border-color: #29485d; background: #0a1824; }
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin: 18px 0; border: 1px solid #1c3548; }
 .metrics div { padding: 12px 8px; text-align: center; border-right: 1px solid #1c3548; }
 .metrics div:last-child { border: 0; }
@@ -42,11 +43,20 @@ select:focus, input[type="number"]:focus { border-color: #35caff; }
 .layer-dot, .viewer-legend i { width: 7px; height: 7px; border-radius: 50%; }
 .blue { background: #22c7ff; box-shadow: 0 0 9px #22c7ff; }
 .orange { background: #ffad33; box-shadow: 0 0 9px #ffad33; }
+.gray { background: #7791a3; box-shadow: none; }
+.background-toggle { margin-top: 8px; color: #b5c7d4; }
 .parameter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .parameter-grid label { display: grid; gap: 7px; }
 .primary-button { width: 100%; margin-top: 20px; padding: 12px; border: 0; color: #00121b; background: #3bd3ff; font-weight: 700; }
 .primary-button:disabled { opacity: .45; cursor: not-allowed; }
 .error-message { padding: 10px; color: #ffb0a8; background: #351817; font-size: 12px; }
+.object-card { margin-top: 16px; padding: 13px; border: 1px solid #28465a; background: #091722; }
+.object-card > div { display: grid; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid #1d3447; }
+.object-card span, .object-card dt { color: #728ca0; font-size: 10px; }
+.object-card strong { overflow: hidden; font: 600 11px "IBM Plex Mono", monospace; text-overflow: ellipsis; }
+.object-card dl { display: grid; grid-template-columns: 72px 1fr; gap: 7px; margin: 11px 0 0; }
+.object-card dt, .object-card dd { margin: 0; }
+.object-card dd { overflow: hidden; font: 11px "IBM Plex Mono", monospace; text-overflow: ellipsis; }
 
 .viewer-panel { min-width: 0; display: grid; grid-template-rows: 61px 1fr 42px; }
 .viewer-toolbar, .viewer-legend { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid #1d3447; }
@@ -58,6 +68,7 @@ select:focus, input[type="number"]:focus { border-color: #35caff; }
 .mode-switch button.active { color: #00131d; background: #38cbf7; }
 .viewer-stage { position: relative; min-height: 0; overflow: hidden; background: #07111d; }
 .scene-view, .plan-view { width: 100%; height: 100%; }
+.selectable-path { cursor: pointer; }
 .plan-view { padding: 25px; background-image: linear-gradient(#11263a 1px, transparent 1px), linear-gradient(90deg, #11263a 1px, transparent 1px); background-size: 28px 28px; }
 .empty-view { width: 100%; height: 100%; display: grid; place-content: center; justify-items: center; color: #557489; }
 .empty-view span { color: #2bbce9; font: 64px/1 "IBM Plex Mono", monospace; }

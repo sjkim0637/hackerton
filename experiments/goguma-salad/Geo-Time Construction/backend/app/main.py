@@ -6,8 +6,14 @@ import ezdxf
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.cad import DEFAULT_CABLE_LAYERS, analyze_drawing, build_cable_objects, read_dxf_upload
-from app.models import ConstructionObjectResponse, DrawingAnalysis
+from app.cad import (
+    DEFAULT_CABLE_LAYERS,
+    analyze_drawing,
+    build_architecture_background,
+    build_cable_objects,
+    read_dxf_upload,
+)
+from app.models import ArchitectureBackgroundResponse, ConstructionObjectResponse, DrawingAnalysis
 
 app = FastAPI(title="Geo-Time Construction Phase 1 API", version="0.1.0")
 app.add_middleware(
@@ -46,6 +52,24 @@ def construction_objects(
             layers=layers or DEFAULT_CABLE_LAYERS,
             elevation_m=elevation_m,
             diameter_m=diameter_m,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/cad/architecture-background", response_model=ArchitectureBackgroundResponse)
+def architecture_background(
+    file: Annotated[UploadFile, File()],
+    unit_type: Annotated[str, Query(pattern=r"^\d+[A-Z]$")] = "84A",
+    min_segment_length_mm: Annotated[float, Query(ge=10, le=5000)] = 100,
+) -> ArchitectureBackgroundResponse:
+    doc = _read_upload(file)
+    try:
+        return build_architecture_background(
+            doc,
+            file.filename or "architecture.dxf",
+            unit_type=unit_type,
+            min_segment_length_mm=min_segment_length_mm,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

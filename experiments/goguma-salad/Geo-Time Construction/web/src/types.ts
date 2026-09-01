@@ -59,3 +59,22 @@ export interface ConstructionObjectResponse {
   object_count: number;
   objects: ConstructionObject[];
 }
+
+export interface ArchitectureSegment {
+  id: string;
+  cad_layer: string;
+  entity_handle: string;
+  source_entity_type: string;
+  start: Point3D;
+  end: Point3D;
+}
+
+export interface ArchitectureBackgroundResponse {
+  filename: string;
+  unit_type: string;
+  source_units: string;
+  source_path_entity_count: number;
+  rendered_segment_count: number;
+  min_segment_length_mm: number;
+  segments: ArchitectureSegment[];
+}

@@ -13,6 +13,8 @@ from ezdxf.document import Drawing
 from ezdxf.entities import DXFEntity
 
 from app.models import (
+    ArchitectureBackgroundResponse,
+    ArchitectureSegment,
     CableProperties,
     ConstructionObject,
     ConstructionObjectResponse,
@@ -28,6 +30,7 @@ SUPPORTED_PATH_TYPES = {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "SPLINE"}
 DEFAULT_CABLE_LAYERS = ("e-wire", "e-wire3s")
 SHEET_WIDTH_MM = 42_000.0
 SHEET_HEIGHT_MM = 29_700.0
+ARCHITECTURE_UNIT_ORDER = ("84A", "84B", "84C", "84D", "120A", "144P", "155P")
 UNIT_TITLE_PATTERN = re.compile(r"(?P<area>\d+)㎡(?P<variant>[A-Z])\s*단위세대", re.IGNORECASE)
 
 
@@ -176,6 +179,79 @@ def build_cable_objects(
     )
 
 
+def build_architecture_background(
+    doc: Drawing,
+    filename: str,
+    unit_type: str,
+    min_segment_length_mm: float = 100.0,
+) -> ArchitectureBackgroundResponse:
+    try:
+        unit_index = ARCHITECTURE_UNIT_ORDER.index(unit_type)
+    except ValueError as exc:
+        available = ", ".join(ARCHITECTURE_UNIT_ORDER)
+        raise ValueError(f"Unknown unit type {unit_type!r}; available: {available}") from exc
+
+    min_x = unit_index * SHEET_WIDTH_MM
+    min_y = 0.0
+    max_x = min_x + SHEET_WIDTH_MM
+    max_y = min_y + SHEET_HEIGHT_MM
+    segments: list[ArchitectureSegment] = []
+    seen: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    source_entity_count = 0
+
+    for entity_index, entity in enumerate(doc.modelspace()):
+        if entity.dxftype() not in {"LINE", "LWPOLYLINE", "POLYLINE"}:
+            continue
+        points = _entity_points(entity)
+        if len(points) < 2:
+            continue
+        handle = entity.dxf.get("handle", f"generated-{entity_index}")
+        intersects_region = False
+        for segment_index, (start, end) in enumerate(zip(points, points[1:], strict=False)):
+            clipped = _clip_segment(start, end, min_x, min_y, max_x, max_y)
+            if clipped is None:
+                continue
+            intersects_region = True
+            if _distance(*clipped) < min_segment_length_mm:
+                continue
+            clipped_start, clipped_end = clipped
+            normalized_start = (
+                round((clipped_start[0] - min_x) / 1000.0, 6),
+                round((clipped_start[1] - min_y) / 1000.0, 6),
+            )
+            normalized_end = (
+                round((clipped_end[0] - min_x) / 1000.0, 6),
+                round((clipped_end[1] - min_y) / 1000.0, 6),
+            )
+            key = tuple(sorted((normalized_start, normalized_end)))
+            if key in seen:
+                continue
+            seen.add(key)
+            segments.append(
+                ArchitectureSegment(
+                    id=f"architecture-{unit_type.lower()}-{handle.lower()}-{segment_index}",
+                    cad_layer=entity.dxf.layer,
+                    entity_handle=handle,
+                    source_entity_type=entity.dxftype(),
+                    start=Point3D(x=normalized_start[0], y=normalized_start[1], z=0),
+                    end=Point3D(x=normalized_end[0], y=normalized_end[1], z=0),
+                )
+            )
+        if intersects_region:
+            source_entity_count += 1
+
+    unit_code = int(doc.header.get("$INSUNITS", 0))
+    return ArchitectureBackgroundResponse(
+        filename=Path(filename).name,
+        unit_type=unit_type,
+        source_units=_unit_name(unit_code),
+        source_path_entity_count=source_entity_count,
+        rendered_segment_count=len(segments),
+        min_segment_length_mm=min_segment_length_mm,
+        segments=segments,
+    )
+
+
 def _entity_points(entity: DXFEntity) -> list[tuple[float, float]]:
     if entity.dxftype() == "LINE":
         return [
@@ -196,6 +272,46 @@ def _belongs_to_region(points: list[tuple[float, float]], region: UnitRegion) ->
         region.origin_x_mm <= center_x < region.origin_x_mm + region.width_mm
         and region.origin_y_mm <= center_y < region.origin_y_mm + region.height_mm
     )
+
+
+def _distance(
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> float:
+    return ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+
+
+def _clip_segment(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    min_x: float,
+    min_y: float,
+    max_x: float,
+    max_y: float,
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    x1, y1 = start
+    x2, y2 = end
+    dx = x2 - x1
+    dy = y2 - y1
+    p = (-dx, dx, -dy, dy)
+    q = (x1 - min_x, max_x - x1, y1 - min_y, max_y - y1)
+    lower = 0.0
+    upper = 1.0
+
+    for edge, distance in zip(p, q, strict=True):
+        if edge == 0:
+            if distance < 0:
+                return None
+            continue
+        ratio = distance / edge
+        if edge < 0:
+            lower = max(lower, ratio)
+        else:
+            upper = min(upper, ratio)
+        if lower > upper:
+            return None
+
+    return ((x1 + lower * dx, y1 + lower * dy), (x1 + upper * dx, y1 + upper * dy))
 
 
 def _plain_text(entity: DXFEntity) -> str:

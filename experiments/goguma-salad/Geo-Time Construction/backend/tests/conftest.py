@@ -48,3 +48,28 @@ def sample_dxf_bytes(sample_doc) -> bytes:
     stream = BytesIO()
     sample_doc.write(stream, fmt="bin")
     return stream.getvalue()
+
+
+@pytest.fixture
+def architecture_doc():
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 4
+    doc.layers.add("arch")
+    msp = doc.modelspace()
+    msp.add_line((1_000, 1_000), (2_000, 1_000), dxfattribs={"layer": "arch"})
+    msp.add_line((2_000, 1_000), (1_000, 1_000), dxfattribs={"layer": "arch"})
+    msp.add_line((2_000, 2_000), (2_010, 2_000), dxfattribs={"layer": "arch"})
+    msp.add_line((-100, 3_000), (200, 3_000), dxfattribs={"layer": "arch"})
+    msp.add_line((43_000, 1_000), (44_000, 1_000), dxfattribs={"layer": "arch"})
+    msp.add_lwpolyline(
+        [(3_000, 1_000), (3_000, 1_500), (3_500, 1_500)],
+        dxfattribs={"layer": "arch"},
+    )
+    return doc
+
+
+@pytest.fixture
+def architecture_dxf_bytes(architecture_doc) -> bytes:
+    stream = BytesIO()
+    architecture_doc.write(stream, fmt="bin")
+    return stream.getvalue()
