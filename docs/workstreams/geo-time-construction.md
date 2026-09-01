@@ -55,6 +55,7 @@ Pipe 대신 `e-wire`, `e-wire3s`의 선형 Entity를 `communication/cable_path`�
 - CAD 단위와 원본 좌표 보존 확인
 - 제목 TEXT와 42,000mm 좌표 구간을 이용한 평형별 분리
 - 통신 배선과 기호를 Structured CAD JSON 후보로 변환
+- 통신단자함·홈넷 기기 `INSERT`를 point 기반 `communication_device` Object로 변환
 - Phase 1 최소 Dataset과 제외 대상 확정
 - FastAPI 기반 DXF 분석·Construction Object API
 - React 2D SVG와 Three.js 3D 통신 배선 Viewer
@@ -82,6 +83,9 @@ Pipe 대신 `e-wire`, `e-wire3s`의 선형 Entity를 `communication/cable_path`�
 - `e-wire`, `e-wire3s`의 선형 Entity만 경로로 변환하고 주석 `INSERT`는 제외한다.
 - Backend가 Construction Object를 생성하며 Frontend는 DXF를 직접 해석하지 않는다.
 - 높이 2.3m와 지름 0.03m는 실제 시공값이 아닌 초기 Viewer 기본값으로 표시한다.
+- 통신단자함·홈넷 기기 `INSERT`는 `통신단자함`, `SYM`, `E-SYM`, `천정` Layer에서만 추출하고, Block 이름으로 Subtype을 매핑한다.
+- 매핑되지 않은 Block은 `home_network_device` 기본 Subtype으로 분류해 누락을 방지한다.
+- 기기 표시 높이는 Layer가 `천정`이면 2.3m, 그 외에는 1.4m 초기값을 사용한다.
 
 ## Integration Candidate
 
@@ -102,6 +106,9 @@ TBD
 - Frontend ESLint와 TypeScript/Vite Production Build 통과.
 - FastAPI 실행 상태에서 실제 ET-1101 DXF Upload API가 객체 28개를 반환했다.
 - 사용자가 Web Viewer에서 기존 `e-wire` 통신 배선의 3D 표시를 확인했다.
+- 실제 ET-1101 84㎡A에서 통신단자함·홈넷 기기 Device 객체 20개를 생성했다.
+- 84㎡A 결과는 적외선 감지기 5, Joint Box 4, 천장 홈넷 설비 3, 통신단자함 2, 현관카메라 2, 마그네틱 센서 2, 동체 감지기 1, 일괄소등 스위치 1이며 매핑되지 않은 Block은 없었다.
+- Backend Pytest 10개 통과, Ruff 통과. Frontend ESLint와 TypeScript/Vite Production Build 통과.
 
 ## Known Issues
 
@@ -112,20 +119,21 @@ TBD
 - 실제 통신 배선의 높이, 지름과 시공 경로는 현재 DWG만으로 확정할 수 없다.
 - 3D Viewer Production Bundle이 약 1.08MB라 후속 단계에서 Three.js Code Splitting을 검토해야 한다.
 - 연결 가능한 Browser 인스턴스가 없어 새 건축 배경·객체 선택 UI의 육안 검증은 사용자 확인이 필요하다.
+- Device Block 매핑(`DEVICE_TYPES`)은 84㎡A 기준으로만 확인했고 다른 평형은 검증하지 않았다.
 
 ## Next
 
-1. 로컬 Browser에서 실제 XR 건축 배경과 객체 선택 동작을 육안 검증한다.
-2. 통신단자함과 홈넷 기호 `INSERT`를 별도 Object Type으로 변환한다.
-3. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙을 회귀 검증한다.
-4. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
-5. 필요한 경우 GLB Export 경계를 검토한다.
+1. 로컬 Browser에서 실제 XR 건축 배경, 배선·기기 객체 선택 동작을 육안 검증한다.
+2. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙과 Device 매핑을 회귀 검증한다.
+3. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
+4. 필요한 경우 GLB Export 경계를 검토한다.
 
 ## Relevant Commits
 
 - `3bd0ef8` docs(cad): Geo-Time Construction Phase 1 검토 등록
 - `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
 - `eadd7fe` feat(cad): 건축 배경과 배선 객체 선택 기능 추가
+- `bfde30c` feat(cad): 통신단자함·홈넷 설비 INSERT를 Construction Object로 변환
 
 ## Updated
 

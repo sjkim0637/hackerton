@@ -7,7 +7,7 @@
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
-| goguma-salad + Codex | `agent/goguma-salad/geo-time-construction` | `experiments/goguma-salad/Geo-Time Construction/` | Geo-Time Construction | 통신 배선을 건축 배경과 정합한 평형별 2D·3D 객체로 변환한다. | `IN_PROGRESS` | [geo-time-construction](docs/workstreams/geo-time-construction.md) | 2026-09-01 |
+| goguma-salad + Codex/Claude | `agent/goguma-salad/geo-time-construction` | `experiments/goguma-salad/Geo-Time Construction/` | Geo-Time Construction | 통신 배선과 홈넷 기기를 건축 배경과 정합한 평형별 2D·3D 객체로 변환한다. | `IN_PROGRESS` | [geo-time-construction](docs/workstreams/geo-time-construction.md) | 2026-09-01 |
 
 ## 사용 방법
 
