@@ -13,6 +13,8 @@ Desktop.ini
 # 환경 변수와 비밀정보
 .env
 .env.*
+# Supabase 운영 연결 정보는 Repository 내 위치와 관계없이 명시적으로 제외
+.env.supabase.local
 !.env.example
 *.secret
 *.secrets
