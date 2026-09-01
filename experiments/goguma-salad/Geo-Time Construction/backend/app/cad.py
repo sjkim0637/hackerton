@@ -35,6 +35,7 @@ SHEET_WIDTH_MM = 42_000.0
 SHEET_HEIGHT_MM = 29_700.0
 ARCHITECTURE_UNIT_ORDER = ("84A", "84B", "84C", "84D", "120A", "144P", "155P")
 DEVICE_LAYERS = {"통신단자함", "SYM", "E-SYM", "천정"}
+DEVICE_WALL_OFFSET_M = 0.9
 DEVICE_TYPES = {
     "100-57": ("communication_panel", "통신단자함"),
     "EFCL": ("entrance_camera", "세대 현관 카메라"),
@@ -185,7 +186,7 @@ def build_cable_objects(
             )
         )
 
-    devices = _build_communication_devices(doc, filename, region)
+    devices = _build_communication_devices(doc, filename, region, elevation_m)
     return ConstructionObjectResponse(
         drawing=analysis,
         unit_region=region,
@@ -201,6 +202,7 @@ def _build_communication_devices(
     doc: Drawing,
     filename: str,
     region: UnitRegion,
+    cable_elevation_m: float,
 ) -> list[CommunicationDevice]:
     devices: list[CommunicationDevice] = []
     for entity_index, entity in enumerate(doc.modelspace().query("INSERT")):
@@ -217,7 +219,12 @@ def _build_communication_devices(
             block_name.upper(),
             ("home_network_device", "홈넷 설비"),
         )
-        elevation_m = 2.3 if entity.dxf.layer == "천정" else 1.4
+        elevation_m = round(
+            cable_elevation_m
+            if entity.dxf.layer == "천정"
+            else max(cable_elevation_m - DEVICE_WALL_OFFSET_M, 0.0),
+            6,
+        )
         handle = entity.dxf.get("handle", f"generated-device-{entity_index}")
         devices.append(
             CommunicationDevice(

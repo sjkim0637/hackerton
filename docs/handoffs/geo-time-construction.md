@@ -24,6 +24,7 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
   - `docs/workstreams/geo-time-construction.md`의 Scope, Decisions, Verification, Known Issues, Next, Relevant Commits를 갱신했다.
   - `TEAM_WORKBOARD.md`의 Purpose와 Owner 표기를 갱신했다.
   - 위 코드 변경을 Commit `bfde30c`로 반영했다.
+- 사용자가 Web Viewer 3D 화면에서 배선(천장, `표시 높이` Slider 값)과 기기(고정 1.4m/2.3m)의 높이가 서로 다른 파라미터를 써서 시각적으로 어긋나는 것을 발견했다. Claude가 기기 높이를 배선과 동일한 `표시 높이` Slider 기준 상대 Offset(`DEVICE_WALL_OFFSET_M` = 0.9m)으로 계산하도록 `_build_communication_devices`를 수정하고, 회귀 테스트를 추가해 Backend Pytest 11개로 확인했다.
 
 ## Important Files
 
@@ -37,7 +38,7 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
 - 통신단자함·홈넷 기기는 `cable_path`(선형)와 별도로 `category=communication`, `type=communication_device`, `system=home_network`의 point Object로 분리한다.
 - Device 추출 대상 Layer는 `통신단자함`, `SYM`, `E-SYM`, `천정`으로 제한한다.
 - Block 이름으로 Subtype을 매핑하고, 매핑되지 않은 Block은 `home_network_device` 기본값으로 분류해 누락을 방지한다.
-- 표시 높이는 Layer가 `천정`이면 2.3m, 그 외에는 1.4m 초기값을 사용한다(실제 시공 높이 아님).
+- 기기 표시 높이는 고정값이 아니라 배선 `표시 높이` Slider(`elevation_m`)를 기준으로 계산한다. Layer가 `천정`이면 배선과 같은 높이, 그 외에는 배선 높이 - 0.9m를 사용해 Slider를 조정해도 상대 높이가 유지된다(실제 시공 높이 아님).
 
 ## Constraints
 
@@ -52,10 +53,11 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
 
 ## Next
 
-1. 로컬 Browser에서 통신단자함·홈넷 기기 표시와 선택 동작을 육안 검증한다.
+1. 로컬 Browser에서 통신단자함·홈넷 기기 표시·선택과 새 높이 연동 동작을 육안 검증한다.
 2. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙과 Device 매핑을 회귀 검증하고, 새 Block이 나오면 `DEVICE_TYPES`에 추가한다.
-3. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
-4. 필요한 경우 GLB Export 경계를 검토한다.
+3. `DEVICE_WALL_OFFSET_M`(0.9m 고정값)이 실제 도면상 벽부착 기기 높이와 맞는지 검토한다.
+4. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
+5. 필요한 경우 GLB Export 경계를 검토한다.
 
 ## Relevant Commits
 
@@ -63,3 +65,4 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
 - `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
 - `eadd7fe` feat(cad): 건축 배경과 배선 객체 선택 기능 추가
 - `bfde30c` feat(cad): 통신단자함·홈넷 설비 INSERT를 Construction Object로 변환
+- (커밋 예정) fix(cad): 홈넷 기기 표시 높이를 배선 Slider에 연동

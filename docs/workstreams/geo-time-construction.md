@@ -85,7 +85,7 @@ Pipe 대신 `e-wire`, `e-wire3s`의 선형 Entity를 `communication/cable_path`�
 - 높이 2.3m와 지름 0.03m는 실제 시공값이 아닌 초기 Viewer 기본값으로 표시한다.
 - 통신단자함·홈넷 기기 `INSERT`는 `통신단자함`, `SYM`, `E-SYM`, `천정` Layer에서만 추출하고, Block 이름으로 Subtype을 매핑한다.
 - 매핑되지 않은 Block은 `home_network_device` 기본 Subtype으로 분류해 누락을 방지한다.
-- 기기 표시 높이는 Layer가 `천정`이면 2.3m, 그 외에는 1.4m 초기값을 사용한다.
+- 기기 표시 높이는 고정값이 아니라 배선과 같은 `표시 높이` Slider를 기준으로 계산한다. Layer가 `천정`이면 배선과 같은 높이, 그 외에는 배선 높이 - `DEVICE_WALL_OFFSET_M`(0.9m)을 사용해 배선을 올리고 내리면 기기도 상대 높이를 유지한 채 함께 움직인다.
 
 ## Integration Candidate
 
@@ -109,6 +109,8 @@ TBD
 - 실제 ET-1101 84㎡A에서 통신단자함·홈넷 기기 Device 객체 20개를 생성했다.
 - 84㎡A 결과는 적외선 감지기 5, Joint Box 4, 천장 홈넷 설비 3, 통신단자함 2, 현관카메라 2, 마그네틱 센서 2, 동체 감지기 1, 일괄소등 스위치 1이며 매핑되지 않은 Block은 없었다.
 - Backend Pytest 10개 통과, Ruff 통과. Frontend ESLint와 TypeScript/Vite Production Build 통과.
+- 사용자가 Web Viewer 3D 화면에서 배선과 기기 높이가 어긋나는 것을 확인해, 기기 높이를 배선 `표시 높이` Slider에 연동하도록 수정했다.
+- Backend Pytest 11개 통과(배선 Slider 값 변경 시 벽부착 기기 높이가 상대 Offset을 유지한 채 따라가는지 확인하는 Case 추가), Ruff 통과.
 
 ## Known Issues
 

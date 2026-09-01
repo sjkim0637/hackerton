@@ -41,6 +41,17 @@ def test_build_cable_objects_crops_and_normalizes_84a(sample_doc):
     assert panel.geometry.position.z == 1.4
 
 
+def test_build_cable_objects_device_elevation_follows_cable_elevation(sample_doc):
+    response = build_cable_objects(sample_doc, "sample.dxf", "84A", elevation_m=1.9)
+
+    assert {item.geometry.points[0].z for item in response.objects} == {1.9}
+    panel = next(
+        device for device in response.devices if device.properties.subtype == "communication_panel"
+    )
+    assert panel.geometry.position.z == 1.0
+    assert panel.properties.elevation_m == 1.0
+
+
 def test_build_cable_objects_rejects_unknown_unit(sample_doc):
     try:
         build_cable_objects(sample_doc, "sample.dxf", "999Z")
