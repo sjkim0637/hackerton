@@ -1,5 +1,7 @@
 # Handoff
 
+이 문서는 `agent/goguma-salad/geo-time-construction` Branch의 고정 인계 문서다. 매번 새 문서를 만들지 않고 이 파일을 계속 갱신한다. 다음 세션은 전체 프로젝트를 다시 읽지 않고 이 문서만으로 현재 상태를 파악하고 이어서 작업할 수 있어야 한다.
+
 ## From
 
 goguma-salad (Codex 세션, 토큰 소진으로 중단)
@@ -40,7 +42,7 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
 ## Constraints
 
 - 프로젝트 원본 지시서(`experiments/goguma-salad/Geo-Time Construction/docs/raw/Geo-Time Construction.md`)의 Phase 1 범위를 유지한다. AR·AI·Time Revision은 아직 구현 대상이 아니다.
-- `.gitignore` 변경(`.env.supabase.local` 제외 규칙 추가)과 `experiments/goguma-salad/geo-time-ar-v2/`의 미Commit·미추적 파일은 이 작업과 무관하다. 다른 세션의 작업일 수 있어 확인 없이 삭제·Commit하지 않았다.
+- `experiments/goguma-salad/geo-time-ar-v2/`의 미추적 파일(`.venv`, `.gradle`, `tmp` 등)은 `.gitignore` 규칙에 이미 걸러지고 있어 별도 조치가 필요 없다. `git status`에 폴더째로 뜨는 이유는 그 안에 `.vercel/README.txt`, `.vercel/project.json` 두 파일만 규칙에 안 걸리기 때문이며, 다른 Workstream 소유 파일이라 이 작업에서는 손대지 않았다.
 
 ## Known Issues
 
