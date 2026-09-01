@@ -12,11 +12,18 @@ DXF
 DrawingAnalysis + UnitRegion
  ↓  평형 Crop, mm→m 정규화
 ConstructionObject[communication/cable_path]
- ↓
+ + ArchitectureBackground[filtered line segments]
+ ↓  공통 평형 Local 좌표
 React 2D SVG / Three.js 3D Cylinder
 ```
 
 Frontend는 DXF Entity를 직접 해석하지 않는다. Backend가 반환한 Construction Object만 사용한다.
+
+## 건축 배경
+
+`XR_단위`는 대부분의 Entity가 `arch` 단일 Layer에 있어 벽체를 의미적으로 확정하기 어렵다. Phase 1에서는 벽체 3D 객체를 추론하지 않고 `LINE`, `LWPOLYLINE`, `POLYLINE`을 평형 도곽으로 자른 뒤 길이 100mm 이상 선분만 중복 제거하여 경량 배경으로 제공한다.
+
+건축 배경과 통신 배선은 동일한 평형 Local m 좌표를 사용한다. 배경은 바닥 높이의 회색 선으로만 표시하고, 사용자가 Toggle로 숨길 수 있다. 이 방식은 통신 경로의 공간 맥락을 제공하지만 벽, 문, 가구 등 건축 의미 분류를 보장하지 않는다.
 
 ## 평형 분리
 
@@ -42,6 +49,8 @@ system   = home_network
 Geometry는 3차원 `polyline`이며 X/Y는 평면 좌표, Z는 표시 높이다. 표시 높이와 지름은 현재 실제 시공 속성이 아니라 3D 변환 검증용 파라미터다.
 
 Source에는 DXF 파일명, Entity handle, CAD Layer와 평형을 보존한다. 향후 원본 도면 추적과 Revision 비교에 사용한다.
+
+Viewer에서 통신 경로를 선택하면 동일 Source 속성을 2D와 3D에서 공통으로 확인한다.
 
 ## 지원 Entity
 

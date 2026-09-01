@@ -12,7 +12,9 @@
 - `XR_SHEET` 좌표를 이용한 84㎡A 등 평형별 Crop
 - `e-wire`, `e-wire3s` 선형 Entity의 `communication/cable_path` 변환
 - 원본 mm 좌표를 평형 기준 m 좌표로 정규화
+- `XR_단위`의 선형 Entity를 100mm 이상 경량 건축 배경으로 결합
 - React 2D SVG와 Three.js 3D Cylinder Viewer
+- 2D·3D 객체 선택과 CAD 원본 속성 확인
 
 ## 준비
 
@@ -51,6 +53,7 @@ API:
 
 - `POST /api/cad/analyze`: DXF 통계와 평형 목록
 - `POST /api/cad/construction-objects`: 선택 평형의 통신 배선 Construction Object
+- `POST /api/cad/architecture-background`: 선택 평형의 경량 건축 배경 선분
 - `GET /health`: 상태 확인
 
 ## Web 실행
@@ -61,7 +64,7 @@ npm install
 npm run dev
 ```
 
-`http://localhost:5173`에서 `data/derived/ET-1101 단위세대 홈네트워크설비 평면도.dxf`를 선택한다. 기본값은 84㎡A, 높이 2.3m, 지름 0.03m이며 모두 Viewer용 가정값이다.
+`http://localhost:5173`에서 통신 도면으로 `data/derived/ET-1101 단위세대 홈네트워크설비 평면도.dxf`, 선택 건축 배경으로 `data/derived/XR_단위.dxf`를 지정한다. 기본값은 84㎡A, 높이 2.3m, 지름 0.03m이며 높이와 지름은 Viewer용 가정값이다. 건축 배경은 Toggle로 숨길 수 있고 통신 경로를 클릭하면 원본 Layer, Entity, Handle과 표시 속성을 확인할 수 있다.
 
 ## 검증
 

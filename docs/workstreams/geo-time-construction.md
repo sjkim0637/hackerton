@@ -58,6 +58,8 @@ Pipe 대신 `e-wire`, `e-wire3s`의 선형 Entity를 `communication/cable_path`�
 - Phase 1 최소 Dataset과 제외 대상 확정
 - FastAPI 기반 DXF 분석·Construction Object API
 - React 2D SVG와 Three.js 3D 통신 배선 Viewer
+- `XR_단위` 평형별 경량 건축 배경과 표시 Toggle
+- 2D·3D 통신 경로 선택 및 CAD Source 속성 확인
 
 ## Out of Scope
 
@@ -94,9 +96,12 @@ TBD
 - PowerShell 변환 Script로 Phase 1 DWG 세 파일만 `data/derived/`에 DXF로 변환했다.
 - 실제 ET-1101 84㎡A에서 통신 배선 객체 28개와 경로 점 189개를 생성했다.
 - `e-wire` 24개와 `e-wire3s` 선형 4개가 변환되고 주석 `INSERT` 2개는 제외됐다.
-- Backend Ruff 통과, Pytest 7개 통과.
+- 실제 XR_단위 84㎡A에서 도곽과 교차하는 선형 Entity 14,934개를 입력으로 중복·100mm 미만 선분을 제외한 배경 선분 2,687개를 생성했다.
+- 실제 Upload API 응답은 통신 객체 28개(18,925 bytes), 건축 배경 2,687개(517,554 bytes)이며 모두 HTTP 200을 반환했다.
+- Backend Ruff 통과, Pytest 10개 통과.
 - Frontend ESLint와 TypeScript/Vite Production Build 통과.
 - FastAPI 실행 상태에서 실제 ET-1101 DXF Upload API가 객체 28개를 반환했다.
+- 사용자가 Web Viewer에서 기존 `e-wire` 통신 배선의 3D 표시를 확인했다.
 
 ## Known Issues
 
@@ -106,20 +111,21 @@ TBD
 - 원본 50개 CAD는 약 126MiB이며 최소 Dataset 외 파일은 Git에서 제외해야 한다.
 - 실제 통신 배선의 높이, 지름과 시공 경로는 현재 DWG만으로 확정할 수 없다.
 - 3D Viewer Production Bundle이 약 1.08MB라 후속 단계에서 Three.js Code Splitting을 검토해야 한다.
-- 연결 가능한 Browser 인스턴스가 없어 이번 작업에서 UI 육안 검증은 수행하지 못했다.
+- 연결 가능한 Browser 인스턴스가 없어 새 건축 배경·객체 선택 UI의 육안 검증은 사용자 확인이 필요하다.
 
 ## Next
 
-1. 로컬 Browser에서 실제 ET-1101 2D·3D 화면을 육안 검증한다.
-2. `XR_단위` 건축 골격을 경량 Background Geometry로 결합한다.
-3. 통신단자함과 홈넷 기호 `INSERT`를 별도 Object Type으로 변환한다.
-4. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙을 회귀 검증한다.
+1. 로컬 Browser에서 실제 XR 건축 배경과 객체 선택 동작을 육안 검증한다.
+2. 통신단자함과 홈넷 기호 `INSERT`를 별도 Object Type으로 변환한다.
+3. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙을 회귀 검증한다.
+4. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
 5. 필요한 경우 GLB Export 경계를 검토한다.
 
 ## Relevant Commits
 
 - `3bd0ef8` docs(cad): Geo-Time Construction Phase 1 검토 등록
 - `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
+- `eadd7fe` feat(cad): 건축 배경과 배선 객체 선택 기능 추가
 
 ## Updated
 
