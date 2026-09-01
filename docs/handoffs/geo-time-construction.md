@@ -65,4 +65,4 @@ goguma-salad (다음 세션 — Claude가 같은 날 이어받아 Commit·문서
 - `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
 - `eadd7fe` feat(cad): 건축 배경과 배선 객체 선택 기능 추가
 - `bfde30c` feat(cad): 통신단자함·홈넷 설비 INSERT를 Construction Object로 변환
-- (커밋 예정) fix(cad): 홈넷 기기 표시 높이를 배선 Slider에 연동
+- `2018cbc` fix(cad): 홈넷 기기 표시 높이를 배선 Slider에 연동
