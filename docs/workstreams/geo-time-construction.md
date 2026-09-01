@@ -86,6 +86,7 @@ Pipe 대신 `e-wire`, `e-wire3s`의 선형 Entity를 `communication/cable_path`�
 - 통신단자함·홈넷 기기 `INSERT`는 `통신단자함`, `SYM`, `E-SYM`, `천정` Layer에서만 추출하고, Block 이름으로 Subtype을 매핑한다.
 - 매핑되지 않은 Block은 `home_network_device` 기본 Subtype으로 분류해 누락을 방지한다.
 - 기기 표시 높이는 고정값이 아니라 배선과 같은 `표시 높이` Slider를 기준으로 계산한다. Layer가 `천정`이면 배선과 같은 높이, 그 외에는 배선 높이 - `DEVICE_WALL_OFFSET_M`(0.9m)을 사용해 배선을 올리고 내리면 기기도 상대 높이를 유지한 채 함께 움직인다.
+- `XR_단위`는 평형 하나가 아니라 주변 통로·인접 세대까지 포함한 Sheet 전체(42,000×29,700mm)를 담고 있어 그대로 자르면 배선보다 훨씬 넓게 보인다. `/api/cad/architecture-background`에 선택적 `focus_min/max_x/y`(평형 Local m) Query를 추가해 Sheet Crop 이후 그 상자로 다시 Clip하고, Frontend는 이미 받은 배선·기기 좌표의 Bounding Box에 여백 4m를 더해 이 값을 계산해 전달한다(DXF 직접 해석 없이 숫자 좌표 계산만 하므로 Frontend·DWG 비의존 원칙은 유지).
 
 ## Integration Candidate
 
@@ -111,6 +112,9 @@ TBD
 - Backend Pytest 10개 통과, Ruff 통과. Frontend ESLint와 TypeScript/Vite Production Build 통과.
 - 사용자가 Web Viewer 3D 화면에서 배선과 기기 높이가 어긋나는 것을 확인해, 기기 높이를 배선 `표시 높이` Slider에 연동하도록 수정했다.
 - Backend Pytest 11개 통과(배선 Slider 값 변경 시 벽부착 기기 높이가 상대 Offset을 유지한 채 따라가는지 확인하는 Case 추가), Ruff 통과.
+- 실측으로 건축 배경 좌표 범위(84㎡A: X 0~42m, Y 0~29.7m)가 배선 범위(X 7~23m, Y 1~21m)보다 훨씬 넓다는 것을 확인했다. 옆 세대 데이터 혼입이 아니라 `XR_단위` Sheet 자체가 그만큼 넓은 실제 데이터였다.
+- 배선·기기 Bounding Box + 4m 여백으로 건축 배경을 다시 Clip하도록 수정한 뒤 실제 84㎡A로 재확인: 배경 선분이 2,687개에서 2,595개로 줄고 좌표 범위가 Focus 상자(X 3.4~26.7m, Y 0.9~25.4m)에 정확히 맞춰졌다.
+- Backend Pytest 13개 통과(Focus Bounds Clip 검증 Case 2개 추가), Ruff 통과. Frontend ESLint와 TypeScript/Vite Production Build 통과.
 
 ## Known Issues
 
@@ -122,13 +126,15 @@ TBD
 - 3D Viewer Production Bundle이 약 1.08MB라 후속 단계에서 Three.js Code Splitting을 검토해야 한다.
 - 연결 가능한 Browser 인스턴스가 없어 새 건축 배경·객체 선택 UI의 육안 검증은 사용자 확인이 필요하다.
 - Device Block 매핑(`DEVICE_TYPES`)은 84㎡A 기준으로만 확인했고 다른 평형은 검증하지 않았다.
+- 건축 배경 Focus 여백 4m(`ARCHITECTURE_FOCUS_MARGIN_M`)는 실제 세대 폭·통로 폭을 분석해 정한 값이 아닌 초기 가정값이다.
 
 ## Next
 
-1. 로컬 Browser에서 실제 XR 건축 배경, 배선·기기 객체 선택 동작을 육안 검증한다.
-2. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙과 Device 매핑을 회귀 검증한다.
-3. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
-4. 필요한 경우 GLB Export 경계를 검토한다.
+1. 로컬 Browser에서 새로 좁힌 건축 배경, 배선·기기 표시·높이·선택 동작을 육안 검증한다.
+2. 84㎡B 등 다른 평형에도 동일 Crop/Translate 규칙, Device 매핑, Focus Crop을 회귀 검증한다.
+3. Focus 여백 4m가 실제 세대 규모에 적합한지, UI에서 조정 가능하게 할지 검토한다.
+4. 건축 배경 응답의 압축 또는 Streaming 필요성을 측정한다.
+5. 필요한 경우 GLB Export 경계를 검토한다.
 
 ## Relevant Commits
 
@@ -136,6 +142,8 @@ TBD
 - `3b2a4ce` feat(cad): 통신 배선 2D·3D 변환 PoC 구현
 - `eadd7fe` feat(cad): 건축 배경과 배선 객체 선택 기능 추가
 - `bfde30c` feat(cad): 통신단자함·홈넷 설비 INSERT를 Construction Object로 변환
+- `2018cbc` fix(cad): 홈넷 기기 표시 높이를 배선 Slider에 연동
+- `8b50cec` fix(cad): 건축 배경을 배선 범위 기준으로 다시 Crop
 
 ## Updated
 
