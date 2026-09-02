@@ -119,17 +119,19 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
   `scripts/e2e_check.py` 로 합성 거실 이미지 1장을 써서 세션→키프레임 업로드→
   remove-object→job 폴링→결과 이미지 다운로드→서버 저장 파일 확인까지 실제
   HTTP 로 13단계 전부 PASS, 결과 이미지 정상 저장 확인. 인계: `docs/handoffs/user3.md`.
-- PHASE 1 앱 (P1-1~P1-3, P1-8~P1-9): 진행 예정
+- PHASE 1 앱 (P1-2, P1-3, P1-8, P1-9): 완료(코드 + 디버그 APK 빌드 성공).
+  TV 영역 드래그 지정 → 키프레임 캡처 → `POST /scenes` `/keyframes` `/remove-object`
+  → job 폴링 → 결과 이미지를 벽 quad(또는 전체화면 대체)로 적용 → "삭제 전/후" 토글.
+  서버 주소는 `http://localhost:8000` 하드코딩. `assembleDebug` 는 JBR 25 로는 실패하고
+  `JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` 로 성공. 인계: `docs/handoffs/user1.md`.
+- 남은 것: 실기기 네트워크 검증(P1-11), 실제 외부 AI 연동(P1-10), 결과 정합 다듬기.
 
 ## Next
 
-PHASE 1 나머지 (앱 → 서버 → AI → 앱 한 번 관통). 상세는 `docs/backlog.md`.
-
-1. 앱: 이관한 카메라·평면·탭·드래그·핀치 실기기 검증 (P1-1)
-2. 앱: TV 를 탭해 bbox 로 대상 지정하는 UI + 키프레임/메타 생성 → 서버 호출 (P1-2, P1-3)
-3. 앱: job 폴링 → 결과 이미지를 벽 quad 로 고정 + 전/후 비교 (P1-8, P1-9)
-4. 서버: `app/ai/external.py` 의 TODO 를 실제 외부 AI API 호출로 교체 (P1-10)
-5. end-to-end 1회 성공 데모 녹화 (P1-11)
+1. 서버를 `--host 0.0.0.0` 로 띄우고 앱의 `InteriorApiClient.DEFAULT_BASE_URL` 을
+   PC LAN IP 로 바꿔 실기기에서 캡처→전송→응답→화면적용 한 번 관통 (P1-11).
+2. 서버 `app/ai/external.py` 의 `TODO(P1-10)` 를 실제 외부 AI 호출로 교체 (P1-10).
+3. 결과 quad 방향/스케일/정합 다듬기 (PHASE 3 로 이어짐).
 
 ## Relevant Commits
 

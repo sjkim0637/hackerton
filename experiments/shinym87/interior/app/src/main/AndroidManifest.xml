@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
 
+    <!-- 키프레임 업로드 / 결과 폴링을 위해 로컬 서버(http://localhost:8000)에 접속 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Android 12(API 31)+ 에서 ARCore 모션 트래킹이 200Hz IMU 스트림을 받으려면 필요하다.
          없으면 가속도계/자이로 등록이 실패해(Failed to register sensor to queue) 평면 인식이 안 된다. -->
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
@@ -18,6 +21,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.InteriorAr">
 
         <!-- Play Store installs ARCore automatically for "AR Required" apps.

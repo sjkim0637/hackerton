@@ -31,6 +31,10 @@ class ArSpaceController(
     /** 매 프레임 호출된다. 이름표 빌보드 갱신 등 프레임 동기 작업에 사용한다. */
     var onFrame: (() -> Unit)? = null
 
+    /** 가장 최근 AR 프레임. 키프레임 캡처 시 카메라 pose/intrinsics 를 뽑는 데 쓴다. */
+    var latestFrame: Frame? = null
+        private set
+
     /** 화면에 아무것도 선택/입력 중이 아니면 true. 이때만 안내 문구를 자동 갱신한다. */
     var isIdle: () -> Boolean = { true }
 
@@ -59,6 +63,7 @@ class ArSpaceController(
         }
 
         sceneView.onSessionUpdated = { session, frame ->
+            latestFrame = frame
             onFrame?.invoke()
             logTrackingState(session, frame)
         }

@@ -21,6 +21,26 @@
         android:clickable="false"
         android:focusable="false" />
 
+    <!-- 서버가 돌려준 "삭제 후" 결과 이미지 (벽 평면 앵커를 못 잡았을 때의 전체화면 대체 표시).
+         평소에는 3D quad 로 벽에 붙이고, 이 뷰는 fallback 이다. -->
+    <ImageView
+        android:id="@+id/resultOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        android:contentDescription="삭제 결과"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- "TV 선택 모드"에서 화면을 드래그해 제거할 사물의 사각형(bounding box)을 그린다.
+         visibility=gone 이면 터치를 먹지 않아 평소 탭/드래그에 영향이 없다. -->
+    <com.hackathon.interior.remove.BboxSelectionView
+        android:id="@+id/bboxSelectionView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -70,6 +90,49 @@
             android:max="100"
             android:progress="50"
             android:visibility="gone" />
+
+        <!-- 사물 제거(P1-2/P1-3/P1-8/P1-9) 흐름 조작 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnTvSelectMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TV 선택 모드" />
+
+            <Button
+                android:id="@+id/btnRequestRemove"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:enabled="false"
+                android:text="삭제 요청" />
+
+            <Button
+                android:id="@+id/btnToggleRemoval"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:visibility="gone"
+                android:text="삭제 전/후" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/removalStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:shadowColor="@android:color/black"
+            android:shadowRadius="6"
+            android:text="" />
     </LinearLayout>
 
     <!-- 가구를 선택하면 나타나는 조작 패널 (핀치로도 크기 조절 가능) -->

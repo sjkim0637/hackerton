@@ -38,8 +38,14 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
 | 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` |
+| TV 영역 드래그 지정 (bbox) | `remove/BboxSelectionView.kt` |
+| 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
+| job 폴링 → 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
 
-미구현: 가구 회전, 실제 3D 모델(glTF), AI 기반 빈 공간 복원(사용자 2 영역).
+서버 주소는 `remove/InteriorApiClient.DEFAULT_BASE_URL = "http://localhost:8000"` 하드코딩
+(실기기에서는 PC LAN IP 로 바꿔야 함).
+
+미구현: 가구 회전, 실제 3D 모델(glTF), 실제 외부 AI 연동(P1-10), 결과 정합 다듬기(PHASE 3).
 
 ## 프로젝트 구조
 
@@ -50,7 +56,7 @@ experiments/shinym87/interior/
 │  └─ src/main/
 │     ├─ AndroidManifest.xml             # CAMERA 권한, AR Required 메타데이터
 │     ├─ java/com/hackathon/interior/
-│     │  ├─ MainActivity.kt              # 세 컨트롤러를 레이아웃/제스처에 연결
+│     │  ├─ MainActivity.kt              # 네 컨트롤러를 레이아웃/제스처에 연결
 │     │  ├─ ar/
 │     │  │  ├─ ArSpaceController.kt      # 카메라·AR 세션·평면 인식·hitTest
 │     │  │  └─ PlaneKind.kt              # 평면 타입 집합 + 수직/수평 판별
@@ -60,6 +66,10 @@ experiments/shinym87/interior/
 │     │  │  └─ LabelRenderer.kt          # 이름표 비트맵
 │     │  ├─ keyframe/
 │     │  │  └─ BackgroundKeyframe.kt     # 빈 배경 캡처 + 반투명 오버레이
+│     │  ├─ remove/
+│     │  │  ├─ BboxSelectionView.kt      # 드래그로 제거 대상 사각형 지정
+│     │  │  ├─ InteriorApiClient.kt      # 서버 HTTP (baseUrl 하드코딩)
+│     │  │  └─ RemovalController.kt      # 캡처·메타·플로우·결과 quad·전/후 토글
 │     │  └─ ui/
 │     │     └─ FurnitureInfoDialog.kt    # 이름/실물 크기 입력 팝업
 │     └─ res/
@@ -82,7 +92,8 @@ experiments/shinym87/interior/
 | compileSdk / targetSdk | 35 |
 | minSdk | 24 |
 | AR 라이브러리 | `io.github.sceneview:arsceneview:2.3.0` (ARCore 1.48.0 + Filament 1.56.0 포함) |
-| 필요 JDK | 17 (Android Studio 의 Gradle JDK 설정) |
+| 그 외 | `kotlinx-coroutines-android:1.8.1`, `lifecycle-runtime-ktx:2.8.7` |
+| 필요 JDK | 17 또는 21. Android Studio 번들 JBR 이 25 라 Gradle 8.11.1 CLI 빌드가 실패한다("Unsupported class file major version 69"). 이 PC 에서는 `JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` 로 빌드했다. |
 
 ## 빌드 및 실기기 설치
 
