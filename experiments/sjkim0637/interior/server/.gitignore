@@ -1,0 +1,12 @@
+# 런타임 저장소 (업로드 이미지, SQLite DB, AI 결과물)
+data/
+
+# 로컬 환경
+.venv/
+venv/
+.env
+__pycache__/
+*.pyc
+
+# E2E 스크립트가 내려받은 결과 이미지
+scripts/_out/

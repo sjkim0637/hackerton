@@ -1,0 +1,47 @@
+[
+  {
+    "id": "cat_tv_wall-55",
+    "name": "55인치 벽걸이 TV",
+    "category": "tv",
+    "size_m": { "w": 1.24, "h": 0.72, "d": 0.06 },
+    "model": { "type": "glb", "url": "/assets/tv-wall-55.glb", "placeholder": "cube" },
+    "thumbnail": "/assets/tv-wall-55.png",
+    "anchor_hint": "wall"
+  },
+  {
+    "id": "cat_sofa_nordic-3seat",
+    "name": "노르딕 3인 소파",
+    "category": "sofa",
+    "size_m": { "w": 2.1, "h": 0.85, "d": 0.95 },
+    "model": { "type": "glb", "url": "/assets/nordic-3seat.glb", "placeholder": "cube" },
+    "thumbnail": "/assets/nordic-3seat.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_table_low-oak",
+    "name": "오크 로우 테이블",
+    "category": "table",
+    "size_m": { "w": 1.1, "h": 0.4, "d": 0.6 },
+    "model": { "type": "glb", "url": "/assets/low-oak-table.glb", "placeholder": "cube" },
+    "thumbnail": "/assets/low-oak-table.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_chair_dining-basic",
+    "name": "기본 식탁 의자",
+    "category": "chair",
+    "size_m": { "w": 0.46, "h": 0.9, "d": 0.5 },
+    "model": { "type": "glb", "url": "/assets/dining-chair.glb", "placeholder": "cube" },
+    "thumbnail": "/assets/dining-chair.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_shelf_wall-3tier",
+    "name": "3단 벽 선반",
+    "category": "shelf",
+    "size_m": { "w": 0.8, "h": 0.9, "d": 0.25 },
+    "model": { "type": "glb", "url": "/assets/wall-shelf-3tier.glb", "placeholder": "cube" },
+    "thumbnail": "/assets/wall-shelf-3tier.png",
+    "anchor_hint": "wall"
+  }
+]
