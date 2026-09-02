@@ -1,0 +1,45 @@
+"""AI 프로바이더 선택. 설정값 하나로 mock <-> external 을 바꾼다."""
+from __future__ import annotations
+
+from ..config import Settings
+from .base import (
+    ProviderError,
+    ProviderNotConfigured,
+    RemoveObjectProvider,
+    RemoveResult,
+)
+from .external import ExternalRemoveObjectProvider
+from .mock import MockRemoveObjectProvider
+
+__all__ = [
+    "ProviderError",
+    "ProviderNotConfigured",
+    "RemoveObjectProvider",
+    "RemoveResult",
+    "build_provider",
+    "provider_status",
+]
+
+
+def build_provider(settings: Settings) -> RemoveObjectProvider:
+    if settings.ai_provider == "external":
+        return ExternalRemoveObjectProvider(
+            api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
+            model=settings.ai_model,
+        )
+    return MockRemoveObjectProvider()
+
+
+def provider_status(settings: Settings) -> dict:
+    """/health 에서 노출. 키를 값으로 돌려주지는 않는다."""
+    ready = settings.ai_provider == "mock" or bool(settings.ai_api_key)
+    return {
+        "provider": settings.ai_provider,
+        "ready": ready,
+        "detail": (
+            "mock 은 항상 사용 가능"
+            if settings.ai_provider == "mock"
+            else ("키 설정됨" if ready else "INTERIOR_AI_API_KEY 필요")
+        ),
+    }

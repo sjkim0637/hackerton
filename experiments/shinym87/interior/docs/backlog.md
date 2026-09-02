@@ -10,14 +10,18 @@
 | P1-1 | `interior` 앱: 카메라/평면 인식/탭 배치/드래그/핀치 (이관 완료분 실기기 검증) | 앱 | IN_PROGRESS |
 | P1-2 | 앱: TV 를 탭해 화면 bbox 로 대상 영역 지정하는 UI | 앱 | TODO |
 | P1-3 | 앱: 편집 명령 시점의 키프레임(JPEG) + 메타(JSON) 생성 | 앱 | TODO |
-| P1-4 | 서버: FastAPI 뼈대, `POST /scenes`, SQLite 초기화 | 서버 | TODO |
-| P1-5 | 서버: `POST /scenes/{id}/keyframes` 업로드 + 파일 저장 | 서버 | TODO |
-| P1-6 | 서버: 외부 AI 어댑터 인터페이스 + mock 구현(회색 사각형 채우기) | 서버 | TODO |
-| P1-7 | 서버: `POST /remove-object` → job, `GET /jobs/{id}` 폴링 | 서버 | TODO |
+| P1-4 | 서버: FastAPI 뼈대, `POST /scenes`, SQLite 초기화 | 서버 | DONE |
+| P1-5 | 서버: `POST /scenes/{id}/keyframes` 업로드 + 파일 저장 | 서버 | DONE |
+| P1-6 | 서버: 외부 AI 어댑터 인터페이스 + mock 구현 + external 자리 | 서버 | DONE |
+| P1-7 | 서버: `POST /remove-object` → job, `GET /jobs/{id}` 폴링 | 서버 | DONE |
 | P1-8 | 앱: 결과 이미지를 받아 벽 평면 quad 텍스처로 고정 | 앱 | TODO |
 | P1-9 | 앱: 변경 전/후 비교 오버레이 (기존 배경 오버레이 재사용) | 앱 | TODO |
-| P1-10 | 실제 외부 AI 프로바이더 1곳 선정 후 mock 교체 | 서버 | TODO |
+| P1-10 | 실제 외부 AI 프로바이더 1곳 선정 후 mock 교체 (`app/ai/external.py` TODO) | 서버 | TODO |
 | P1-11 | end-to-end 1회 성공 데모 녹화 | 공통 | TODO |
+
+서버(P1-4~P1-7)는 `experiments/shinym87/interior/server/` 에 구현, `pytest` 5개 통과.
+추가로 `GET /scenes/{id}/objects`(사물 정보 저장 형식만), `GET /catalog`(가구 데이터 API),
+동일 요청 캐시, 작업당 호출 상한을 포함한다. 인계는 `docs/handoffs/user3.md`.
 
 ## PHASE 2 이후 (개요만)
 

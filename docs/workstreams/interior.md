@@ -109,15 +109,24 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 - `backlog.md` — PHASE 1 이슈 목록 + 아이디어 백로그
 - `decisions.md` — 결정 기록
 
+## 진행 상황
+
+- PHASE 0: 완료 (`experiments/shinym87/interior/docs/`)
+- PHASE 1 서버/통합 (P1-4~P1-7): 완료. `experiments/shinym87/interior/server/`
+  FastAPI — 세션 생성, 키프레임 업로드/저장, 사물 정보 저장(형식만),
+  외부 AI 연결 구조(mock + external 자리), 사물 제거 job, 가구 카탈로그 API.
+  `pytest` 5개 통과. 인계: `docs/handoffs/user3.md`.
+- PHASE 1 앱 (P1-1~P1-3, P1-8~P1-9): 진행 예정
+
 ## Next
 
-PHASE 1 (앱 → 서버 → AI → 앱 한 번 관통). 상세는 `docs/backlog.md`.
+PHASE 1 나머지 (앱 → 서버 → AI → 앱 한 번 관통). 상세는 `docs/backlog.md`.
 
 1. 앱: 이관한 카메라·평면·탭·드래그·핀치 실기기 검증 (P1-1)
-2. 앱: TV 를 탭해 bbox 로 대상 지정하는 UI + 키프레임/메타 생성 (P1-2, P1-3)
-3. 서버: FastAPI 뼈대, `POST /scenes`, 키프레임 업로드, AI 어댑터 mock (P1-4~P1-7)
-4. 앱: 결과 이미지를 벽 quad 로 고정 + 전/후 비교 (P1-8, P1-9)
-5. 실제 외부 AI 프로바이더 1곳 선정 후 mock 교체 (P1-10), end-to-end 데모 녹화 (P1-11)
+2. 앱: TV 를 탭해 bbox 로 대상 지정하는 UI + 키프레임/메타 생성 → 서버 호출 (P1-2, P1-3)
+3. 앱: job 폴링 → 결과 이미지를 벽 quad 로 고정 + 전/후 비교 (P1-8, P1-9)
+4. 서버: `app/ai/external.py` 의 TODO 를 실제 외부 AI API 호출로 교체 (P1-10)
+5. end-to-end 1회 성공 데모 녹화 (P1-11)
 
 ## Relevant Commits
 

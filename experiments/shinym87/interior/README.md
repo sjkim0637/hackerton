@@ -1,8 +1,15 @@
 # Interior AR — 카메라 기반 공간 편집 / AR 가구 재배치
 
-`hackathon_spatial_editing_design.md` 설계서의 **사용자 1 (공간 / AR 작업 흐름)** 부분을
-구현하는 Android 앱이다. 카메라로 실제 공간을 보면서 가구(현재는 반투명 큐브)를
-배치·이동·크기 조절하고, "빈 배경" 대표 이미지를 캡처해 비교한다.
+`hackathon_spatial_editing_design.md` 설계서를 따르는 실험. 초기에는 1인이
+앱(사용자 1) → 서버(사용자 3) → 외부 AI 순으로 진행한다.
+
+- **`app/`** — Android 앱 (사용자 1, 공간 / AR). 카메라로 실제 공간을 보면서
+  가구(현재는 반투명 큐브)를 배치·이동·크기 조절하고, "빈 배경" 대표 이미지를
+  캡처해 비교한다.
+- **[`server/`](server/README.md)** — FastAPI 서버 (사용자 3, 서버 / 통합).
+  작업 세션, 키프레임 업로드/저장, 사물 정보 저장(형식만), 외부 AI 연결 구조
+  (mock + 실제 API 자리), 사물 제거 job, 가구 카탈로그 API. `pytest` 5개 통과.
+- **`docs/`** — PHASE 0 설계·규칙.
 
 `experiments/shinym87/ar2/` (Branch `agent/shinym87/ar2`) 의 검증 코드에서
 카메라 실행 · 평면 인식 · 탭 생성 · 드래그 이동 로직을 재사용했고, 설계서 폴더/개념
