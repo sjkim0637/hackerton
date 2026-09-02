@@ -3,6 +3,10 @@ data/
 
 # 로컬 환경
 .venv/
+venv/
 .env
 __pycache__/
 *.pyc
+
+# E2E 스크립트가 내려받은 결과 이미지
+scripts/_out/

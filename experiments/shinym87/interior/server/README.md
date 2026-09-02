@@ -83,6 +83,25 @@ pytest
 `tests/test_api.py` 가 세션 생성 → 키프레임 업로드 → 사물 정보 저장 → remove-object
 (mock) → 결과 이미지 → 카탈로그 → external 미설정 오류까지 확인한다.
 
+## 전체 흐름 E2E 검증 (실제 HTTP)
+
+`scripts/e2e_check.py` 가 합성 거실 이미지 하나로 **세션 생성 → 키프레임 업로드
+→ 사물 정보 확인 → remove-object → job 폴링 → 결과 이미지 다운로드/검증 →
+서버 저장 파일 확인 → 캐시 확인**까지 실제 HTTP 로 한 번에 실행한다.
+서버가 안 떠 있으면 uvicorn 을 자동으로 띄웠다가 끝나면 내린다.
+
+```bash
+# server/ 에서 (venv 활성화 상태)
+python scripts/e2e_check.py            # 13단계 PASS 후 exit 0
+python scripts/e2e_check.py --no-start # 이미 떠 있는 서버로만
+# Windows:
+.\scripts\run_e2e.ps1
+```
+
+- 테스트 이미지: `testdata/living_room.jpg` (없으면 `scripts/make_test_image.py` 로 생성).
+- 내려받은 결과 이미지: `scripts/_out/result_<job>.jpg` (git 무시).
+- 서버가 저장한 원본: `data/scenes/<scene>/results/<job>.jpg`.
+
 ## 알려진 제약 / 다음
 
 - `remove-object` 는 `BackgroundTasks` 로 동기 실행에 가깝게 처리한다. 실제 외부 AI

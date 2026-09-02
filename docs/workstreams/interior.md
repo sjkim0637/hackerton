@@ -115,7 +115,10 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 - PHASE 1 서버/통합 (P1-4~P1-7): 완료. `experiments/shinym87/interior/server/`
   FastAPI — 세션 생성, 키프레임 업로드/저장, 사물 정보 저장(형식만),
   외부 AI 연결 구조(mock + external 자리), 사물 제거 job, 가구 카탈로그 API.
-  `pytest` 5개 통과. 인계: `docs/handoffs/user3.md`.
+  `pytest` 5개 통과. **전체 흐름 PC에서 검증 완료 (2026-09-02)** —
+  `scripts/e2e_check.py` 로 합성 거실 이미지 1장을 써서 세션→키프레임 업로드→
+  remove-object→job 폴링→결과 이미지 다운로드→서버 저장 파일 확인까지 실제
+  HTTP 로 13단계 전부 PASS, 결과 이미지 정상 저장 확인. 인계: `docs/handoffs/user3.md`.
 - PHASE 1 앱 (P1-1~P1-3, P1-8~P1-9): 진행 예정
 
 ## Next

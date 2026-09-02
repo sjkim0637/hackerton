@@ -23,6 +23,10 @@
 추가로 `GET /scenes/{id}/objects`(사물 정보 저장 형식만), `GET /catalog`(가구 데이터 API),
 동일 요청 캐시, 작업당 호출 상한을 포함한다. 인계는 `docs/handoffs/user3.md`.
 
+**전체 흐름 PC에서 검증 완료 (2026-09-02)**: `server/scripts/e2e_check.py` 로 합성 거실
+이미지 1장을 써서 세션→키프레임 업로드→remove-object→job 폴링→결과 이미지
+다운로드→서버 저장 파일 확인까지 실제 HTTP 로 13단계 PASS.
+
 ## PHASE 2 이후 (개요만)
 
 - PHASE 2: 사물 영역 정밀화(마스크), AI 프롬프트 개선, 경계 보정, 재시도/중복호출 방지

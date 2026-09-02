@@ -47,6 +47,13 @@ PHASE 1 사용자 3 항목을 `experiments/shinym87/interior/server/` 에 구현
   데이터는 `catalog/furniture.json` (tv/sofa/table/chair/shelf 5종, `data-model.md`
   6절 형식).
 - **테스트**: `tests/test_api.py` — 전체 흐름 + 카탈로그 + external 미설정 오류.
+- **전체 흐름 PC에서 검증 완료 (2026-09-02)**: `scripts/e2e_check.py` 로 합성 거실
+  이미지(`testdata/living_room.jpg`, 1280×853) 하나를 써서 실제 HTTP 로
+  세션 생성 → 키프레임 업로드 → 사물 정보 저장 확인 → remove-object → job 폴링
+  (`done`) → 결과 이미지 다운로드 → 서버 저장 파일(`data/scenes/<scene>/results/
+  <job>.jpg`) 존재·크기 일치 확인 → 캐시 재호출까지 **13단계 전부 PASS (exit 0)**.
+  결과 이미지는 유효한 JPEG, 원본과 같은 해상도, TV 영역 평균 밝기 14 → 183
+  (어두운 TV 가 벽 색으로 덮임). mock 프로바이더 기준이며 external 은 P1-10.
 
 ## Important Files
 
@@ -56,6 +63,11 @@ experiments/shinym87/interior/server/
 ├─ requirements.txt           fastapi / uvicorn / python-multipart / pydantic-settings / pillow / httpx
 ├─ .env.example               INTERIOR_* 설정 (그대로면 mock)
 ├─ catalog/furniture.json     가구 카탈로그 시드
+├─ testdata/living_room.jpg   E2E 검증용 합성 거실 이미지
+├─ scripts/
+│  ├─ e2e_check.py            전체 흐름 E2E 검증 (실제 HTTP, uvicorn 자동 기동)
+│  ├─ make_test_image.py      거실 이미지 생성기
+│  └─ run_e2e.ps1             Windows 실행기
 └─ app/
    ├─ main.py                 FastAPI 앱, /health
    ├─ config.py               Settings (env 접두사 INTERIOR_)
