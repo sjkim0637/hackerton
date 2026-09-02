@@ -1,0 +1,88 @@
+package com.hackathon.interior
+
+import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import com.hackathon.interior.ar.ArSpaceController
+import com.hackathon.interior.databinding.ActivityMainBinding
+import com.hackathon.interior.furniture.FurnitureController
+import com.hackathon.interior.furniture.FurnitureItem
+import com.hackathon.interior.keyframe.BackgroundKeyframe
+
+/**
+ * 카메라 기반 공간 편집 / AR 가구 재배치 시뮬레이터 — 공간·AR 작업 흐름의 진입점.
+ *
+ * 화면 구성은 세 조각으로 나뉜다.
+ * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
+ * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 삭제
+ * - [BackgroundKeyframe] : "빈 배경" 대표 이미지 캡처와 반투명 오버레이
+ *
+ * MainActivity 는 이 조각들을 레이아웃 위젯과 제스처에 연결만 한다.
+ */
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var space: ArSpaceController
+    private lateinit var furniture: FurnitureController
+    private lateinit var keyframe: BackgroundKeyframe
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        val sceneView = binding.sceneView
+
+        space = ArSpaceController(sceneView, lifecycle, binding.instructionText)
+
+        furniture = FurnitureController(
+            activity = this,
+            sceneView = sceneView,
+            hitTest = space::hitTest,
+            onSelectionChanged = ::renderSelectionPanel,
+        )
+
+        keyframe = BackgroundKeyframe(
+            activity = this,
+            sceneView = sceneView,
+            overlay = binding.backgroundOverlay,
+            captureButton = binding.btnCaptureBg,
+            toggleButton = binding.btnToggleBg,
+            opacityBar = binding.opacitySeekBar,
+            beforeCapture = { furniture.setAllVisible(false) },
+            afterCapture = { furniture.setAllVisible(true) },
+        )
+
+        space.onFrame = { furniture.billboard() }
+        space.isIdle = { furniture.isIdle() }
+
+        sceneView.setOnGestureListener(
+            onSingleTapConfirmed = { motionEvent, node -> furniture.handleTap(motionEvent, node) },
+            onLongPress = { _, node -> furniture.handleLongPress(node) },
+            onMoveBegin = { _, _, node -> furniture.beginDrag(node) },
+            onMove = { _, motionEvent, _ -> furniture.drag(motionEvent) },
+            onMoveEnd = { _, _, _ -> furniture.endDrag() },
+            onScale = { detector, _, _ -> furniture.scaleSelectedBy(detector.scaleFactor) },
+        )
+
+        binding.btnGrow.setOnClickListener { furniture.scaleSelectedBy(FurnitureItem.SCALE_STEP) }
+        binding.btnShrink.setOnClickListener { furniture.scaleSelectedBy(1f / FurnitureItem.SCALE_STEP) }
+        binding.btnDeselect.setOnClickListener { furniture.deselect() }
+        binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
+    }
+
+    /** 선택된 가구가 있으면 하단 조작 패널을 채우고, 없으면 숨긴다. */
+    private fun renderSelectionPanel(item: FurnitureItem?) {
+        if (item == null) {
+            binding.selectionPanel.visibility = View.GONE
+            return
+        }
+        binding.selectionPanel.visibility = View.VISIBLE
+        val f = item.scaleFactor
+        val w = item.baseSize.x * 100f * f
+        val h = item.baseSize.y * 100f * f
+        val d = item.baseSize.z * 100f * f
+        binding.selectedNameText.text =
+            "%s  ·  %.0f×%.0f×%.0f cm  (x%.2f)".format(item.name, w, h, d, f)
+    }
+}

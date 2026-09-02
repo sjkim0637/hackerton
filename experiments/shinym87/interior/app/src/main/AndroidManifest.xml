@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ARCore needs the camera and OpenGL ES 3.0 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+
+    <!-- Android 12(API 31)+ 에서 ARCore 모션 트래킹이 200Hz IMU 스트림을 받으려면 필요하다.
+         없으면 가속도계/자이로 등록이 실패해(Failed to register sensor to queue) 평면 인식이 안 된다. -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
+    <!-- "AR Required" app: the device must support ARCore. -->
+    <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.InteriorAr">
+
+        <!-- Play Store installs ARCore automatically for "AR Required" apps.
+             When side-loading, SceneView asks the user to install it on first launch.
+             SceneView's manifest declares this as "optional", so override it here. -->
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="required"
+            tools:replace="android:value" />
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="true"
+            android:screenOrientation="locked"
+            android:theme="@style/Theme.InteriorAr">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
