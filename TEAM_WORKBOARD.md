@@ -7,6 +7,7 @@
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
+| sjkim0637 + Codex | `agent/sjkim0637/interior` | `experiments/sjkim0637/interior/` | 카메라 기반 공간 편집 / AR 가구 재배치 | 실제 거실에서 TV 제거·벽 복원·가구 재배치가 가능한 MVP를 검증한다. | `IN_PROGRESS` | [interior-sjkim0637](docs/workstreams/interior-sjkim0637.md) | 2026-09-02 |
 
 ## 사용 방법
 
