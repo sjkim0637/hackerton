@@ -37,22 +37,33 @@ uvicorn app.main:app --reload
 - API 문서: http://127.0.0.1:8000/docs
 - 업로드 이미지 / DB / 결과물은 `data/` 아래에 쌓인다 (git 무시).
 
-## 외부 AI 키 넣는 법 (나중에)
+## 외부 AI: Google Gemini (`INTERIOR_AI_PROVIDER=external`)
 
-지금은 `INTERIOR_AI_PROVIDER=mock` 이라 실제 API 없이 대상 영역을 주변 색으로 덮는다.
-실제 외부 AI 를 붙일 때:
+기본값은 `mock`(Pillow 로 영역을 벽 색으로 덮음)이다. 실제 AI 로 바꾸려면 `.env` 에:
 
-1. `.env` 에서
-   ```
-   INTERIOR_AI_PROVIDER=external
-   INTERIOR_AI_API_KEY=<발급받은 키>
-   INTERIOR_AI_BASE_URL=<엔드포인트>
-   INTERIOR_AI_MODEL=<모델명>
-   ```
-2. `app/ai/external.py` 의 `remove_object()` 안 `TODO(P1-10)` 블록을 실제 HTTP 호출로 채운다.
+```
+INTERIOR_AI_PROVIDER=external
+INTERIOR_AI_API_KEY=<Google AI Studio 에서 발급한 Gemini API 키>
+# 선택: 못 쓰는 모델이면 바꾼다 (기본 gemini-3.1-flash-image)
+INTERIOR_AI_MODEL=gemini-3.1-flash-image
+```
 
-라우터·저장·작업 큐 코드는 바꿀 필요가 없다. `build_provider()` 가 설정만 보고
-프로바이더를 바꾼다.
+서버를 재시작하면 `build_provider()` 가 설정만 보고 `ExternalRemoveObjectProvider`
+(`app/ai/external.py`)를 쓴다. 라우터·저장·작업 큐 코드는 그대로다.
+
+동작: 키프레임 이미지 + bbox 로 만든 흑백 마스크 PNG + 지시문을 Gemini
+`:generateContent` 에 보내고, 응답 파트에서 이미지(base64)를 받아 JPEG 로 재인코딩한다.
+실패는 `job.status="failed"` + `error` 메시지로 나온다 (429 한도 초과 / 401·403 인증 /
+400 잘못된 요청 / 404 모델 없음 / 5xx / 네트워크·타임아웃 / 이미지 없음 / 안전 차단).
+
+키를 넣은 뒤 실제 결과 확인:
+
+```bash
+cd experiments/shinym87/interior/server
+python scripts/e2e_check.py --port 8020 --ai-provider external --ai-api-key <KEY>
+#  또는 .env 에 external 설정을 넣고:  python scripts/e2e_check.py --port 8020
+# → scripts/_out/result_<job>.jpg 에 실제 편집 결과가 저장된다
+```
 
 ## 요청 흐름 예시
 
@@ -80,8 +91,11 @@ pip install pytest
 pytest
 ```
 
-`tests/test_api.py` 가 세션 생성 → 키프레임 업로드 → 사물 정보 저장 → remove-object
-(mock) → 결과 이미지 → 카탈로그 → external 미설정 오류까지 확인한다.
+- `tests/test_api.py` — 세션 생성 → 키프레임 업로드 → 사물 정보 저장 →
+  remove-object(mock) → 결과 이미지 → 카탈로그.
+- `tests/test_external.py` — Gemini 프로바이더의 요청 조립·응답 파싱·에러 처리
+  (키 없음 / 200 성공 / 429 / 403 / 네트워크 / 타임아웃 / 이미지 없음 / 안전 차단)를
+  `httpx.post` 를 가짜로 바꿔 실제 키·네트워크 없이 검증한다.
 
 ## 전체 흐름 E2E 검증 (실제 HTTP)
 

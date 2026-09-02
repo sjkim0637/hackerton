@@ -27,14 +27,15 @@ def build_provider(settings: Settings) -> RemoveObjectProvider:
             api_key=settings.ai_api_key,
             base_url=settings.ai_base_url,
             model=settings.ai_model,
+            timeout=settings.ai_timeout_seconds,
         )
     return MockRemoveObjectProvider()
 
 
 def provider_status(settings: Settings) -> dict:
-    """/health 에서 노출. 키를 값으로 돌려주지는 않는다."""
+    """/health 에서 노출. 키 값 자체는 돌려주지 않는다."""
     ready = settings.ai_provider == "mock" or bool(settings.ai_api_key)
-    return {
+    status: dict = {
         "provider": settings.ai_provider,
         "ready": ready,
         "detail": (
@@ -43,3 +44,6 @@ def provider_status(settings: Settings) -> dict:
             else ("키 설정됨" if ready else "INTERIOR_AI_API_KEY 필요")
         ),
     }
+    if settings.ai_provider == "external":
+        status["model"] = settings.ai_model
+    return status

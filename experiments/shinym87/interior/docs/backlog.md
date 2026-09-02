@@ -16,7 +16,7 @@
 | P1-7 | 서버: `POST /remove-object` → job, `GET /jobs/{id}` 폴링 | 서버 | DONE |
 | P1-8 | 앱: job 폴링 → 결과 이미지를 벽 평면 quad(또는 전체화면 대체)로 적용 | 앱 | DONE |
 | P1-9 | 앱: "삭제 전/후" 전환 버튼 | 앱 | DONE |
-| P1-10 | 실제 외부 AI 프로바이더 1곳 선정 후 mock 교체 (`app/ai/external.py` TODO) | 서버 | TODO |
+| P1-10 | `app/ai/external.py` 를 Google Gemini 이미지 편집 API 로 구현 (mock 유지, `INTERIOR_AI_PROVIDER=external` 로 전환). 에러 처리 + 단위 테스트 포함 | 서버 | DONE (키로 실결과 검증만 남음) |
 | P1-11 | 실기기에서 end-to-end 1회 성공 + 데모 녹화 (서버 `--host 0.0.0.0`, baseUrl 을 PC IP 로) | 공통 | TODO |
 
 서버(P1-4~P1-7)는 `experiments/shinym87/interior/server/` 에 구현, `pytest` 5개 통과.

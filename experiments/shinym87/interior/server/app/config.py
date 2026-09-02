@@ -23,10 +23,12 @@ class Settings(BaseSettings):
     assets_dir: Path = SERVER_ROOT / "catalog" / "assets"
 
     # 외부 AI 연결 (mock | external)
+    #  - external 은 Google Gemini 이미지 편집 API 를 호출한다.
     ai_provider: str = "mock"
-    ai_api_key: str = ""
-    ai_base_url: str = ""
-    ai_model: str = ""
+    ai_api_key: str = ""  # INTERIOR_AI_API_KEY — Gemini API 키
+    ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    ai_model: str = "gemini-3.1-flash-image"
+    ai_timeout_seconds: float = 120.0
 
     # 작업당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20

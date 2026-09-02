@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import subprocess
 import sys
 import time
@@ -185,6 +186,11 @@ def main() -> int:
     parser.add_argument("--keep-server", action="store_true",
                         help="검증 후 자동 기동한 서버를 끄지 않음")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--ai-provider", choices=["mock", "external"],
+                        help="자동 기동하는 서버의 INTERIOR_AI_PROVIDER 를 덮어쓴다")
+    parser.add_argument("--ai-api-key",
+                        help="자동 기동하는 서버의 INTERIOR_AI_API_KEY (Gemini 키). "
+                             "생략하면 .env / 환경변수를 그대로 쓴다")
     args = parser.parse_args()
 
     image_path = Path(args.image)
@@ -199,11 +205,20 @@ def main() -> int:
             print(f"서버에 연결할 수 없습니다: {base_url} (--no-start)")
             return 2
         base_url = f"http://127.0.0.1:{args.port}"
-        print(f"서버가 없어 uvicorn 을 기동합니다 (port {args.port}) …")
+        env = os.environ.copy()
+        if args.ai_provider:
+            env["INTERIOR_AI_PROVIDER"] = args.ai_provider
+        if args.ai_api_key:
+            env["INTERIOR_AI_API_KEY"] = args.ai_api_key
+        print(
+            f"서버가 없어 uvicorn 을 기동합니다 (port {args.port}, "
+            f"provider={env.get('INTERIOR_AI_PROVIDER', 'mock')}) …"
+        )
         proc = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "app.main:app",
              "--port", str(args.port), "--log-level", "warning"],
             cwd=str(SERVER_ROOT),
+            env=env,
         )
         if not wait_for_health(base_url, timeout=30.0):
             print("uvicorn 기동 실패")
