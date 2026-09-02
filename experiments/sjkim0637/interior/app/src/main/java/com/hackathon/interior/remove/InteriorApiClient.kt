@@ -1,5 +1,6 @@
 package com.hackathon.interior.remove
 
+import com.hackathon.interior.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -9,16 +10,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * `experiments/shinym87/interior/server/` 의 FastAPI 서버와 통신한다.
+ * `experiments/sjkim0637/interior/server/` 의 FastAPI 서버와 통신한다.
  *
  * PHASE 1 목표(흐름 연결)에 맞춰 최소 구현이다. OkHttp 같은 의존성 없이
- * `HttpURLConnection` + `org.json` 만 쓴다. 서버 주소는 우선 하드코딩한다.
+ * `HttpURLConnection` + `org.json` 만 쓴다. 서버 주소는 Gradle Property로 교체할 수 있다.
  */
 class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
     companion object {
-        // 실기기 네트워크 연결은 나중에. 지금은 로컬 서버 고정.
-        const val DEFAULT_BASE_URL = "http://localhost:8000"
+        // Emulator 기본값. 실기기는 -PINTERIOR_API_BASE_URL=http://<PC-LAN-IP>:8000 로 빌드한다.
+        val DEFAULT_BASE_URL: String = BuildConfig.INTERIOR_API_BASE_URL
     }
 
     data class JobStatus(

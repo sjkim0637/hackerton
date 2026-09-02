@@ -3,6 +3,8 @@ plugins {
     id 'kotlin-android'
 }
 
+def interiorApiBaseUrl = project.findProperty('INTERIOR_API_BASE_URL') ?: 'http://10.0.2.2:8000'
+
 android {
     namespace 'com.hackathon.interior'
     compileSdk 35
@@ -13,6 +15,7 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0'
+        buildConfigField 'String', 'INTERIOR_API_BASE_URL', "\"${interiorApiBaseUrl}\""
     }
 
     buildTypes {
@@ -24,6 +27,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     compileOptions {

@@ -5,9 +5,28 @@
 ## 현재 상태
 
 - PHASE 0: 완료
-- 현재 단계: PHASE 1 준비
+- 현재 단계: PHASE 1 구현 및 PC 검증 완료, 실기기 검증 대기
 - 우선 아키텍처: 외부 AI 이미지 편집 API를 사용하는 방식 A
-- 개발 코드: PHASE 1에서 생성
+- Android/ARCore 앱, FastAPI 서버, Mock 및 Gemini Provider 구현
+
+## PHASE 1 구현 결과
+
+- 카메라·평면 인식, bbox 선택, 키프레임 캡처, 결과 표시 코드
+- 반투명 가구 배치·이동·크기 조절
+- Scene/Keyframe/사물 제거 Job/결과/가구 카탈로그 API
+- Mock AI와 Google Gemini 이미지 편집 Provider
+- 서버 단위 테스트 13개 통과
+- 실제 HTTP Mock E2E 13/13 통과
+- Android 빌드는 Gradle 배포 파일을 내려받을 수 없는 현재 검증 환경에서는 재실행하지 못함
+- Android 실기기가 없어 앱 E2E와 시연 녹화는 대기
+
+## 서버 주소 설정
+
+Emulator 기본 주소는 `http://10.0.2.2:8000`이다. 실기기에서는 PC와 같은 Wi-Fi에 연결하고 다음처럼 PC LAN IP를 지정해 빌드한다.
+
+```bash
+./gradlew assembleDebug -PINTERIOR_API_BASE_URL=http://192.168.0.10:8000
+```
 
 ## 확정한 시연 흐름
 

@@ -30,7 +30,7 @@ IN_PROGRESS
 
 ## Current Direction
 
-PHASE 0을 완료했다. PHASE 1에서는 Android AR 앱과 FastAPI 서버를 Mock AI로 먼저 연결하고, 이후 외부 AI Provider로 교체한다. 초기 시연과 MVP 범위는 고정하되 검증 결과에 따라 확장하거나 변경할 수 있다.
+PHASE 0을 완료했다. PHASE 1의 Android AR 앱, FastAPI 서버, Mock AI 및 Gemini Provider 코드를 구현했고 서버 단위 테스트와 PC Mock E2E를 통과했다. 초기 시연과 MVP 범위는 고정하되 검증 결과에 따라 확장하거나 변경할 수 있다.
 
 ## Scope
 
@@ -70,15 +70,16 @@ TBD
 
 ## Known Issues
 
-아직 애플리케이션 코드를 생성하지 않았다. 실제 AI 품질, 실기기 네트워크, 공간 정합은 검증 전이다.
+사용자가 보유한 기기가 iOS뿐이어서 Android 실기기 검증과 시연 녹화는 대기 중이다. 실제 Gemini 품질은 API Key가 없어 검증 전이다. 현재 실행 환경에서는 Gradle 배포 파일 다운로드가 차단되어 Android 빌드를 재검증하지 못했다.
 
 ## Next
 
-PHASE 1의 P1-1 Android 프로젝트 및 ARCore 실행 환경 생성을 시작한다.
+Android 기기 또는 Emulator가 준비되면 앱 빌드와 E2E를 수행한다. 그 전에는 Gemini API Key가 준비될 경우 실제 이미지 품질을 검증한다.
 
 ## Relevant Commits
 
-PHASE 0 문서 Commit
+- `b717d47` PHASE 0 문서
+- `2a2f228` Android AR 앱과 FastAPI PHASE 1 기반 구현
 
 ## Updated
 
