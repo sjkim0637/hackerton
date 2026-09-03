@@ -63,6 +63,13 @@ INTERIOR_AI_MODEL=gemini-3.1-flash-image
 그대로 돌려준다(중복 AI 호출 방지). 서버 로그에 매 AI 호출마다 scene 누적 횟수와
 `INTERIOR_AI_COST_PER_CALL_USD`(기본 0.039) 기준 예상 비용을 남긴다.
 
+**결과 후처리** (`app/ai/colormatch.py`, `_run_job` 에서 자동):
+- 색감 보정 — 원본의 **마스크 밖** 평균 밝기/색상에 맞춰 결과에 채널 게인을 곱한다
+  (노출/화이트밸런스 수준). `INTERIOR_RESULT_COLOR_MATCH=false` 로 끌 수 있다.
+- 이상 결과 감지 — 마스크 밖 영역이 원본과 크게 다르면(`INTERIOR_RESULT_ANOMALY_FAIL_MAD`
+  기본 55) job 을 `failed` 로, 다소 다르면(`..._WARN_MAD` 22) 경고 로그. 결과 해상도가
+  64px 미만이어도 fail.
+
 키를 넣은 뒤 실제 결과 확인 (실사진 권장):
 
 ```bash

@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # 호출 1회당 대략적 비용(USD). 로그 집계용. gemini-2.5-flash-image ≈ $0.039/장.
     ai_cost_per_call_usd: float = 0.039
 
+    # 결과 후처리: 원본의 (마스크 밖) 평균 밝기/색상에 맞춰 채널 게인 보정
+    result_color_match: bool = True
+    # 이상 결과 감지: 마스크 밖 영역의 원본↔결과 차이(MAD, 0~255) 임계값
+    result_anomaly_warn_mad: float = 22.0
+    result_anomaly_fail_mad: float = 55.0
+
     # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20
 

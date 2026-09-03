@@ -48,6 +48,15 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 - [TODO] 정밀 세그멘테이션 마스크(bbox → 실제 사물 윤곽) 또는 포인트/브러시 "이 사물만" 선택,
   remove-object 를 BackgroundTasks 밖 워커/큐로.
 
+## PHASE 3 (진행 중)
+
+- [DONE] 사용자 1: 결과 quad EMA 스무딩·추적 놓침 시 위치 유지·가장자리 알파 페이드
+  (`RemovalController.onFrame`, `remove/EdgeFade.kt`). 실기기 확인 남음.
+- [DONE] 사용자 2: 색감 보정(마스크 밖 평균에 맞춘 채널 게인) + 이상 결과 감지
+  (마스크 밖 MAD/채널편차 임계값, 해상도 검사) → `app/ai/colormatch.py`,
+  `docs/handoffs/user2.md`.
+- [TODO] 재투영 보정, 가림(occlusion) 처리, 회전 slerp.
+
 ## PHASE 2 이후 (개요만)
 
 - PHASE 3 (진행 중, 사용자 1): 결과 quad 를 벽 앵커에 프레임마다 EMA 스무딩해서 고정

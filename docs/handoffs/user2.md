@@ -11,7 +11,33 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 (P1-10) + PHASE 2 "사용자 2 (영상 / AI)".
+PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
+
+## PHASE 3 — 색감 보정 + 이상 결과 감지 (2026-09-03)
+
+`app/ai/colormatch.py` 신설. 기준은 **마스크(선택 영역) 밖**이다 — AI 는 그 밖을
+건드리지 않아야 하므로, 그 영역의 원본↔결과 차이로 전역 이동을 잡는다.
+`_run_job` 이 `ensure_jpeg_size` 직후 → 이상 감지 → 색감 보정 순으로 후처리한다.
+
+1. **색감 보정** (`match_to_source`)
+   - 마스크 밖 영역의 원본/결과 채널별 평균으로 게인 `g_c = mean_src_c / mean_res_c`
+     계산, `[0.7, 1.4]` 로 클램프, `Image.point` LUT 로 결과에 곱한다(노출/화이트밸런스
+     수준의 가벼운 후처리, JPEG q92 재인코딩).
+   - 게인이 모두 ±3% 이내면 건너뛴다(재인코딩 안 함). 선택 영역이 화면의 85% 초과라
+     바깥 표본이 부족하면 건너뛴다.
+   - 로그: `[job X] 색감 보정 gains(r,g,b)=[1.08, 1.05, 1.11]`.
+   - `INTERIOR_RESULT_COLOR_MATCH=false` 로 끌 수 있다.
+2. **이상 결과 감지** (`check_result_anomaly`) — 명백한 케이스만
+   - 리사이즈 전 결과가 64px 미만 → **fail**. 종횡비가 원본과 25% 초과 차이 → warn.
+   - 마스크 밖 영역을 384px 로 다운스케일해 원본과 비교:
+     - grayscale MAD ≥ `INTERIOR_RESULT_ANOMALY_FAIL_MAD`(기본 55) 또는 채널편차 ≥ 45
+       → **job 을 `failed` 처리** (에러: "이상 결과 감지: 마스크 밖 영역이 원본과 크게
+       다름 … AI 가 장면 전체를 바꿨거나 다른 이미지를 만든 것으로 보임").
+     - MAD ≥ `..._WARN_MAD`(기본 22) 또는 채널편차 ≥ 18 → **경고 로그만**, 결과는 유지.
+   - 재시도는 안 한다(잘못 생성된 이미지는 다시 해도 비슷). fail 은 곧바로 실패로 마감.
+   - 초기 실기기 버그(검은 키프레임 → AI 가 상상한 방)가 이 fail 조건에 걸린다.
+   - 테스트: `tests/test_colormatch.py` 8개 (전체 `pytest` 28개 통과). mock 은 마스크 밖이
+     원본과 동일 → 항상 "ok", 색감 보정도 no-op → mock e2e 회귀 없음.
 
 ## PHASE 2 — 마스크 페더링 / 종류별 프롬프트 / 다양한 사물 테스트 (2026-09-03)
 

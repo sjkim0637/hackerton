@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from ..ai import ProviderError, is_known, normalize_object_type
+from ..ai.colormatch import check_result_anomaly, match_to_source
 from ..ai.imageops import ensure_jpeg_size, image_size
 from ..config import get_settings
 from ..deps import get_provider, get_store
@@ -190,8 +191,34 @@ def _run_job(
                 object_type=object_type,
                 prompt=settings.ai_extra_instruction,
             )
+            raw_result_size = image_size(result.image_bytes)  # 리사이즈 전
             # 공통 보정: 결과는 항상 원본과 같은 해상도의 JPEG.
             final_bytes = ensure_jpeg_size(result.image_bytes, original_size)
+
+            # --- 이상 결과 감지 (명백한 케이스만) ---
+            report = check_result_anomaly(
+                final_bytes, source_bytes, region,
+                raw_result_size=raw_result_size,
+                warn_mad=settings.result_anomaly_warn_mad,
+                fail_mad=settings.result_anomaly_fail_mad,
+            )
+            if report.severity == "fail":
+                _log.warning("[job %s] 이상 결과 → 실패 처리: %s %s",
+                             job_id, report.reason, report.metrics)
+                store.update_job(job_id, status="failed",
+                                 error=f"이상 결과 감지: {report.reason}")
+                return
+            if report.severity == "warn":
+                _log.warning("[job %s] 이상 결과 의심: %s %s",
+                             job_id, report.reason, report.metrics)
+
+            # --- 색감 보정: 원본의 (마스크 밖) 밝기/색상에 맞춘다 ---
+            if settings.result_color_match:
+                cm = match_to_source(final_bytes, source_bytes, region)
+                if cm.applied:
+                    _log.info("[job %s] 색감 보정 gains(r,g,b)=%s",
+                              job_id, [round(g, 3) for g in cm.gains])
+                    final_bytes = cm.image_bytes
 
             results_dir = settings.scenes_dir / scene_id / "results"
             results_dir.mkdir(parents=True, exist_ok=True)

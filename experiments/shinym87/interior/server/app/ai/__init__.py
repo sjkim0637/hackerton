@@ -8,6 +8,7 @@ from .base import (
     RemoveObjectProvider,
     RemoveResult,
 )
+from .colormatch import AnomalyReport, check_result_anomaly, match_to_source
 from .external import ExternalRemoveObjectProvider
 from .mock import MockRemoveObjectProvider
 from .objects import KNOWN_TYPES, is_known, normalize_object_type
@@ -20,6 +21,9 @@ __all__ = [
     "KNOWN_TYPES",
     "is_known",
     "normalize_object_type",
+    "AnomalyReport",
+    "check_result_anomaly",
+    "match_to_source",
     "build_provider",
     "provider_status",
 ]
