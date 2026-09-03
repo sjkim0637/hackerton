@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
@@ -24,6 +25,7 @@ from ..schemas import (
 )
 
 router = APIRouter(tags=["scenes"])
+_log = logging.getLogger("interior.scenes")
 
 
 def _require_scene(scene_id: str) -> dict:
@@ -157,6 +159,11 @@ def _run_job(
         provider = get_provider()
         source_bytes = Path(image_path).read_bytes()
         original_size = image_size(source_bytes)
+        _log.info(
+            "[job %s] provider=%s keyframe=%s (%d bytes, %dx%d) object=%s region=%s",
+            job_id, provider.name, Path(image_path).name, len(source_bytes),
+            original_size[0], original_size[1], object_type, region,
+        )
         prompt = (
             f"Remove the {object_type} from the image and reconstruct the wall/floor "
             f"behind it so it looks like the {object_type} was never there."
@@ -182,7 +189,9 @@ def _run_job(
             result_url=f"/scenes/{scene_id}/results/{job_id}.jpg",
             changed_region=result.changed_region,
         )
+        _log.info("[job %s] done → %s (%d bytes)", job_id, out_path.name, len(final_bytes))
     except Exception as exc:  # noqa: BLE001 - 작업 실패는 상태로 보고한다
+        _log.warning("[job %s] failed: %s: %s", job_id, type(exc).__name__, exc)
         store.update_job(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
 
 

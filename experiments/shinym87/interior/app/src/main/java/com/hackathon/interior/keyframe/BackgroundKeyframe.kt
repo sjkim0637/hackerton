@@ -3,7 +3,6 @@ package com.hackathon.interior.keyframe
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -63,19 +62,16 @@ class BackgroundKeyframe(
     }
 
     /**
-     * 지금 카메라 화면(가구·UI 제외)을 사진으로 찍어 저장한다.
-     * PixelCopy 로 윈도우 표면을 읽되, 캡처 순간에는 가구와 오버레이를 잠깐 숨긴다.
+     * 지금 카메라 화면(가구 제외)을 사진으로 찍어 저장한다.
+     *
+     * `ARSceneView` 는 `SurfaceView` 라 카메라·3D 가 별도 서피스에 그려진다. 윈도우를
+     * 캡처하면 카메라가 검게 나오므로 `PixelCopy.request(SurfaceView, ...)` 로 그 서피스를
+     * 직접 읽는다(UI 오버레이는 자동 제외).
      */
     private fun capture() {
-        if (sceneView.width == 0 || sceneView.height == 0) return
+        if (sceneView.width == 0 || sceneView.height == 0 || !sceneView.holder.surface.isValid) return
 
         val bitmap = Bitmap.createBitmap(sceneView.width, sceneView.height, Bitmap.Config.ARGB_8888)
-        val location = IntArray(2)
-        sceneView.getLocationInWindow(location)
-        val rect = Rect(
-            location[0], location[1],
-            location[0] + sceneView.width, location[1] + sceneView.height,
-        )
 
         val overlayWasVisible = overlay.visibility == View.VISIBLE
         overlay.visibility = View.GONE
@@ -83,7 +79,7 @@ class BackgroundKeyframe(
 
         // 가구 숨김이 AR 렌더 스레드에 반영될 시간을 준 뒤 캡처.
         sceneView.postDelayed({
-            PixelCopy.request(activity.window, rect, bitmap, { result ->
+            PixelCopy.request(sceneView, bitmap, { result ->
                 afterCapture()
                 if (result == PixelCopy.SUCCESS) {
                     backgroundBitmap = bitmap

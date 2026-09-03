@@ -83,6 +83,15 @@ experiments/shinym87/interior/app/src/main/
   일치하지 않는다. 메타의 intrinsics 는 스케일 근사값.
 - "TV 선택 모드" 중에는 SceneView 제스처(큐브 생성/드래그)가 막힌다(의도).
 
+## 캡처 버그 수정 (2026-09-03)
+
+실기기에서 키프레임이 "카메라 없이 검은 배경 + UI 위젯"으로 저장되던 문제:
+`ARSceneView` 는 `SurfaceView` 라 카메라·3D 가 별도 서피스에 그려지는데
+`PixelCopy.request(window, ...)` 는 그 서피스를 포함하지 않아 카메라가 검게 나왔다.
+→ `PixelCopy.request(sceneView /* SurfaceView */, bitmap, listener, handler)` 로 교체.
+`RemovalController.captureSceneJpeg` 와 `BackgroundKeyframe.capture`("배경 촬영",
+동일 버그) 둘 다 수정. UI 오버레이는 서피스 밖이라 자동 제외된다.
+
 ## Known Issues
 
 - 빌드 검증: **`:app:assembleDebug` 성공** (`app/build/outputs/apk/debug/app-debug.apk`,

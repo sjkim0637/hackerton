@@ -106,6 +106,17 @@ experiments/shinym87/interior/server/
   `BackgroundTasks` 동기 실행이라 오래 걸리면 폴링이 그만큼 길어진다(PHASE 2 에서
   워커 분리).
 
+## 진단 로그 (2026-09-03)
+
+`interior.*` 로거를 uvicorn 콘솔에 붙였다(`app/main.py._setup_logging`). 요청/응답 추적:
+- `app/routers/scenes.py` `_run_job`: provider, 키프레임 파일명/바이트/해상도, region, 완료/실패
+- `app/ai/external.py`: `[Gemini 요청]` — 모델, part별 크기(이미지 bytes·해상도·base64
+  길이, 마스크 base64 길이), 프롬프트 앞부분. 이미지가 2KB 미만이면 경고("검은 화면
+  가능성"). `[Gemini 응답]` — status, finishReason, parts 요약(이미지 base64→bytes,
+  또는 `text=...` 원문), promptFeedback.
+- 실기기 첫 실패 원인은 서버가 아니라 **앱의 키프레임 캡처**였다(검은 화면 전송).
+  앱 쪽 수정은 user1 handoff 참고.
+
 ## Known Issues
 
 - mock e2e 는 여전히 13/13 통과 (회귀 없음). external + 키 없음 e2e 는

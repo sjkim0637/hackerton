@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 
 import httpx
 
@@ -22,6 +23,8 @@ from .mask import data_url_b64, location_hint, region_bbox, region_to_mask_png
 
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _DEFAULT_MODEL = "gemini-3.1-flash-image"
+
+_log = logging.getLogger("interior.ai.external")
 
 
 class ExternalRemoveObjectProvider(RemoveObjectProvider):
@@ -57,20 +60,41 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
             )
 
         mask_png = region_to_mask_png(image_bytes, region)
+        image_b64 = data_url_b64(image_bytes)
+        mask_b64 = data_url_b64(mask_png)
+        instruction = self._build_prompt(object_type, region, prompt)
         body = {
             "contents": [
                 {
                     "role": "user",
                     "parts": [
-                        {"text": self._build_prompt(object_type, region, prompt)},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": data_url_b64(image_bytes)}},
-                        {"inline_data": {"mime_type": "image/png", "data": data_url_b64(mask_png)}},
+                        {"text": instruction},
+                        {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}},
+                        {"inline_data": {"mime_type": "image/png", "data": mask_b64}},
                     ],
                 }
             ],
             "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
         }
         url = f"{self.base_url}/models/{self.model}:generateContent"
+
+        # --- 요청 진단 로그 (이미지가 실제로 실려 나가는지 확인용) ---
+        src_w, src_h = image_size(image_bytes)
+        _log.info(
+            "[Gemini 요청] model=%s url=%s\n"
+            "  parts: text(%d자) + image(jpeg %d bytes, %dx%d, base64 %d자) + mask(png %d bytes, base64 %d자)\n"
+            "  region=%s prompt.head=%r",
+            self.model, url,
+            len(instruction),
+            len(image_bytes), src_w, src_h, len(image_b64),
+            len(mask_png), len(mask_b64),
+            region, instruction[:120],
+        )
+        if len(image_bytes) < 2000 or len(image_b64) < 2000:
+            _log.warning(
+                "[Gemini 요청] 원본 이미지가 비정상적으로 작습니다 (%d bytes). "
+                "키프레임 캡처가 검은 화면일 수 있음.", len(image_bytes),
+            )
 
         try:
             resp = httpx.post(
@@ -89,7 +113,9 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
 
         self._raise_for_status(resp)
 
-        raw = self._extract_image(resp.json())
+        payload = resp.json()
+        self._log_response(resp.status_code, payload)
+        raw = self._extract_image(payload)
         # Gemini 는 원본과 다른 해상도로 돌려줄 수 있어 원본 크기로 강제 리사이즈한다.
         try:
             jpeg = ensure_jpeg_size(raw, image_size(image_bytes))
@@ -142,6 +168,32 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
         if 500 <= code < 600:
             raise ProviderError(f"Gemini 서버 오류 ({code}): {detail}")
         raise ProviderError(f"Gemini 요청 실패 ({code}): {detail}")
+
+    @staticmethod
+    def _log_response(status: int, payload: dict) -> None:
+        """응답 파트 요약 로그: 이미지가 왔는지 / 텍스트로 뭐라 답했는지."""
+        cand = (payload.get("candidates") or [{}])[0]
+        finish = cand.get("finishReason")
+        parts = (cand.get("content") or {}).get("parts") or []
+        summary: list[str] = []
+        for part in parts:
+            inline = part.get("inlineData") or part.get("inline_data")
+            if inline and inline.get("data"):
+                mime = inline.get("mimeType") or inline.get("mime_type")
+                data = inline.get("data", "")
+                try:
+                    decoded = len(base64.b64decode(data))
+                except Exception:  # noqa: BLE001
+                    decoded = -1
+                summary.append(f"image({mime}, base64 {len(data)}자 → {decoded} bytes)")
+            elif part.get("text") is not None:
+                summary.append(f"text={part['text']!r}")
+        pf = payload.get("promptFeedback")
+        _log.info(
+            "[Gemini 응답] status=%s finishReason=%s parts=%s%s",
+            status, finish, summary or "(없음)",
+            f" promptFeedback={pf}" if pf else "",
+        )
 
     @staticmethod
     def _extract_image(payload: dict) -> bytes:

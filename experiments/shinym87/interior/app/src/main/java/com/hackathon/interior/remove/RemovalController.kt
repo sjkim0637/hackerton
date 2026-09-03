@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
@@ -303,28 +302,28 @@ class RemovalController(
         showingAfter = false
     }
 
+    /**
+     * 키프레임 캡처. `ARSceneView` 는 `SurfaceView` 라 카메라·3D 는 별도 서피스에 그려진다.
+     * 창(window) 을 캡처하면 UI 위젯만 나오고 카메라가 검게 나오므로,
+     * `PixelCopy.request(SurfaceView, ...)` 로 그 서피스만 직접 읽는다(UI 오버레이는 자동 제외).
+     */
     private fun captureSceneJpeg(onResult: (ByteArray?, Int, Int) -> Unit) {
         val vw = sceneView.width
         val vh = sceneView.height
-        if (vw == 0 || vh == 0) {
+        if (vw == 0 || vh == 0 || !sceneView.holder.surface.isValid) {
             onResult(null, 0, 0)
             return
         }
         val bitmap = Bitmap.createBitmap(vw, vh, Bitmap.Config.ARGB_8888)
-        val loc = IntArray(2)
-        sceneView.getLocationInWindow(loc)
-        val rect = Rect(loc[0], loc[1], loc[0] + vw, loc[1] + vh)
 
-        binding.bboxSelectionView.visibility = View.GONE
-        binding.resultOverlay.visibility = View.GONE
+        // 큐브/결과 quad 는 키프레임에서 뺀다. bboxSelectionView/resultOverlay 는 서피스 밖이라 무관.
         resultNode?.isVisible = false
         onBeforeCapture()
 
         sceneView.postDelayed({
-            PixelCopy.request(activity.window, rect, bitmap, { copyResult ->
+            PixelCopy.request(sceneView, bitmap, { copyResult ->
                 onAfterCapture()
                 resultNode?.isVisible = showingAfter
-                if (bboxNorm != null) binding.bboxSelectionView.visibility = View.VISIBLE
                 if (copyResult == PixelCopy.SUCCESS) {
                     val out = ByteArrayOutputStream()
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)

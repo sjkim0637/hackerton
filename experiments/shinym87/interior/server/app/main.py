@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -18,7 +20,19 @@ from .config import get_settings
 from .routers import catalog, scenes
 
 
+def _setup_logging() -> None:
+    """앱 로거(`interior.*`)가 uvicorn 콘솔에 보이도록 핸들러를 붙인다."""
+    logger = logging.getLogger("interior")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s [%(name)s] %(message)s"))
+        logger.addHandler(handler)
+    logger.propagate = False
+
+
 def create_app() -> FastAPI:
+    _setup_logging()
     settings = get_settings()
 
     app = FastAPI(
