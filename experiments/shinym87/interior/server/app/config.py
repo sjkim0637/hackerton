@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     result_anomaly_warn_mad: float = 22.0
     result_anomaly_fail_mad: float = 55.0
 
+    # 결과 관리
+    result_max_bytes: int = 5_000_000        # 이보다 크면 품질을 낮춰 압축해서 저장 (0=안 함)
+    result_keep_per_scene: int = 12          # scene 당 유지할 최근 결과 개수 (0=무제한)
+    result_max_age_hours: float = 72.0       # 기동 시 이보다 오래된 결과 파일 정리 (0=안 함)
+
     # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20
 

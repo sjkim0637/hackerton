@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from ..ai import ProviderError, is_known, normalize_object_type
 from ..ai.colormatch import check_result_anomaly, match_to_source
-from ..ai.imageops import ensure_jpeg_size, image_size
+from ..ai.imageops import cap_jpeg_bytes, ensure_jpeg_size, image_size
+from ..cleanup import prune_scene_results
 from ..config import get_settings
 from ..deps import get_provider, get_store
 from ..ids import new_job_id, new_keyframe_id, new_object_id, new_scene_id
@@ -23,6 +24,7 @@ from ..schemas import (
     KeyframeOut,
     ObjectInfoOut,
     RemoveObjectRequest,
+    ResultInfoOut,
     SceneCreate,
     SceneOut,
 )
@@ -220,6 +222,15 @@ def _run_job(
                               job_id, [round(g, 3) for g in cm.gains])
                     final_bytes = cm.image_bytes
 
+            # --- 폰 전달 최적화: 너무 크면 품질만 낮춰 압축 (해상도는 유지) ---
+            final_bytes, cap = cap_jpeg_bytes(final_bytes, settings.result_max_bytes)
+            if cap.get("capped"):
+                _log.info(
+                    "[job %s] 결과 압축: %d → %d bytes (q%s)%s",
+                    job_id, cap["original_bytes"], cap["bytes"], cap.get("quality"),
+                    " " + cap["note"] if cap.get("note") else "",
+                )
+
             results_dir = settings.scenes_dir / scene_id / "results"
             results_dir.mkdir(parents=True, exist_ok=True)
             out_path = results_dir / f"{job_id}.jpg"
@@ -235,6 +246,10 @@ def _run_job(
             _log.info(
                 "[job %s] done → %s (%d bytes, 시도 %d회)",
                 job_id, out_path.name, len(final_bytes), attempt,
+            )
+            # 오래된 결과 정리 (scene 당 개수 상한). job 기록은 남기고 파일만 지운다.
+            prune_scene_results(
+                settings.scenes_dir, scene_id, settings.result_keep_per_scene
             )
             return
         except ProviderError as exc:
@@ -323,6 +338,41 @@ def get_job(scene_id: str, job_id: str) -> JobOut:
     return _job_out(job)
 
 
+@router.get("/scenes/{scene_id}/results", response_model=list[ResultInfoOut])
+def list_results(scene_id: str) -> list[dict]:
+    """이 scene 의 복원 결과를 job 단위 버전으로 최신순 나열한다.
+
+    같은 scene 에서 여러 번 삭제 요청을 해도 결과는 job_id 로 분리돼 덮어써지지 않는다.
+    오래된 결과가 정리(삭제)됐으면 `available=false` 로 표시되고 기록만 남는다.
+    """
+    _require_scene(scene_id)
+    out: list[dict] = []
+    for job in get_store().list_jobs(scene_id):
+        result_path = job.get("result_path")
+        size_bytes: int | None = None
+        available = False
+        if job["status"] == "done" and result_path:
+            p = Path(result_path)
+            if p.is_file():
+                available = True
+                size_bytes = p.stat().st_size
+        out.append(
+            {
+                "job_id": job["job_id"],
+                "keyframe_id": job["keyframe_id"],
+                "status": job["status"],
+                "result_image_url": job.get("result_url") if available else None,
+                "changed_region": job.get("changed_region"),
+                "error": job.get("error"),
+                "created_at": job["created_at"],
+                "updated_at": job["updated_at"],
+                "size_bytes": size_bytes,
+                "available": available,
+            }
+        )
+    return out
+
+
 @router.get("/scenes/{scene_id}/results/{job_id}.jpg")
 def get_job_result_image(scene_id: str, job_id: str) -> FileResponse:
     _require_scene(scene_id)
@@ -331,4 +381,9 @@ def get_job_result_image(scene_id: str, job_id: str) -> FileResponse:
         raise HTTPException(status_code=404, detail=f"작업 없음: {job_id}")
     if job["status"] != "done" or not job.get("result_path"):
         raise HTTPException(status_code=409, detail=f"결과가 아직 없습니다 (status={job['status']})")
+    if not Path(job["result_path"]).is_file():
+        raise HTTPException(
+            status_code=410,
+            detail=f"결과 파일이 정리되어 더 이상 없습니다: {job_id} (GET /scenes/{scene_id}/results 로 버전 목록 확인)",
+        )
     return FileResponse(job["result_path"], media_type="image/jpeg")

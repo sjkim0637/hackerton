@@ -55,7 +55,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 - [DONE] 사용자 2: 색감 보정(마스크 밖 평균에 맞춘 채널 게인) + 이상 결과 감지
   (마스크 밖 MAD/채널편차 임계값, 해상도 검사) → `app/ai/colormatch.py`,
   `docs/handoffs/user2.md`.
-- [TODO] 재투영 보정, 가림(occlusion) 처리, 회전 slerp.
+- [DONE] 사용자 3: 결과 버전 관리(`GET /scenes/{id}/results` 목록, job 단위로 안 덮어씀,
+  정리된 버전은 `available:false`) · 임시 저장 정리(`app/cleanup.py` — scene 당 개수
+  `INTERIOR_RESULT_KEEP_PER_SCENE`, 기동 시 기간 `INTERIOR_RESULT_MAX_AGE_HOURS`) ·
+  폰 전달 최적화(`cap_jpeg_bytes` — `INTERIOR_RESULT_MAX_BYTES` 초과 시 품질만 낮춤,
+  해상도 유지). `pytest` 34개. `docs/handoffs/user3.md`.
+- [TODO] 재투영 보정, 가림(occlusion) 처리, 회전 slerp. 정리된 job row TTL, 기간 정리 주기 실행.
 
 ## PHASE 2 이후 (개요만)
 

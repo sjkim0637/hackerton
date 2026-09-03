@@ -122,6 +122,22 @@ class JobOut(BaseModel):
     error: str | None = None
 
 
+class ResultInfoOut(BaseModel):
+    """`GET /scenes/{id}/results` 의 항목. 같은 scene 의 복원 결과를 job 단위 버전으로 나열한다."""
+
+    job_id: str
+    keyframe_id: str
+    status: Literal["queued", "running", "done", "failed"]
+    result_image_url: str | None = None
+    changed_region: dict | None = None
+    error: str | None = None
+    created_at: str
+    updated_at: str
+    size_bytes: int | None = None
+    # 오래된 결과 정리로 파일이 삭제됐으면 false (job 기록은 남는다).
+    available: bool = False
+
+
 # --------------------------------------------------------------------- 가구 카탈로그
 
 class FurnitureSize(BaseModel):

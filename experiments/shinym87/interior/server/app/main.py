@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .ai import provider_status
+from .cleanup import sweep_old_results
 from .config import get_settings
 from .routers import catalog, scenes
 
@@ -41,6 +42,9 @@ def create_app() -> FastAPI:
         settings.ai_max_retries, settings.ai_cost_per_call_usd,
         settings.max_ai_calls_per_scene,
     )
+
+    # 오래된 결과 이미지 정리 (기간 기준). 개수 기준은 결과 생성 시마다 처리한다.
+    sweep_old_results(settings.scenes_dir, settings.result_max_age_hours)
 
     app = FastAPI(
         title="Interior AR — Server / Integration",

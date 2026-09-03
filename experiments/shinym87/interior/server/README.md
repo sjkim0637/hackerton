@@ -16,6 +16,7 @@
 | 사물 정보 저장 (형식만, 인식 없음) | 키프레임 메타의 `targetObject` 또는 `remove-object` 요청 → `objects` 테이블, `GET /scenes/{id}/objects` |
 | 외부 AI 연결 구조 | `app/ai/` — `base.RemoveObjectProvider`, `mock`, `external`(자리만), `build_provider()` |
 | 사물 제거 + 복원 작업 | `POST /scenes/{id}/remove-object` → job, `GET /scenes/{id}/jobs/{job_id}`, `GET /scenes/{id}/results/{job_id}.jpg` |
+| 복원 결과 버전 목록 | `GET /scenes/{id}/results` — scene 의 모든 job 을 최신순으로 (정리된 버전은 `available:false`) |
 | 가구 데이터 API | `GET /catalog`, `GET /catalog/{id}` (`catalog/furniture.json`) |
 
 부가: 동일 `(keyframe_id, target)` 재요청은 캐시된 job 반환, 작업당 외부 AI 호출 상한
@@ -69,6 +70,16 @@ INTERIOR_AI_MODEL=gemini-3.1-flash-image
 - 이상 결과 감지 — 마스크 밖 영역이 원본과 크게 다르면(`INTERIOR_RESULT_ANOMALY_FAIL_MAD`
   기본 55) job 을 `failed` 로, 다소 다르면(`..._WARN_MAD` 22) 경고 로그. 결과 해상도가
   64px 미만이어도 fail.
+
+**결과 관리** (`app/cleanup.py`, `app/ai/imageops.cap_jpeg_bytes`):
+- 버전 관리 — 결과는 `data/scenes/{scene}/results/{job}.jpg` 로 job 마다 분리 저장되어
+  덮어써지지 않는다. `GET /scenes/{id}/results` 로 전체 버전을 최신순 조회.
+- 임시 저장 정리 — scene 당 최근 `INTERIOR_RESULT_KEEP_PER_SCENE`(기본 12)개만 남기고
+  나머지는 결과 생성 시마다 파일 삭제. 서버 기동 시 `INTERIOR_RESULT_MAX_AGE_HOURS`
+  (기본 72)보다 오래된 결과 파일도 삭제. **파일만** 지우고 job 기록은 남으며,
+  지워진 버전의 이미지 요청은 410. 각 값 `0` = 해당 정리 안 함.
+- 폰 전달 최적화 — 결과 JPEG 이 `INTERIOR_RESULT_MAX_BYTES`(기본 5MB)를 넘으면
+  품질만 낮춰 재인코딩(해상도 유지).
 
 키를 넣은 뒤 실제 결과 확인 (실사진 권장):
 

@@ -55,6 +55,47 @@ PHASE 1 + PHASE 2 "사용자 3 (서버 / 통합)".
 - 중복 방지·한도 체크는 서버가 단일 프로세스라는 가정. 동시에 들어온 서로 다른 요청 2건이
   한도 체크를 같이 통과할 수 있는 미세 레이스 존재 (해커톤 범위에선 무시).
 
+## PHASE 3 — 결과 버전 관리 / 임시 저장 정리 / 폰 전달 최적화 (2026-09-03)
+
+1. **복원 결과 버전 관리 + 목록 조회 API**
+   - 결과 파일은 이미 `data/scenes/{scene}/results/{job_id}.jpg` 로 job 단위 분리 →
+     같은 scene 에서 여러 번 삭제 요청해도 **덮어써지지 않는다**. 별도 저장 구조 변경 없음.
+   - 신규 `GET /scenes/{id}/results` → 이 scene 의 모든 job 을 최신순으로 나열.
+     항목: `job_id, keyframe_id, status, result_image_url, changed_region, error,
+     created_at, updated_at, size_bytes, available`. (`store.list_jobs`,
+     `schemas.ResultInfoOut`)
+   - 정리로 파일이 지워진 버전은 `available:false` + `result_image_url:null` 로 표시되고
+     job 기록(상태·영역·시각)은 남는다. 그 결과 이미지 직접 요청은 **410 Gone**
+     (기존 "결과 없음"은 409 유지 — 아직 처리 중인 경우).
+   - 중복 요청은 기존대로 같은 job 을 재사용하므로 새 버전이 안 생긴다.
+   - 테스트: `test_results.py::test_list_results_keeps_every_job_as_version`,
+     `::test_list_results_missing_scene_404`.
+2. **결과 이미지 임시 저장 정리** (`app/cleanup.py`)
+   - 개수 기준: `_run_job` 이 결과를 저장한 뒤 `prune_scene_results()` 호출 →
+     scene 당 최근 `INTERIOR_RESULT_KEEP_PER_SCENE`(기본 12)개만 남기고 오래된 파일부터 삭제.
+     mtime 우선, 동률이면 파일명(seq zero-pad) 순.
+   - 기간 기준: 서버 기동 시 `main.create_app()` 에서 `sweep_old_results()` 한 번 →
+     모든 scene 에서 `INTERIOR_RESULT_MAX_AGE_HOURS`(기본 72h)보다 오래된 결과 파일 삭제.
+   - 둘 다 **파일만** 지우고 DB row 는 유지 (목록에서 이력 확인 가능). 값 `0` 이면 해당 정리 안 함.
+   - 테스트: `::test_old_results_pruned_by_count`, `::test_sweep_old_results_by_age`.
+3. **스마트폰 전달 최적화 — 용량 캡** (`app/ai/imageops.cap_jpeg_bytes`)
+   - 후처리까지 끝난 결과 JPEG 이 `INTERIOR_RESULT_MAX_BYTES`(기본 5,000,000)를 넘으면
+     품질을 `82→72→62` 로 낮춰 재인코딩. **해상도는 유지**(결과 quad 텍스처 저해상도 방지,
+     e2e "원본과 같은 해상도" 불변식 유지). 최저 품질에서도 못 줄이면 그대로 저장 + 경고 로그.
+   - 로그: `[job X] 결과 압축: 8,300,000 → 4,700,000 bytes (q72)`.
+   - 테스트: `::test_cap_jpeg_bytes_shrinks_but_keeps_resolution`,
+     `::test_cap_jpeg_bytes_noop_when_small_or_disabled`.
+
+새 설정(`config.py`, `.env.example`): `INTERIOR_RESULT_MAX_BYTES`,
+`INTERIOR_RESULT_KEEP_PER_SCENE`, `INTERIOR_RESULT_MAX_AGE_HOURS`.
+검증: `pytest` **34개 통과**(신규 6), `scripts/e2e_check.py --ai-provider mock` 14/14 PASS.
+
+### 알려진 한계 (PHASE 3 이후)
+- 정리는 파일만 지우고 job row 는 무한정 쌓인다 (해커톤 범위). 필요 시 row 도 TTL 정리.
+- 용량 캡은 품질만 낮춘다. 초고해상도 결과가 최저 품질에서도 한도를 넘으면 다운스케일이
+  필요하지만, 그러면 해상도 불변식이 깨지므로 지금은 안 한다.
+- 기간 정리는 기동 시 1회뿐. 장시간 떠 있는 서버는 주기 실행(스케줄러)이 필요.
+
 ## Completed
 
 PHASE 1 사용자 3 항목을 `experiments/shinym87/interior/server/` 에 구현했다.
@@ -117,9 +158,10 @@ experiments/shinym87/interior/server/
    ├─ store.py                SQLite + 파일 저장 (scenes/keyframes/objects/jobs)
    ├─ ids.py                  scene_/kf_/obj_/job_ 생성
    ├─ deps.py                 Store / provider 싱글턴
-   ├─ ai/                     base·mock·external·build_provider
+   ├─ cleanup.py              결과 이미지 정리 (개수: prune_scene_results / 기간: sweep_old_results)
+   ├─ ai/                     base·mock·external·objects·colormatch·imageops·build_provider
    └─ routers/
-      ├─ scenes.py            세션·키프레임·objects·remove-object·jobs·results
+      ├─ scenes.py            세션·키프레임·objects·remove-object·jobs·results(목록/이미지)
       └─ catalog.py           가구 데이터 API
 ```
 

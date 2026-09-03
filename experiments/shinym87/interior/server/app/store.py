@@ -231,6 +231,15 @@ class Store:
             ).fetchone()
         return self._job_row(row)
 
+    def list_jobs(self, scene_id: str) -> list[dict[str, Any]]:
+        """이 scene 의 모든 job 을 최신순으로. (결과 버전 목록 조회용)"""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE scene_id = ? ORDER BY created_at DESC, job_id DESC",
+                (scene_id,),
+            ).fetchall()
+        return [j for r in rows if (j := self._job_row(r)) is not None]
+
     def count_jobs(self, scene_id: str) -> int:
         with self._conn() as conn:
             row = conn.execute(
