@@ -11,7 +11,26 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 "사용자 1 (공간 / AR)" 남은 작업.
+PHASE 1 + PHASE 2 "사용자 1 (공간 / AR)".
+
+## PHASE 2 — 사물 종류 선택 (2026-09-03)
+
+"TV 선택 모드" 하나로 고정이던 걸, **지울 사물 종류를 고를 수 있게** 바꿨다.
+
+- `activity_main.xml`: 서버 주소 입력창 아래에 `objectTypeSpinner`(Spinner) 추가.
+  라벨: TV / 소파 / 테이블 / 의자 / 선반. 접힌 상태는 흰 글씨
+  (`res/layout/spinner_item_light.xml`), 펼친 목록은 기본 흰 배경.
+- `RemovalController`:
+  - `OBJECT_TYPES = [("tv","TV"),("sofa","소파"),("table","테이블"),("chair","의자"),("shelf","선반")]`
+    — 서버 키는 `server/catalog/furniture.json` 의 category 와 맞췄다.
+  - `selectedObjectType()` 가 스피너 선택값의 **서버 키**를 돌려준다.
+  - "삭제 요청" 시점에 그 값을 잡아 `buildMetaJson(... objectType)` 의 `targetObject.objectType`
+    와 `requestRemoveObject(... objectType)` 에 그대로 넣는다. **더 이상 "tv" 하드코딩 없음.**
+  - 버튼 라벨 "TV 선택 모드" → "영역 선택 모드". 드래그 안내 문구에 선택한 종류 표시.
+  - 처리 중에는 스피너도 비활성화(`setControlsEnabled`).
+- 서버는 `object_type` 을 자유 문자열로 받으므로(스키마 `str`) 변경 불필요.
+  Gemini 프롬프트가 `Remove the {object_type} ...` 로 그대로 반영된다.
+- 나머지 흐름(선택 영역 표시 · 삭제 버튼 · 결과 수신 · 벽면 적용 · 삭제 전/후)은 그대로.
 
 ## Completed
 

@@ -9,9 +9,11 @@ import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
+import android.widget.ArrayAdapter
 import com.google.ar.core.Anchor
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
+import com.hackathon.interior.R
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
 import io.github.sceneview.ar.ARSceneView
@@ -65,12 +67,26 @@ class RemovalController(
 
     init {
         binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
+
+        binding.objectTypeSpinner.adapter = ArrayAdapter(
+            activity,
+            R.layout.spinner_item_light,
+            OBJECT_TYPES.map { it.second },
+        ).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
         binding.bboxSelectionView.onRectFinalized = ::onRectSelected
         binding.btnTvSelectMode.setOnClickListener { toggleSelectionMode() }
         binding.btnClearSelection.setOnClickListener { clearSelection() }
         binding.btnRequestRemove.setOnClickListener { requestRemoval() }
         binding.btnToggleRemoval.setOnClickListener { toggleBeforeAfter() }
     }
+
+    /** 스피너에서 고른 사물의 서버 키(tv / sofa / table …). */
+    private fun selectedObjectType(): String =
+        OBJECT_TYPES[binding.objectTypeSpinner.selectedItemPosition.coerceIn(0, OBJECT_TYPES.lastIndex)].first
+
+    private fun selectedObjectLabel(): String =
+        OBJECT_TYPES[binding.objectTypeSpinner.selectedItemPosition.coerceIn(0, OBJECT_TYPES.lastIndex)].second
 
     // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
 
@@ -82,13 +98,13 @@ class RemovalController(
             binding.bboxSelectionView.visibility = View.VISIBLE
             binding.btnTvSelectMode.text = "선택 모드 끄기"
             binding.btnClearSelection.visibility = View.VISIBLE
-            status("화면에서 지울 물체 위를 사각형으로 드래그하세요")
+            status("화면에서 지울 ${selectedObjectLabel()} 위를 사각형으로 드래그하세요")
         } else {
             selectionMode = false
             binding.bboxSelectionView.isSelecting = false
             val hasSelection = bboxNorm != null
             binding.bboxSelectionView.visibility = if (hasSelection) View.VISIBLE else View.GONE
-            binding.btnTvSelectMode.text = "TV 선택 모드"
+            binding.btnTvSelectMode.text = "영역 선택 모드"
             binding.btnClearSelection.visibility = if (hasSelection) View.VISIBLE else View.GONE
             status(if (hasSelection) "영역 지정됨 · '삭제 요청'을 누르세요" else "")
         }
@@ -106,7 +122,7 @@ class RemovalController(
         binding.bboxSelectionView.isSelecting = false
         binding.bboxSelectionView.clear()
         binding.bboxSelectionView.visibility = View.GONE
-        binding.btnTvSelectMode.text = "TV 선택 모드"
+        binding.btnTvSelectMode.text = "영역 선택 모드"
         binding.btnClearSelection.visibility = View.GONE
         binding.btnRequestRemove.isEnabled = false
         clearResult()
@@ -128,10 +144,10 @@ class RemovalController(
         selectionMode = false
         binding.bboxSelectionView.isSelecting = false
         binding.bboxSelectionView.visibility = View.VISIBLE   // 그린 사각형은 확인용으로 유지
-        binding.btnTvSelectMode.text = "TV 선택 모드"
+        binding.btnTvSelectMode.text = "영역 선택 모드"
         binding.btnClearSelection.visibility = View.VISIBLE
         binding.btnRequestRemove.isEnabled = true
-        status("영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 'TV 선택 모드')")
+        status("영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')")
     }
 
     /** 사각형 중심/네 변에서 hitTest 해 벽 앵커와 실제 크기(m), 평면 정보를 잡는다. */
@@ -174,9 +190,10 @@ class RemovalController(
     private fun requestRemoval() {
         if (busy) return
         val bbox = bboxNorm ?: run {
-            status("먼저 'TV 선택 모드'로 지울 영역을 지정하세요")
+            status("먼저 '영역 선택 모드'로 지울 영역을 지정하세요")
             return
         }
+        val objectType = selectedObjectType()
         val client = InteriorApiClient(currentBaseUrl())
         busy = true
         setControlsEnabled(false)
@@ -189,10 +206,10 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
-            val meta = buildMetaJson(imageW, imageH, bbox)
+            val meta = buildMetaJson(imageW, imageH, bbox, objectType)
             scope.launch {
                 try {
-                    runFlow(client, jpeg, meta, bbox)
+                    runFlow(client, jpeg, meta, bbox, objectType)
                 } catch (e: Exception) {
                     status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
                 } finally {
@@ -208,6 +225,7 @@ class RemovalController(
         jpeg: ByteArray,
         metaJson: String,
         bbox: FloatArray,
+        objectType: String,
     ) {
         status("세션 생성 중…")
         val sceneId = client.createScene()
@@ -216,7 +234,7 @@ class RemovalController(
         val keyframeId = client.uploadKeyframe(sceneId, jpeg, metaJson)
 
         status("삭제 요청 전송 중…")
-        val jobId = client.requestRemoveObject(sceneId, keyframeId, bbox, "tv")
+        val jobId = client.requestRemoveObject(sceneId, keyframeId, bbox, objectType)
 
         var job = client.getJob(sceneId, jobId)
         var tries = 0
@@ -335,7 +353,7 @@ class RemovalController(
         }, 100L)
     }
 
-    private fun buildMetaJson(imageW: Int, imageH: Int, bbox: FloatArray): String {
+    private fun buildMetaJson(imageW: Int, imageH: Int, bbox: FloatArray, objectType: String): String {
         val meta = JSONObject()
         meta.put("capturedAt", isoNow())
         meta.put("imageSize", JSONObject().put("width", imageW).put("height", imageH))
@@ -379,7 +397,7 @@ class RemovalController(
         meta.put(
             "targetObject",
             JSONObject()
-                .put("objectType", "tv")
+                .put("objectType", objectType)
                 .put(
                     "region",
                     JSONObject()
@@ -439,11 +457,21 @@ class RemovalController(
         binding.btnClearSelection.isEnabled = enabled
         binding.btnRequestRemove.isEnabled = enabled && bboxNorm != null
         binding.serverUrlInput.isEnabled = enabled
+        binding.objectTypeSpinner.isEnabled = enabled
     }
 
     private companion object {
         const val DEFAULT_SERVER_URL = "http://192.168.0.2:8000"
         const val KEY_SERVER_URL = "server_url"
+
+        /** 서버 키 → 화면 표시 라벨. server/catalog/furniture.json 의 category 와 맞춘다. */
+        val OBJECT_TYPES = listOf(
+            "tv" to "TV",
+            "sofa" to "소파",
+            "table" to "테이블",
+            "chair" to "의자",
+            "shelf" to "선반",
+        )
 
         val IDENTITY_16 = floatArrayOf(
             1f, 0f, 0f, 0f,

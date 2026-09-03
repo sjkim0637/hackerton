@@ -32,9 +32,15 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 이미지 1장을 써서 세션→키프레임 업로드→remove-object→job 폴링→결과 이미지
 다운로드→서버 저장 파일 확인까지 실제 HTTP 로 13단계 PASS.
 
+## PHASE 2 (진행 중)
+
+- [DONE] 앱: 지울 사물 종류 선택(Spinner: TV/소파/테이블/의자/선반) → 서버 요청의
+  `objectType` 이 선택값을 따라감 (더 이상 "tv" 하드코딩 아님). `RemovalController`,
+  `activity_main.xml`, `res/layout/spinner_item_light.xml`.
+- 사물 영역 정밀화(마스크), AI 프롬프트 개선(경계 seam·그림자), 재시도/중복호출 방지
+
 ## PHASE 2 이후 (개요만)
 
-- PHASE 2: 사물 영역 정밀화(마스크), AI 프롬프트 개선, 경계 보정, 재시도/중복호출 방지
 - PHASE 3: 복원 이미지 공간 고정 안정화, 카메라 이동 시 흔들림/재투영 보정, 가림 처리
 - PHASE 4: 기존 가구 떼어내기(원위치 저장) → 이동/회전/크기, undo/redo
 - PHASE 5: 새 가구 카탈로그 배치, 바닥/벽 자동 맞춤, 벽지/색상 변경

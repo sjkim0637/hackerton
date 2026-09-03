@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spinner 접힌 상태(카메라 위)에서 흰 글씨로 보이게 하는 아이템 레이아웃.
+     펼친 목록은 android.R.layout.simple_spinner_dropdown_item(흰 배경/검은 글씨)을 쓴다. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:textColor="@android:color/white"
+    android:textSize="14sp"
+    android:paddingVertical="8dp"
+    android:paddingHorizontal="6dp"
+    android:singleLine="true"
+    android:ellipsize="end" />

@@ -111,6 +111,34 @@
             android:hint="서버 주소 (예: http://192.168.0.10:8000)"
             android:importantForAutofill="no" />
 
+        <!-- 지울 사물 종류. 서버 요청의 objectType 이 이 선택값을 따라간다. -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="지울 사물"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:shadowColor="@android:color/black"
+                android:shadowRadius="6" />
+
+            <Spinner
+                android:id="@+id/objectTypeSpinner"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="96dp"
+                android:background="#33FFFFFF"
+                android:popupBackground="#FFFFFF" />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -122,7 +150,7 @@
                 android:id="@+id/btnTvSelectMode"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="TV 선택 모드" />
+                android:text="영역 선택 모드" />
 
             <Button
                 android:id="@+id/btnClearSelection"

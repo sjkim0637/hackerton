@@ -39,6 +39,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
 | 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` |
 | 제거할 물체 영역 드래그 지정 (bbox) + 선택 취소 | `remove/BboxSelectionView.kt`, `RemovalController.clearSelection()` |
+| 지울 사물 종류 선택 (TV/소파/테이블/의자/선반) → 요청 `objectType` 반영 | `objectTypeSpinner`, `RemovalController.selectedObjectType()` |
 | 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
 | job 폴링 → 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
 
