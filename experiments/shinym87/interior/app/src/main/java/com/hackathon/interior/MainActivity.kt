@@ -69,15 +69,6 @@ class MainActivity : AppCompatActivity() {
             afterCapture = afterCapture,
         )
 
-        moved = MovedObjectController(
-            activity = this,
-            sceneView = sceneView,
-            space = space,
-            binding = binding,
-            furnitureHasSelection = furniture::hasSelection,
-            status = { binding.removalStatusText.text = it },
-        )
-
         removal = RemovalController(
             activity = this,
             scope = lifecycleScope,
@@ -86,8 +77,21 @@ class MainActivity : AppCompatActivity() {
             binding = binding,
             onBeforeCapture = beforeCapture,
             onAfterCapture = afterCapture,
-            onRemovalApplied = { type, bmp, pose, w, h -> moved.arm(type, bmp, pose, w, h) },
-            onRemovalCleared = { moved.disarm(announce = false) },
+            onRemovalApplied = { sid, jid, type, bmp, pose, src, w, h ->
+                moved.arm(sid, jid, type, bmp, pose, src, w, h)
+            },
+            onRemovalCleared = { moved.disarm() },
+        )
+
+        moved = MovedObjectController(
+            activity = this,
+            sceneView = sceneView,
+            space = space,
+            binding = binding,
+            scope = lifecycleScope,
+            serverBaseUrl = { removal.serverBaseUrl() },
+            furnitureHasSelection = furniture::hasSelection,
+            status = { binding.removalStatusText.text = it },
         )
 
         space.onFrame = {

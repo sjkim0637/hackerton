@@ -265,6 +265,28 @@
                 android:layout_marginStart="8dp"
                 android:text="회전 ⟳" />
         </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnMovedRestore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:enabled="false"
+                android:text="서버 배치 복원" />
+
+            <Button
+                android:id="@+id/btnMovedUndo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:enabled="false"
+                android:text="실행 취소" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 가구를 선택하면 나타나는 조작 패널 (핀치로도 크기 조절 가능) -->

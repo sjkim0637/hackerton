@@ -31,6 +31,18 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         val error: String?,
     )
 
+    /** PHASE 4: 서버에 저장된 재배치(이동/회전/크기) 한 건. */
+    data class Placement(
+        val placementId: String,
+        val jobId: String?,
+        val objectType: String,
+        val scale: Float,
+        val rotationDeg: Float,
+        val plane: String?,           // "wall" | "floor" | null
+        val sourceRect: FloatArray?,  // source_region.rect [x, y, w, h] 정규화
+        val status: String,           // active | undone
+    )
+
     suspend fun createScene(): String = withContext(Dispatchers.IO) {
         val conn = open("/scenes", "POST")
         conn.doOutput = true
@@ -103,6 +115,75 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
             changedRect = rect,
             error = json.optString("error").ifEmpty { null },
         )
+    }
+
+    // ---------------------------------------------------------- 재배치 (PHASE 4)
+
+    /** `POST /scenes/{id}/placements` — 이동/회전/크기 상태 저장. placement_id 반환. */
+    suspend fun createPlacement(
+        sceneId: String,
+        objectType: String,
+        position: FloatArray,     // [x, y, z] (ARCore 월드, 세션 로컬)
+        rotation: FloatArray,     // [x, y, z, w]
+        scale: Float,
+        rotationDeg: Float,
+        plane: String?,           // "wall" | "floor" | null
+        jobId: String?,
+        sourceRect: FloatArray?,  // 원래 제거 bbox [x, y, w, h] 정규화
+    ): String = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("object_type", objectType)
+            .put(
+                "pose",
+                JSONObject()
+                    .put("position", JSONArray(position.map { it.toDouble() }))
+                    .put("rotation", JSONArray(rotation.map { it.toDouble() })),
+            )
+            .put("scale", scale.toDouble())
+            .put("rotation_deg", rotationDeg.toDouble())
+        if (plane != null) body.put("plane", plane)
+        if (jobId != null) body.put("job_id", jobId)
+        if (sourceRect != null) {
+            body.put(
+                "source_region",
+                JSONObject().put("type", "bbox").put("rect", JSONArray(sourceRect.map { it.toDouble() })),
+            )
+        }
+        val conn = open("/scenes/$sceneId/placements", "POST")
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        JSONObject(readBody(conn)).getString("placement_id")
+    }
+
+    /** `GET /scenes/{id}/placements` 의 마지막(최신) active 배치. 없으면 null. */
+    suspend fun latestActivePlacement(sceneId: String): Placement? = withContext(Dispatchers.IO) {
+        val arr = JSONArray(readBody(open("/scenes/$sceneId/placements", "GET")))
+        if (arr.length() == 0) return@withContext null
+        val o = arr.getJSONObject(0)   // 서버가 최신순 정렬
+        val rect = o.optJSONObject("source_region")?.optJSONArray("rect")?.let { a ->
+            FloatArray(a.length()) { i -> a.getDouble(i).toFloat() }
+        }
+        Placement(
+            placementId = o.getString("placement_id"),
+            jobId = o.optString("job_id").ifEmpty { null },
+            objectType = o.optString("object_type", "other"),
+            scale = o.optDouble("scale", 1.0).toFloat(),
+            rotationDeg = o.optDouble("rotation_deg", 0.0).toFloat(),
+            plane = o.optString("plane").ifEmpty { null },
+            sourceRect = rect,
+            status = o.optString("status", "active"),
+        )
+    }
+
+    /** `POST /scenes/{id}/placements/undo` — true=취소함, false=취소할 배치 없음(404). */
+    suspend fun undoPlacement(sceneId: String): Boolean = withContext(Dispatchers.IO) {
+        val conn = open("/scenes/$sceneId/placements/undo", "POST")
+        when (val code = conn.responseCode) {
+            in 200..299 -> true
+            404 -> false
+            else -> error("HTTP $code: ${conn.errorStream?.readBytes()?.decodeToString().orEmpty()}")
+        }
     }
 
     suspend fun downloadBytes(pathOrUrl: String): ByteArray = withContext(Dispatchers.IO) {

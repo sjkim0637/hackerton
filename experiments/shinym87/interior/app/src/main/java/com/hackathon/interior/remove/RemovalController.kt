@@ -51,8 +51,13 @@ class RemovalController(
     private val binding: ActivityMainBinding,
     private val onBeforeCapture: () -> Unit = {},
     private val onAfterCapture: () -> Unit = {},
-    /** 삭제 완료 시: (종류, 캡처한 사물 이미지, 원래 위치, 폭 m, 높이 m) — PHASE 4 이동용. */
-    private val onRemovalApplied: (String, Bitmap?, Pose?, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    /**
+     * 삭제 완료 시 — PHASE 4 이동/서버 저장용.
+     * (sceneId, jobId, 종류, 캡처한 사물 이미지, 원래 위치, 원래 bbox[x,y,w,h], 폭 m, 높이 m)
+     */
+    private val onRemovalApplied: (
+        String, String?, String, Bitmap?, Pose?, FloatArray?, Float, Float,
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     /** 선택 취소 등으로 삭제 결과를 물릴 때. 이동된 사물도 함께 정리하라는 신호. */
     private val onRemovalCleared: () -> Unit = {},
 ) {
@@ -247,15 +252,27 @@ class RemovalController(
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
 
-    /** 입력창의 서버 주소를 정규화(스킴 보정, 끝 슬래시 제거)하고 저장한다. */
-    private fun currentBaseUrl(): String {
-        var url = binding.serverUrlInput.text?.toString()?.trim().orEmpty()
+    /** 스킴 보정 + 끝 슬래시 제거만 (부수효과 없음). */
+    private fun normalizeServerUrl(input: String): String {
+        var url = input.trim()
         if (url.isEmpty()) url = DEFAULT_SERVER_URL
         if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
-        url = url.trimEnd('/')
+        return url.trimEnd('/')
+    }
+
+    /** 입력창의 서버 주소를 정규화하고 입력창/prefs 에 반영한다. (삭제 요청 시) */
+    private fun currentBaseUrl(): String {
+        val url = normalizeServerUrl(binding.serverUrlInput.text?.toString().orEmpty())
         prefs.edit().putString(KEY_SERVER_URL, url).apply()
         binding.serverUrlInput.setText(url)
         return url
+    }
+
+    /** 지금 저장된 서버 주소를 부수효과 없이 돌려준다. (이동 배치 저장/복원 API 용) */
+    fun serverBaseUrl(): String {
+        val raw = binding.serverUrlInput.text?.toString()?.trim().orEmpty()
+            .ifEmpty { prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL }
+        return normalizeServerUrl(raw)
     }
 
     private fun requestRemoval() {
@@ -341,9 +358,11 @@ class RemovalController(
             }
         applyResult(bitmap, job.changedRect ?: bbox)
 
-        // PHASE 4: 이제 이 사물을 "다른 위치로 이동" 할 수 있게 이동 컨트롤러에 넘긴다.
+        // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
         onRemovalApplied(
-            objectType, capturedObjectBitmap, originalObjectPose, patchWidthM, patchHeightM,
+            sceneId, jobId, objectType,
+            capturedObjectBitmap, originalObjectPose, bbox,
+            patchWidthM, patchHeightM,
         )
     }
 

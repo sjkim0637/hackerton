@@ -13,6 +13,42 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 "사용자 1 (공간 / AR)".
 
+## PHASE 4 — 재배치를 서버(placements API)와 연동 (2026-09-03)
+
+이동/회전/크기 상태를 **서버에 저장**하고, 앱을 다시 켜면(또는 "서버 배치 복원" 버튼으로)
+`source_region` 기준으로 **현재 세션에 맞게 다시 hitTest 해서 복원**한다. "실행 취소" 버튼은
+서버 `placements/undo` 를 호출하고 화면에서도 그 배치를 없앤다. (사용자 3 이 만든 API 사용.)
+
+1. **배치 저장** (`MovedObjectController` + `InteriorApiClient.createPlacement`)
+   - `RemovalController.onRemovalApplied` 콜백이 이제 `(sceneId, jobId, type, bitmap,
+     originalPose, sourceRect, wM, hM)` 를 넘긴다 → `moved.arm(...)` 이 scene/job/원래 bbox 를
+     보관하고 `SharedPreferences("interior")` 에 `moved_last_scene`/`moved_last_job` 저장.
+   - 배치 확정("여기로 옮기기" 탭) · 드래그 종료(`onDragEnd`) · ＋－/핀치(`bump`) · 회전(`rotate`)
+     마다 `scheduleSave()` → **500ms 디바운스** 후 `POST /scenes/{id}/placements` 1회
+     (핀치 연속 이벤트를 합쳐 append 로그가 안 불어나게). body: `object_type`, `pose{position
+     [3], rotation[4]}`(앵커 현재 월드 pose), `scale`, `rotation_deg`, `plane`("wall"/"floor"),
+     `job_id`, `source_region`.
+2. **배치 복원** ("서버 배치 복원" 버튼 / `restoreFromServer`)
+   - 앱 재실행 시 `init` 이 `moved_last_scene` 를 읽어 패널을 열고 복원/취소 버튼만 활성화.
+   - 버튼 → `GET /scenes/{id}/placements` 의 **맨 앞(최신) active** 를 받아
+     `objectType/scale/rotation_deg/sourceRect` 적용, 사물 이미지는 서버의
+     `{job}_object.jpg`(사용자 2) 를 받아 씀(없으면 플레이스홀더).
+   - **pose 는 세션 로컬이라 안 쓴다** — `source_region` 중심을 현재 화면 좌표로 환산해
+     `space.hitTestPreferring(cx, cy, plane=="wall")` → 새 앵커에 재배치. 평면 미인식이면
+     "그 방향 비춘 뒤 다시 눌러주세요".
+3. **실행 취소** ("실행 취소" 버튼 / `undoOnServer`)
+   - `POST /scenes/{id}/placements/undo` → 200 이면 화면의 이동 노드 제거 + 예약된 저장 취소,
+     404("취소할 배치 없음")면 안내만. "원위치"(로컬로 지운 자리 되돌리기)와는 별개 버튼.
+
+`activity_main.xml` `movedObjectPanel` 에 버튼 2개 추가: `btnMovedRestore`("서버 배치 복원"),
+`btnMovedUndo`("실행 취소"). `RemovalController.serverBaseUrl()`(부수효과 없는 주소 읽기) 신설.
+
+검증: `POST/GET/undo` 라운드트립을 실서버로 스모크(앱이 만드는 JSON body 그대로) — 저장 2건 →
+목록 2 → undo → 1 → undo → 0 → undo 404 → `include_undone` 2, 전부 정상. `:app:assembleDebug` OK.
+실기기 확인 남음: 재실행 후 복원 시 hitTest 재정합 정확도.
+
+---
+
 ## PHASE 4 — 삭제한 사물을 다른 위치로 "이동" (개념 증명) (2026-09-03)
 
 지금까지 "삭제"만 하던 걸, 삭제한 사물을 **새 위치로 옮겨** "지운 자리 + 새 자리"
@@ -212,9 +248,9 @@ experiments/shinym87/interior/app/src/main/
    ├─ keyframe/BackgroundKeyframe.kt           "배경 촬영" 캡처 (동일 오버레이 제거 적용)
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
-      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json, baseUrl 주입
-      ├─ MovedObjectController.kt              PHASE 4: 삭제한 사물을 새 위치로 이동(탭/드래그/핀치/회전, 벽·바닥 자동)
-      └─ RemovalController.kt                  서버주소·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후·원래위치 저장
+      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json (+ createPlacement/latestActivePlacement/undoPlacement)
+      ├─ MovedObjectController.kt              PHASE 4: 이동(탭/드래그/핀치/회전, 벽·바닥 자동) + placements 저장·복원·undo
+      └─ RemovalController.kt                  서버주소(serverBaseUrl)·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후·원래위치+scene/job 전달
 ```
 
 ## Decisions

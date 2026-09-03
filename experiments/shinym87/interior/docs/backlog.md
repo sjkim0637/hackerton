@@ -85,7 +85,13 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   사물 종류별 벽(TV·선반)/바닥 자동 맞춤(`ArSpaceController.hitTestPreferring`),
   "원위치" 되돌리기. 큐브 시스템은 `hasSelection()` 추가 외 무변경. 빌드만 확인, 실기기 남음.
   `docs/handoffs/user1.md`.
-- [TODO] 이동된 사물 원근 보정(평면 사진 한계), `onFrame` EMA 스무딩 이식, undo/redo.
+- [DONE] 사용자 1: 재배치를 서버 `placements` API 와 연동 — 배치/드래그/회전/크기 변경마다
+  500ms 디바운스 `POST /placements`, "서버 배치 복원"(최신 active 를 `source_region` 기준
+  현재 세션에서 재 hitTest), "실행 취소"(`POST /placements/undo` + 화면 노드 제거).
+  `MovedObjectController` + `InteriorApiClient`(createPlacement/latestActivePlacement/
+  undoPlacement). 실서버 라운드트립 스모크 OK. `docs/handoffs/user1.md`.
+- [TODO] 이동된 사물 원근 보정(평면 사진 한계), `onFrame` EMA 스무딩 이식, redo, 복원 자동화
+  (평면 인식되면 버튼 없이).
 
 ## PHASE 2 이후 (개요만)
 
