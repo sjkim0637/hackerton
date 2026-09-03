@@ -34,10 +34,14 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 ## PHASE 2 (진행 중)
 
-- [DONE] 앱: 지울 사물 종류 선택(Spinner: TV/소파/테이블/의자/선반) → 서버 요청의
-  `objectType` 이 선택값을 따라감 (더 이상 "tv" 하드코딩 아님). `RemovalController`,
-  `activity_main.xml`, `res/layout/spinner_item_light.xml`.
-- 사물 영역 정밀화(마스크), AI 프롬프트 개선(경계 seam·그림자), 재시도/중복호출 방지
+- [DONE] 앱(사용자 1): 지울 사물 종류 선택(Spinner: TV/소파/테이블/의자/선반) → 서버 요청의
+  `objectType` 이 선택값을 따라감 (더 이상 "tv" 하드코딩 아님).
+- [DONE] 서버(사용자 2): 마스크 경계 비율 기반 페더링(`mask.py`), 사물 종류별 프롬프트
+  (`external.py` `_SURFACE_HINTS`/`_OBJECT_ALIASES`). Pexels 소파/테이블 사진으로 실테스트 —
+  TV 잘 됨(회귀 없음), 테이블 부분 성공(의자 잔존), 소파 실패(복잡한 배경). 상세는
+  `docs/handoffs/user2.md`.
+- [TODO] 정밀 세그멘테이션 마스크(bbox → 실제 사물 윤곽), "딸린 물건 같이 제거"
+  (테이블+의자), 재시도/중복호출 방지, remove-object 를 BackgroundTasks 밖 워커로.
 
 ## PHASE 2 이후 (개요만)
 

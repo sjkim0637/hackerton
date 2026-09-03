@@ -26,6 +26,55 @@ _DEFAULT_MODEL = "gemini-3.1-flash-image"
 
 _log = logging.getLogger("interior.ai.external")
 
+# 다양한 표기를 표준 키로 모은다 (앱 스피너는 tv/sofa/table/chair/shelf 를 보낸다).
+_OBJECT_ALIASES = {
+    "television": "tv", "monitor": "tv", "screen": "tv",
+    "couch": "sofa", "settee": "sofa", "loveseat": "sofa",
+    "desk": "table", "dining table": "table", "coffee table": "table", "side table": "table",
+    "armchair": "chair", "stool": "chair", "seat": "chair",
+    "bookshelf": "shelf", "bookcase": "shelf", "shelves": "shelf", "cabinet": "shelf",
+}
+
+# 사물 종류별로 "무엇을 복원해야 하는가" 가 다르다.
+_SURFACE_HINTS = {
+    "tv": (
+        "This TV is mounted on the wall. Rebuild the flat wall that was behind it: continue "
+        "the wall's colour, paint texture and any moulding, panel seams or wallpaper pattern "
+        "straight through the area. Also remove the wall bracket, any visible cables and the "
+        "faint rectangular shadow the TV cast on the wall."
+    ),
+    "sofa": (
+        "This sofa stands on the floor, usually against or near a wall. Rebuild the floor where "
+        "it sat with the same flooring material, plank/tile direction and perspective, and rebuild "
+        "the lower part of the wall and the skirting board / baseboard behind it. Remove the soft "
+        "contact shadow on the floor and any cushions or throws that belong to the sofa."
+    ),
+    "table": (
+        "This table stands on the floor. Rebuild one continuous, unbroken floor where it and its "
+        "legs were: match the plank or tile lines, grout, rug edges and the perspective. Remove "
+        "the shadow pooled under the table and anything resting on top of it."
+    ),
+    "chair": (
+        "This chair stands on the floor. Rebuild the continuous floor beneath it and its legs, "
+        "matching material, pattern direction and perspective, and remove the small contact "
+        "shadow it cast."
+    ),
+    "shelf": (
+        "This shelf is fixed to the wall. Rebuild the flat wall behind it (colour, texture and "
+        "any pattern) and remove its brackets, the items sitting on it and the shadow line it "
+        "cast on the wall."
+    ),
+}
+_DEFAULT_HINT = (
+    "Rebuild whatever surface was behind it — wall, floor, or both — matching the surrounding "
+    "colour, texture, pattern and perspective, and remove any shadow it cast."
+)
+
+
+def _normalize_object_type(object_type: str) -> str:
+    key = (object_type or "").strip().lower()
+    return _OBJECT_ALIASES.get(key, key)
+
 
 class ExternalRemoveObjectProvider(RemoveObjectProvider):
     name = "external"
@@ -132,17 +181,20 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
 
     @staticmethod
     def _build_prompt(object_type: str, region: dict, extra: str) -> str:
+        norm = _normalize_object_type(object_type)
+        surface = _SURFACE_HINTS.get(norm, _DEFAULT_HINT)
+        label = (object_type or "").strip() or norm or "object"
         where = location_hint(region)
         text = (
-            f"You are an image inpainting tool for interior photos. "
-            f"Remove the {object_type} in the {where} area of the first image. "
-            f"The white region of the second image (a mask) marks exactly where to edit. "
-            f"Reconstruct the wall / floor / background that was behind the {object_type} so it "
-            f"looks like the {object_type} was never there: match the surrounding color, texture, "
-            f"lighting, shadows and perspective, and fill any shadow the {object_type} cast. "
-            f"Do not move, add, or change anything outside the masked region. "
-            f"Keep the exact same resolution, framing and camera angle as the input. "
-            f"Return only the edited image."
+            f"You are a photo inpainting tool for interior photos. "
+            f"In the first image, completely remove the {label} located in the {where} area, "
+            f"including its legs, base, stand and any attached parts. "
+            f"The white region of the second image is a mask marking exactly where you may edit. "
+            f"{surface} "
+            f"Match the lighting, white balance and grain of the rest of the photo so the edit is "
+            f"invisible. Do not move, add, resize or restyle anything outside the masked region and "
+            f"do not introduce any new furniture. Keep the exact same resolution, framing and "
+            f"camera angle as the input. Return only the edited image, with no text."
         )
         return f"{text} {extra}".strip() if extra else text
 

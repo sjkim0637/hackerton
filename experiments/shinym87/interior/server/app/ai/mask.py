@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 import io
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 
 def region_bbox(region: dict) -> tuple[float, float, float, float]:
@@ -20,8 +20,17 @@ def region_bbox(region: dict) -> tuple[float, float, float, float]:
     return x, y, w, h
 
 
-def region_to_mask_png(image_bytes: bytes, region: dict, feather: int = 6) -> bytes:
-    """원본과 같은 크기의 흑백 마스크 PNG. 지울 영역이 흰색(255)."""
+def region_to_mask_png(image_bytes: bytes, region: dict, feather_frac: float = 0.08) -> bytes:
+    """원본과 같은 크기의 흑백 마스크 PNG. 지울 영역이 흰색(255).
+
+    가장자리를 부드럽게 페더링한다:
+    - feather 반경 = 대상 사각형의 짧은 변 * `feather_frac` (최소 8px, 이미지 12% 상한).
+      → 큰 사물은 넓게, 작은 사물은 좁게. 픽셀 고정값이 아니라 비율이라 4K 사진에서도
+        각지지 않는다.
+    - 블러가 안쪽을 깎아먹어도 원래 bbox 가 완전 불투명하도록, 그린 사각형을 feather 의
+      2배만큼 키운 뒤 블러한다(사물의 잔털/그림자까지 덮는 효과). 사물이 살짝 남는 것보다
+      배경을 조금 더 칠하는 편이 결과가 낫다.
+    """
     with Image.open(io.BytesIO(image_bytes)) as im:
         width, height = im.size
 
@@ -31,13 +40,20 @@ def region_to_mask_png(image_bytes: bytes, region: dict, feather: int = 6) -> by
     right = int((x + w) * width)
     bottom = int((y + h) * height)
 
-    mask = Image.new("L", (width, height), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rectangle([left, top, right, bottom], fill=255)
-    if feather > 0:
-        from PIL import ImageFilter
+    box_w = max(1, right - left)
+    box_h = max(1, bottom - top)
+    feather = round(min(box_w, box_h) * max(0.0, feather_frac))
+    feather = max(8, min(feather, round(min(width, height) * 0.12)))
 
-        mask = mask.filter(ImageFilter.GaussianBlur(feather))
+    pad = feather * 2
+    gl = max(0, left - pad)
+    gt = max(0, top - pad)
+    gr = min(width, right + pad)
+    gb = min(height, bottom + pad)
+
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).rectangle([gl, gt, gr, gb], fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(feather))
 
     out = io.BytesIO()
     mask.save(out, format="PNG")

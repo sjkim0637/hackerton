@@ -164,15 +164,12 @@ def _run_job(
             job_id, provider.name, Path(image_path).name, len(source_bytes),
             original_size[0], original_size[1], object_type, region,
         )
-        prompt = (
-            f"Remove the {object_type} from the image and reconstruct the wall/floor "
-            f"behind it so it looks like the {object_type} was never there."
-        )
+        # 프롬프트 문구는 프로바이더가 사물 종류에 맞춰 만든다 (app/ai/external.py._build_prompt).
         result = provider.remove_object(
             image_bytes=source_bytes,
             region=region,
             object_type=object_type,
-            prompt=prompt,
+            prompt="",
         )
         # 공통 보정: 프로바이더가 무엇을 돌려주든 결과는 항상 원본과 같은 해상도의 JPEG.
         final_bytes = ensure_jpeg_size(result.image_bytes, original_size)

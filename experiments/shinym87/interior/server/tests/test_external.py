@@ -11,6 +11,7 @@ from PIL import Image
 
 from app.ai.base import ProviderError, ProviderNotConfigured
 from app.ai.external import ExternalRemoveObjectProvider
+from app.ai.mask import region_to_mask_png
 
 REGION = {"type": "bbox", "rect": [0.3, 0.3, 0.25, 0.2]}
 
@@ -127,6 +128,38 @@ def test_response_without_image_raises(monkeypatch):
     with pytest.raises(ProviderError) as exc:
         _call(_provider())
     assert "이미지가 없" in str(exc.value)
+
+
+def test_prompt_is_object_type_aware():
+    r = {"type": "bbox", "rect": [0.3, 0.4, 0.3, 0.3]}
+    tv = ExternalRemoveObjectProvider._build_prompt("tv", r, "")
+    sofa = ExternalRemoveObjectProvider._build_prompt("sofa", r, "")
+    table = ExternalRemoveObjectProvider._build_prompt("table", r, "")
+    couch = ExternalRemoveObjectProvider._build_prompt("couch", r, "")  # alias
+
+    assert "wall" in tv and "bracket" in tv and "the tv" in tv
+    assert "floor" in sofa and ("skirting" in sofa or "baseboard" in sofa) and "the sofa" in sofa
+    assert "continuous" in table and "floor" in table
+    # 별칭은 sofa 힌트를 쓰되 라벨은 입력한 단어 유지
+    assert "the couch" in couch and "skirting" in couch
+
+
+def test_mask_is_feathered_and_larger_than_rect(monkeypatch):
+    buf = io.BytesIO()
+    Image.new("RGB", (1200, 900), (128, 128, 128)).save(buf, format="JPEG")
+    region = {"type": "bbox", "rect": [0.4, 0.4, 0.2, 0.2]}  # 240x180 px 중앙
+
+    png = region_to_mask_png(buf.getvalue(), region)
+    mask = Image.open(io.BytesIO(png)).convert("L")
+    assert mask.size == (1200, 900)
+
+    # 중앙은 완전 불투명
+    assert mask.getpixel((600, 450)) == 255
+    # rect 경계 바로 바깥(패딩+페더 영역)은 0도 255도 아닌 중간값 → 부드러운 전환
+    edge_val = mask.getpixel((int(0.6 * 1200) + 20, 450))
+    assert 0 < edge_val < 255
+    # 원래 rect 밖 먼 곳은 0
+    assert mask.getpixel((100, 100)) == 0
 
 
 def test_blocked_prompt_raises(monkeypatch):

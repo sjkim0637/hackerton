@@ -124,8 +124,16 @@ python scripts/e2e_check_custom.py \
   --ai-provider external --ai-api-key <GEMINI_KEY>   # 또는 .env 에 설정
 ```
 
-- `--bbox` 는 `"x,y,width,height"` (각 0~1 비율). 이미지 대비 제거할 사물의 위치.
+- `--bbox` 는 `"x,y,width,height"` (각 0~1 비율). `--object-type` 으로 종류 지정(기본 tv).
 - 두 스크립트 모두 서버가 없으면 uvicorn 을 자동으로 띄웠다가 끝나면 내린다.
+
+testdata 예시:
+```bash
+python scripts/e2e_check_custom.py --image testdata/pexels_sofa.jpg  --bbox 0.24,0.50,0.66,0.30 --object-type sofa
+python scripts/e2e_check_custom.py --image testdata/pexels_table.jpg --bbox 0.36,0.52,0.42,0.30 --object-type table
+```
+평평한 벽 앞의 고립된 사물(벽걸이 TV)이 가장 잘 되고, bbox 안에 다른 가구가 겹치거나
+배경이 복잡하면 결과가 어색하거나 편집이 안 될 수 있다 (PHASE 3 정밀 마스크 필요).
 - 결과 이미지: `scripts/_out/result_<job>.jpg` (git 무시), 서버 저장본:
   `data/scenes/<scene>/results/<job>.jpg`. **둘 다 항상 원본과 같은 해상도**
   (`app/ai/imageops.ensure_jpeg_size()` 가 `_run_job` 에서 강제 리사이즈).

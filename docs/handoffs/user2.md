@@ -11,7 +11,43 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 "사용자 2 (영상 / AI)" — mock 을 실제 외부 AI 로 교체 (이슈 P1-10).
+PHASE 1 (P1-10) + PHASE 2 "사용자 2 (영상 / AI)".
+
+## PHASE 2 — 마스크 페더링 / 종류별 프롬프트 / 다양한 사물 테스트 (2026-09-03)
+
+### 1. 마스크 경계 페더링 (`app/ai/mask.py`)
+- 기존: `feather=6` **픽셀 고정** → 4K 사진에서 사실상 각진 사각형.
+- 개선: `feather = 대상 사각형 짧은 변 × 0.08` (최소 8px, 이미지 12% 상한). 비율 기반이라
+  큰 사물은 넓게, 작은 사물은 좁게, 해상도와 무관하게 부드럽다.
+- 블러가 안쪽을 깎아도 원래 bbox 가 완전 불투명하도록 그린 사각형을 `feather×2` 만큼
+  키운 뒤 블러(사물 잔털/그림자까지 덮음). 마스크 PNG 크기가 ~2KB → ~35~55KB 로 커진 것으로
+  페더링 확인. `tests/test_external.py::test_mask_is_feathered_and_larger_than_rect`.
+
+### 2. 사물 종류별 프롬프트 (`app/ai/external.py`)
+- `_SURFACE_HINTS`: tv→벽/브래킷/케이블/그림자, sofa→바닥+걸레받이+접촉그림자+쿠션,
+  table→연속된 바닥/타일줄눈/러그+상판 위 물건, chair→바닥, shelf→벽. 그 외는 기본 힌트.
+- `_OBJECT_ALIASES`: couch→sofa, desk/coffee table→table, television/monitor→tv 등.
+- `_build_prompt` 가 종류에 맞는 문장을 조립. 라벨은 입력 단어 유지(별칭도).
+- `scenes.py._run_job` 은 이제 프롬프트를 만들지 않고 `prompt=""` 로 넘김(문구는 프로바이더 소유).
+- `tests/test_external.py::test_prompt_is_object_type_aware`.
+
+### 3. 다양한 사물 테스트 (Gemini `gemini-2.5-flash-image`, `scripts/e2e_check_custom.py`)
+`testdata/` 에 Pexels 무료 사진 2장 추가: `pexels_sofa.jpg`(1600×2400),
+`pexels_table.jpg`(1600×2324). 결과는 `scripts/_out/`.
+
+| 사물 | 이미지 / bbox | 결과 | 메모 |
+|---|---|---|---|
+| TV | real_living_room.jpg / `0.34,0.39,0.30,0.28` | **잘 됨** | TV·사운드바·전선 완전 제거, 벽·걸레받이 자연 복원. 이전 버전에 있던 하단 이음매가 사라짐 → 새 페더 마스크+프롬프트로 개선, 회귀 없음. |
+| 소파 | pexels_sofa.jpg / `0.24,0.50,0.66,0.30` | **안 됨** | Gemini 가 거의 원본 그대로 반환(소파·쿠션·앞 벤치 그대로). 창문 앞 + 노출 벽돌 + bbox 안에 벤치 겹침 → 편집을 회피한 것으로 보임. e2e 밝기 체크도 109→109 로 FAIL. |
+| 테이블 | pexels_table.jpg / `0.36,0.52,0.42,0.30` | **부분 성공** | 테이블 자체는 깨끗이 제거되고 바닥 복원 양호. 그러나 의자 6개가 붕 뜬 배치로 남고(요청은 테이블만), 상판에 있던 꽃병이 공중에 뜬 아티팩트. |
+
+관찰
+- **평평한 단일 표면 앞의 고립된 사물**(벽걸이 TV)에서 가장 잘 된다.
+- bbox 안에 다른 가구가 겹치거나(벤치↔소파, 의자↔테이블) 배경이 복잡하면(창/벽돌/패턴)
+  실패하거나 어색해진다. 이건 마스크/프롬프트로는 한계 → 정밀 세그멘테이션(PHASE 3)과
+  "딸린 물건 같이 제거"(테이블+의자) 가 필요.
+- `e2e_check_custom.py` 의 밝기 델타 체크는 완전한 판정은 아니지만(어두운 사물↔어두운 바닥은
+  통과할 수 있음) 소파 미제거를 정확히 잡아냈다. 스모크 신호로 유지.
 
 ## Completed
 
