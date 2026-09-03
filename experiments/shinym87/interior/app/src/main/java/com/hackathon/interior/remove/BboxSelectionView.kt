@@ -31,6 +31,13 @@ class BboxSelectionView @JvmOverloads constructor(
 
     var onRectFinalized: ((RectF) -> Unit)? = null
 
+    /** 확정된 사각형 근처에 보여줄 측정 문구. 여러 줄(`\n`) 허용. null 이면 안 그림. */
+    var measurementText: String? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     private val live = RectF()
     private val locked = RectF()
     private var hasLocked = false
@@ -52,11 +59,17 @@ class BboxSelectionView @JvmOverloads constructor(
         textSize = 34f
         setShadowLayer(6f, 0f, 0f, Color.BLACK)
     }
+    private val measurePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(200, 245, 250)
+        textSize = 32f
+        setShadowLayer(6f, 0f, 0f, Color.BLACK)
+    }
 
     fun clear() {
         hasLocked = false
         locked.setEmpty()
         live.setEmpty()
+        measurementText = null
         invalidate()
     }
 
@@ -102,5 +115,21 @@ class BboxSelectionView @JvmOverloads constructor(
         canvas.drawRect(rect, fillPaint)
         canvas.drawRect(rect, strokePaint)
         canvas.drawText("제거할 사물 영역", rect.left, max(rect.top - 12f, 34f), labelPaint)
+
+        // 확정된 사각형 아래(공간이 없으면 위)에 측정 문구.
+        val text = measurementText
+        if (live.isEmpty && hasLocked && !text.isNullOrEmpty()) {
+            val lines = text.split("\n")
+            val lineGap = 40f
+            var y = rect.bottom + lineGap
+            if (y + (lines.size - 1) * lineGap > height - 8f) {
+                y = rect.top - 12f - lines.size * lineGap
+            }
+            y = max(y, 34f)
+            for (line in lines) {
+                canvas.drawText(line, rect.left, y, measurePaint)
+                y += lineGap
+            }
+        }
     }
 }

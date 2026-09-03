@@ -97,8 +97,8 @@ class RemovalController(
             binding.btnTvSelectMode.text = "선택 모드 끄기"
             binding.btnClearSelection.visibility = View.VISIBLE
             status(
-                "지우고 싶은 사물 하나만 딱 맞게 사각형으로 그려주세요.\n" +
-                    "다른 가구가 겹치지 않게 그릴수록 결과가 좋습니다."
+                "지우고 싶은 사물에 딱 맞게 사각형을 그리면,\n" +
+                    "결과 품질과 크기 측정 정확도가 모두 좋아집니다."
             )
         } else {
             selectionMode = false
@@ -141,6 +141,7 @@ class RemovalController(
         )
         clearResult()
         resolveWall(rect)
+        binding.bboxSelectionView.measurementText = measureSelectionLabel(rect)
 
         selectionMode = false
         binding.bboxSelectionView.isSelecting = false
@@ -160,6 +161,28 @@ class RemovalController(
                 Toast.LENGTH_LONG,
             ).show()
         }
+    }
+
+    /**
+     * 그린 사각형의 실제 가로/세로를 잰다.
+     * 좌상단-우상단(가로), 좌상단-좌하단(세로) 지점에서 ARCore hitTest 를 하고,
+     * 두 3D 좌표 사이 거리를 cm 로 계산한다.
+     *
+     * 이 수치는 **내가 그린 박스**의 크기이지 가구 자체의 정확한 치수가 아니다.
+     * 문구도 "선택 영역"이라고만 표현한다.
+     */
+    private fun measureSelectionLabel(rect: RectF): String {
+        val topLeft = space.hitTest(rect.left, rect.top)?.hitPose
+        val topRight = space.hitTest(rect.right, rect.top)?.hitPose
+        val bottomLeft = space.hitTest(rect.left, rect.bottom)?.hitPose
+
+        if (topLeft == null || topRight == null || bottomLeft == null) {
+            return "선택 영역: 정확한 측정 어려움\n(평면이 인식되지 않았어요)"
+        }
+        val widthCm = distance(topLeft, topRight) * 100f
+        val heightCm = distance(topLeft, bottomLeft) * 100f
+        return "선택 영역: 약 %.0fcm × %.0fcm\n(내가 그린 박스 기준 · 가구 실측 아님)"
+            .format(widthCm, heightCm)
     }
 
     /** 사각형 중심/네 변에서 hitTest 해 벽 앵커와 실제 크기(m), 평면 정보를 잡는다. */
