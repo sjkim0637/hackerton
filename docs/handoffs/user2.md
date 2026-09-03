@@ -49,6 +49,67 @@ PHASE 1 (P1-10) + PHASE 2 "사용자 2 (영상 / AI)".
 - `e2e_check_custom.py` 의 밝기 델타 체크는 완전한 판정은 아니지만(어두운 사물↔어두운 바닥은
   통과할 수 있음) 소파 미제거를 정확히 잡아냈다. 스모크 신호로 유지.
 
+## PHASE 2 — 진단 실험: 실패 원인 분리 (배경 복잡도 vs 가구 겹침) (2026-09-03)
+
+소파 삭제 실패가 "배경이 복잡해서"인지 "bbox 안에 다른 가구가 겹쳐서"인지 분리했다.
+
+### 준비한 이미지 (`testdata/`, Pexels 무료)
+| 코드 | 파일 | 배경 | bbox 안 겹침 |
+|---|---|---|---|
+| A | `sofa_A_simple_isolated.jpg` | 단순 (흰 벽) | 없음 |
+| B | `sofa_B_complex_isolated.jpg` | 복잡 (창+담쟁이+거친 회벽) | 없음 |
+| C | `sofa_C_simple_overlap.jpg` | 비교적 단순 (개방형) | 커피테이블+러그 |
+| D | `pexels_sofa.jpg` (기존) | 복잡 (창+벽돌) | 앞 벤치+쿠션 |
+
+### 실행 (모두 `gemini-2.5-flash-image`, `e2e_check_custom.py`)
+```
+# baseline (기본 프롬프트, 보통 bbox)
+python scripts/e2e_check_custom.py --image testdata/sofa_A_simple_isolated.jpg  --bbox 0.48,0.52,0.52,0.28  --object-type sofa
+python scripts/e2e_check_custom.py --image testdata/sofa_B_complex_isolated.jpg --bbox 0.00,0.575,1.0,0.425 --object-type sofa
+python scripts/e2e_check_custom.py --image testdata/sofa_C_simple_overlap.jpg   --bbox 0.00,0.50,0.66,0.44  --object-type sofa
+python scripts/e2e_check_custom.py --image testdata/pexels_sofa.jpg             --bbox 0.24,0.50,0.66,0.30  --object-type sofa
+# 타이트 bbox (겹친 물체를 박스 밖으로)
+python scripts/e2e_check_custom.py --image testdata/sofa_C_simple_overlap.jpg --bbox 0.00,0.53,0.43,0.40 --object-type sofa
+python scripts/e2e_check_custom.py --image testdata/pexels_sofa.jpg           --bbox 0.52,0.47,0.36,0.30 --object-type sofa
+# "박스 안 다른 물체도 제거, 밖은 건드리지 마" 명시 프롬프트
+python scripts/e2e_check_custom.py --image testdata/pexels_sofa.jpg --bbox 0.24,0.50,0.66,0.30 --object-type sofa \
+  --ai-extra-prompt "If other small objects sit inside the white masked area (a bench, a coffee table, cushions, a rug, or items resting on the furniture), remove those as well and rebuild the surface beneath them. Never remove, move, shrink or alter any object whose main body lies outside the white masked area."
+```
+
+### 결과
+| 실험 | 결과 | 상세 |
+|---|---|---|
+| **A** 단순bg·고립 (보통 bbox) | ✅ 완벽 | 소파 완전 제거, 벽/바닥/걸레받이·뒤 사이드테이블·러그 자연 복원 |
+| **B** 복잡bg·고립 (보통 bbox) | ✅ 성공 | 소파+쿠션 완전 제거. 창틀 아래 벽·마루 원근까지 재구성. (밝기 체크는 false-FAIL) |
+| **C** 단순bg·겹침 (보통 bbox) | ⚠️ 부분 | 소파는 제거되나 **커피테이블+러그 잔존** (덩그러니 남음) |
+| **D** 복잡bg·겹침 (보통 bbox) | ⚠️ 부분·불안정 | 소파 몸체만 지워지고 쿠션/스로우/벤치 잔존, 지저분. 동일 조건 다른 런에서는 아예 passthrough(편집 0) |
+| **B** tight bbox | ✅ 성공 | B-normal보다 더 깔끔, 옆 스툴 보존 |
+| **C** tight bbox (커피테이블 제외) | ✅ 성공 | 소파만 깨끗이 제거, 박스 밖 커피테이블·러그 그대로 |
+| **D** tight bbox (벤치 제외) | ✅ 성공 | 소파·쿠션 전부 제거, **복잡한 벽돌벽·창도 복원**, 벤치 그대로 |
+| **C** + 명시지시 (보통 bbox) | ❌ 악화 | 아무것도 안 지움 (passthrough). C-normal보다 나쁨 |
+| **D** + 명시지시 (보통 bbox) | ✅ 성공 | 소파+쿠션+스로우+**벤치까지 전부** 제거, 박스 밖(화분·커튼) 보존 |
+
+### 결론 — 진짜 원인은?
+- **배경 복잡도가 아니라 "bbox 안 가구 겹침"이 실패 원인이다.**
+  B(복잡bg·고립)가 깨끗이 성공했으므로 복잡한 배경 자체는 문제가 아니다.
+  A↔C(배경 비슷, 겹침만 다름), B↔D(배경 비슷, 겹침만 다름) 모두 겹침 있는 쪽만 실패.
+- **타이트 bbox로 겹친 물체를 박스 밖으로 빼면** C·D 모두(복잡 배경 포함) 깨끗이 성공.
+  → 가장 안정적인 해법.
+- **명시 프롬프트**("박스 안 다른 물체도 제거")는 비결정적: D는 확 좋아졌고 C는 오히려
+  passthrough. 신뢰 불가. 프롬프트에 상시 넣지 않는다(`INTERIOR_AI_EXTRA_INSTRUCTION` 로
+  실험만 가능하게 유지).
+- `e2e_check_custom.py` 밝기 델타 체크는 B에서 false-FAIL(밝기 유사한 사물↔배경).
+  스모크 신호로만 쓰고 최종 판정은 이미지 육안 확인.
+
+### 지금 UI(사각형 드래그)로 실전에서 쓸만한가?
+- **쓸만한 조건**: 지우려는 사물 하나에만 딱 맞게 사각형을 그리면 배경이 복잡해도 잘 된다.
+  벽걸이 TV, 고립된 소파, 벽 앞 단독 가구 → 데모/초기 실전 가능.
+- **한계**: 사각형 안에 다른 가구(커피테이블·벤치·의자)가 물리적으로 들어올 수밖에 없는
+  배치. 이땐 "이것만" 선택이 불가능해 부분 제거/잔존/불안정.
+- **권장 대응**: (1) 사용자 가이드 "사물 하나 = 사각형 하나, 다른 가구 안 겹치게".
+  (2) 드래그 후 박스가 화면의 큰 비율을 덮거나 다른 가구를 포함할 것 같으면 경고 문구.
+  (3) PHASE 3: 정밀 세그멘테이션(사물 윤곽) 또는 포인트/브러시로 "이 사물만" 선택.
+
 ## Completed
 
 `server/app/ai/external.py` 의 `TODO(P1-10)` 를 **Google Gemini 이미지 편집 API**
