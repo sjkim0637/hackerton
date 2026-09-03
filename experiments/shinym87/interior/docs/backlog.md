@@ -69,6 +69,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 ## PHASE 4 (진행 중)
 
+- [DONE] 사용자 3: 재배치 상태 저장 — `POST/GET /scenes/{id}/placements`(이동/회전/크기,
+  append 로그) + `POST /scenes/{id}/placements/undo`(간단한 실행 취소, 이력 되짚기).
+  `placements` 테이블, `store.py` 메서드, `routers/placements.py`. pose 는 세션 로컬이라
+  `source_region`+scale/rotation/plane 도 함께 저장(재정합 근거). 판단·한계는
+  `docs/handoffs/user3.md`. `pytest` 42개.
 - [DONE] 사용자 2: 제거된 사물 크롭을 서버에도 저장(`{job}_object.jpg`, AI 없음) +
   `GET /scenes/{id}/results` 에 `removed_object_image_url` + `_object.jpg` 서빙 라우트.
   판단·근거는 `docs/handoffs/user2.md` (앱은 로컬 크롭으로 충분하나 크로스 기기/세션·웹

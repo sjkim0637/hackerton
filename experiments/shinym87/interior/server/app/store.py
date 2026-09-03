@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-_SEQ_COLUMNS = {"kf_seq", "obj_seq", "job_seq"}
+_SEQ_COLUMNS = {"kf_seq", "obj_seq", "job_seq", "plc_seq"}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS scenes (
@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS scenes (
     kf_seq     INTEGER NOT NULL DEFAULT 0,
     obj_seq    INTEGER NOT NULL DEFAULT 0,
     job_seq    INTEGER NOT NULL DEFAULT 0,
+    plc_seq    INTEGER NOT NULL DEFAULT 0,
     ai_calls   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS keyframes (
@@ -50,6 +51,20 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at           TEXT NOT NULL,
     updated_at           TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS placements (
+    placement_id       TEXT PRIMARY KEY,
+    scene_id           TEXT NOT NULL,
+    job_id             TEXT,
+    object_type        TEXT NOT NULL,
+    source_region_json TEXT,
+    pose_json          TEXT NOT NULL,
+    scale              REAL NOT NULL DEFAULT 1.0,
+    rotation_deg       REAL NOT NULL DEFAULT 0.0,
+    plane              TEXT,
+    status             TEXT NOT NULL DEFAULT 'active',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+);
 """
 
 
@@ -59,7 +74,10 @@ def utcnow() -> str:
 
 # 이미 만들어진 DB 에 뒤늦게 추가된 컬럼 (CREATE IF NOT EXISTS 로는 안 붙는다).
 _EXTRA_COLUMNS = {
-    "scenes": {"ai_calls": "INTEGER NOT NULL DEFAULT 0"},
+    "scenes": {
+        "ai_calls": "INTEGER NOT NULL DEFAULT 0",
+        "plc_seq": "INTEGER NOT NULL DEFAULT 0",
+    },
     "jobs": {
         "removed_object_path": "TEXT",
         "removed_object_url": "TEXT",
@@ -286,4 +304,78 @@ class Store:
         data = dict(row)
         raw = data.pop("changed_region_json", None)
         data["changed_region"] = json.loads(raw) if raw else None
+        return data
+
+    # -------------------------------------------------------------- placements
+
+    def create_placement(
+        self,
+        placement_id: str,
+        scene_id: str,
+        *,
+        job_id: str | None,
+        object_type: str,
+        source_region: dict | None,
+        pose: dict,
+        scale: float,
+        rotation_deg: float,
+        plane: str | None,
+    ) -> dict[str, Any]:
+        now = utcnow()
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO placements (placement_id, scene_id, job_id, object_type, "
+                "source_region_json, pose_json, scale, rotation_deg, plane, status, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+                (
+                    placement_id, scene_id, job_id, object_type,
+                    json.dumps(source_region) if source_region is not None else None,
+                    json.dumps(pose), scale, rotation_deg, plane, now, now,
+                ),
+            )
+        return self.get_placement(placement_id)  # type: ignore[return-value]
+
+    def get_placement(self, placement_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM placements WHERE placement_id = ?", (placement_id,)
+            ).fetchone()
+        return self._placement_row(row)
+
+    def list_placements(
+        self, scene_id: str, *, include_undone: bool = False
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM placements WHERE scene_id = ?"
+        if not include_undone:
+            query += " AND status = 'active'"
+        query += " ORDER BY created_at DESC, placement_id DESC"
+        with self._conn() as conn:
+            rows = conn.execute(query, (scene_id,)).fetchall()
+        return [p for r in rows if (p := self._placement_row(r)) is not None]
+
+    def latest_active_placement(self, scene_id: str) -> dict[str, Any] | None:
+        """이 scene 에서 가장 최근에 만들어졌거나 갱신된 active 배치 (실행 취소 대상)."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM placements WHERE scene_id = ? AND status = 'active' "
+                "ORDER BY updated_at DESC, created_at DESC, placement_id DESC LIMIT 1",
+                (scene_id,),
+            ).fetchone()
+        return self._placement_row(row)
+
+    def set_placement_status(self, placement_id: str, status: str) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE placements SET status = ?, updated_at = ? WHERE placement_id = ?",
+                (status, utcnow(), placement_id),
+            )
+
+    @staticmethod
+    def _placement_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        data["pose"] = json.loads(data.pop("pose_json"))
+        raw = data.pop("source_region_json", None)
+        data["source_region"] = json.loads(raw) if raw else None
         return data

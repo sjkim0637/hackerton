@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .ai import provider_status
 from .cleanup import sweep_old_results
 from .config import get_settings
-from .routers import catalog, scenes
+from .routers import catalog, placements, scenes
 
 
 def _setup_logging() -> None:
@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
 
     app.include_router(scenes.router)
     app.include_router(catalog.router)
+    app.include_router(placements.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict:

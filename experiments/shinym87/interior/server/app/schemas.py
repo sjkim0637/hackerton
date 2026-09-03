@@ -122,6 +122,37 @@ class JobOut(BaseModel):
     error: str | None = None
 
 
+class PlacementCreate(BaseModel):
+    """PHASE 4: 삭제한 사물을 새 위치로 재배치한 상태(이동/회전/크기).
+
+    `pose` 는 ARCore 월드 좌표(세션 로컬)라 다른 세션에서 그대로는 못 쓴다 — 다시 붙일 땐
+    `source_region`(원래 제거 영역) 기준으로 재정합해야 한다. 크기/회전/평면은 세션 무관.
+    """
+
+    object_type: str
+    pose: Pose
+    job_id: str | None = None
+    source_region: Region | None = None
+    scale: float = Field(default=1.0, gt=0, le=20)
+    rotation_deg: float = 0.0
+    plane: Literal["wall", "floor"] | None = None
+
+
+class PlacementOut(BaseModel):
+    placement_id: str
+    scene_id: str
+    job_id: str | None = None
+    object_type: str
+    pose: Pose
+    source_region: dict | None = None
+    scale: float
+    rotation_deg: float
+    plane: str | None = None
+    status: Literal["active", "undone"]
+    created_at: str
+    updated_at: str
+
+
 class ResultInfoOut(BaseModel):
     """`GET /scenes/{id}/results` 의 항목. 같은 scene 의 복원 결과를 job 단위 버전으로 나열한다."""
 

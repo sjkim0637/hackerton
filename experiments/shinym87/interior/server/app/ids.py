@@ -22,3 +22,7 @@ def new_object_id(scene_id: str, seq: int) -> str:
 
 def new_job_id(scene_id: str, seq: int) -> str:
     return f"job_{_scene_suffix(scene_id)}_{seq:03d}"
+
+
+def new_placement_id(scene_id: str, seq: int) -> str:
+    return f"plc_{_scene_suffix(scene_id)}_{seq:03d}"

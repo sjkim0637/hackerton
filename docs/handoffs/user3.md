@@ -96,6 +96,48 @@ PHASE 1 + PHASE 2 "사용자 3 (서버 / 통합)".
   필요하지만, 그러면 해상도 불변식이 깨지므로 지금은 안 한다.
 - 기간 정리는 기동 시 1회뿐. 장시간 떠 있는 서버는 주기 실행(스케줄러)이 필요.
 
+## PHASE 4 — 재배치 상태 저장 + 간단한 실행 취소 (2026-09-03)
+
+### 판단: 저장한다 (사용자 2 크롭 저장과 같은 논리 — 거의 공짜 + 모델 완결 + undo 전제)
+
+- 앱(사용자 1)은 이동/회전/크기를 **로컬 메모리로만** 들고 있어 앱을 끄면 사라진다.
+  단일 기기 데모만 보면 서버 저장은 지금 당장 필요 없다.
+- 그래도 저장하는 이유:
+  - AI·파일 I/O 없음 (SQLite 행 하나). 사실상 공짜.
+  - scene 모델이 완결된다 — `keyframe → object → job(result/crop)` 다음의 **최종 산출물
+    (무엇을 어디로 옮겼나)** 이 지금까지 어디에도 없었다.
+  - **실행 취소(2번)가 성립하려면** 서버에 배치 이력이 있어야 한다.
+  - 설계서 PHASE 4 = "원위치 저장 → 이동/회전/크기, undo/redo" 이고 사용자 3 담당.
+- **한계(문서화)**: `pose` 는 ARCore **세션 로컬 월드 좌표**라 다른 세션/기기에서 그대로는
+  못 쓴다. 그래서 pose 와 함께 `object_type` · `source_region`(원래 제거 bbox) ·
+  `scale` · `rotation_deg` · `plane` 을 같이 저장한다 — 재정합은 `source_region` 기준으로
+  하고, 크기/회전/평면종류는 세션 무관하게 재사용 가능. (클라우드 앵커는 범위 밖.)
+
+### 구현
+
+- 테이블 `placements` (`store.py`): `placement_id`(`plc_<scene8>_NNN`), `scene_id`, `job_id?`,
+  `object_type`, `source_region_json?`, `pose_json`, `scale`, `rotation_deg`, `plane?`,
+  `status`('active'|'undone'), `created_at`, `updated_at`. `scenes.plc_seq` 순번 컬럼 추가
+  (기존 DB 는 `_EXTRA_COLUMNS` ALTER 가드).
+- `POST /scenes/{id}/placements` — body `PlacementCreate`(`object_type`, `pose{position[3],
+  rotation[4]}`, 선택 `job_id`/`source_region`/`scale`(기본 1, >0 ≤20)/`rotation_deg`/`plane`).
+  **append 로그**: 같은 사물을 또 옮기면 새 행이 쌓인다. `job_id` 주면 그 scene 소속인지 검증.
+- `GET /scenes/{id}/placements` — 최신순. 기본 `active` 만, `?include_undone=true` 면 취소분 포함.
+- `POST /scenes/{id}/placements/undo` — 가장 최근에 만들어졌거나 갱신된 `active` 배치 하나를
+  `undone` 으로. 완전한 스택은 아니지만 **연달아 호출하면 이력을 한 단계씩 되짚는다**.
+  active 가 없으면 404. (redo 는 안 넣음 — 행은 다 남아 있으니 나중에 추가 가능.)
+- `store` 메서드: `create_placement` / `list_placements(include_undone)` /
+  `latest_active_placement` / `set_placement_status` / `_placement_row`(pose·region JSON 파싱).
+- 새 라우터 `app/routers/placements.py`, `main.py` 에 include. 새 설정 없음(비용 0).
+- 테스트: `tests/test_placements.py` 6개 — 생성/조회, append 최신순, undo 되짚기 +
+  `include_undone`, active 없을 때 404, job 연결·타 scene job 거부, 없는 scene 404.
+  `pytest` **42개 통과**, mock e2e 14/14(기존 DB 에 `plc_seq`/`placements` 자동 추가 확인).
+
+### 알려진 한계 (PHASE 4 이후)
+- pose 재사용은 세션 로컬 한계 (위 참조). 클라이언트가 아직 이 API 를 호출/복원하지 않는다
+  (사용자 1 앱은 로컬 상태만) — 서버는 저장/undo 만 제공, 실제 복원 연동은 다음 작업.
+- undo 만 있고 redo 없음. per-object 가 아니라 scene 전체의 "마지막 변경" 기준.
+
 ## Completed
 
 PHASE 1 사용자 3 항목을 `experiments/shinym87/interior/server/` 에 구현했다.
@@ -155,13 +197,14 @@ experiments/shinym87/interior/server/
    ├─ main.py                 FastAPI 앱, /health
    ├─ config.py               Settings (env 접두사 INTERIOR_)
    ├─ schemas.py              요청/응답 + 키프레임 메타 스키마
-   ├─ store.py                SQLite + 파일 저장 (scenes/keyframes/objects/jobs)
-   ├─ ids.py                  scene_/kf_/obj_/job_ 생성
+   ├─ store.py                SQLite + 파일 저장 (scenes/keyframes/objects/jobs/placements)
+   ├─ ids.py                  scene_/kf_/obj_/job_/plc_ 생성
    ├─ deps.py                 Store / provider 싱글턴
    ├─ cleanup.py              결과 이미지 정리 (개수: prune_scene_results / 기간: sweep_old_results)
    ├─ ai/                     base·mock·external·objects·colormatch·imageops·build_provider
    └─ routers/
-      ├─ scenes.py            세션·키프레임·objects·remove-object·jobs·results(목록/이미지)
+      ├─ scenes.py            세션·키프레임·objects·remove-object·jobs·results(목록/이미지/크롭)
+      ├─ placements.py        재배치(이동/회전/크기) 저장·조회·실행취소
       └─ catalog.py           가구 데이터 API
 ```
 
