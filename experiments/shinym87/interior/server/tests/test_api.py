@@ -90,6 +90,57 @@ def test_full_remove_object_flow(client):
     assert again.json()["job_id"] == job_id
 
 
+def _new_scene_with_keyframe(client) -> tuple[str, str]:
+    scene_id = client.post("/scenes", json={"device": "t"}).json()["scene_id"]
+    meta = _meta()
+    meta.pop("targetObject", None)  # 사물 정보는 remove-object 로만
+    kf = client.post(
+        f"/scenes/{scene_id}/keyframes",
+        files={"image": ("kf.jpg", _jpeg(), "image/jpeg")},
+        data={"meta": json.dumps(meta)},
+    ).json()["keyframe_id"]
+    return scene_id, kf
+
+
+def test_remove_object_uses_selected_object_type(client):
+    """앱이 보낸 objectType(tv 외)이 그대로 저장/처리된다."""
+    scene_id, kf = _new_scene_with_keyframe(client)
+    r = client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={"keyframe_id": kf, "object_type": "sofa",
+              "target": {"type": "bbox", "rect": [0.2, 0.3, 0.4, 0.4]}},
+    )
+    assert r.status_code == 202
+    assert client.get(f"/scenes/{scene_id}/jobs/{r.json()['job_id']}").json()["status"] == "done"
+    objs = client.get(f"/scenes/{scene_id}/objects").json()
+    assert objs[-1]["object_type"] == "sofa"
+
+
+def test_object_type_aliases_are_normalized(client):
+    """couch → sofa 로 정규화되어 저장된다."""
+    scene_id, kf = _new_scene_with_keyframe(client)
+    client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={"keyframe_id": kf, "object_type": "couch",
+              "target": {"type": "bbox", "rect": [0.2, 0.3, 0.4, 0.4]}},
+    )
+    objs = client.get(f"/scenes/{scene_id}/objects").json()
+    assert objs[-1]["object_type"] == "sofa"
+
+
+def test_duplicate_request_reuses_job_and_no_extra_ai_call(client):
+    """동일 요청 재호출 → 같은 job, AI 호출 수 증가 없음."""
+    scene_id, kf = _new_scene_with_keyframe(client)
+    payload = {"keyframe_id": kf, "object_type": "table",
+               "target": {"type": "bbox", "rect": [0.25, 0.25, 0.3, 0.3]}}
+    j1 = client.post(f"/scenes/{scene_id}/remove-object", json=payload).json()["job_id"]
+    j2 = client.post(f"/scenes/{scene_id}/remove-object", json=payload).json()["job_id"]
+    j3 = client.post(f"/scenes/{scene_id}/remove-object", json=payload).json()["job_id"]
+    assert j1 == j2 == j3
+    # objects 도 재요청마다 늘지 않는다 (첫 요청만 add_object)
+    assert len(client.get(f"/scenes/{scene_id}/objects").json()) == 1
+
+
 def test_catalog_endpoints(client):
     all_items = client.get("/catalog").json()
     assert any(i["id"] == "cat_sofa_nordic-3seat" for i in all_items)

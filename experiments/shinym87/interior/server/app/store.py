@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS scenes (
     created_at TEXT NOT NULL,
     kf_seq     INTEGER NOT NULL DEFAULT 0,
     obj_seq    INTEGER NOT NULL DEFAULT 0,
-    job_seq    INTEGER NOT NULL DEFAULT 0
+    job_seq    INTEGER NOT NULL DEFAULT 0,
+    ai_calls   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS keyframes (
     keyframe_id TEXT PRIMARY KEY,
@@ -54,12 +55,23 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+# 이미 만들어진 DB 에 뒤늦게 추가된 컬럼 (CREATE IF NOT EXISTS 로는 안 붙는다).
+_EXTRA_COLUMNS = {
+    "scenes": {"ai_calls": "INTEGER NOT NULL DEFAULT 0"},
+}
+
+
 class Store:
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            for table, cols in _EXTRA_COLUMNS.items():
+                have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+                for name, decl in cols.items():
+                    if name not in have:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -103,6 +115,17 @@ class Store:
                 f"SELECT {column} AS value FROM scenes WHERE scene_id = ?", (scene_id,)
             ).fetchone()
         return int(row["value"])
+
+    def bump_ai_calls(self, scene_id: str) -> int:
+        """실제 외부 AI 를 호출할 때마다 1 증가. 반환값은 이 scene 의 누적 호출 수."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE scenes SET ai_calls = ai_calls + 1 WHERE scene_id = ?", (scene_id,)
+            )
+            row = conn.execute(
+                "SELECT ai_calls FROM scenes WHERE scene_id = ?", (scene_id,)
+            ).fetchone()
+        return int(row["ai_calls"]) if row else 0
 
     # --------------------------------------------------------------- keyframes
 
@@ -215,16 +238,29 @@ class Store:
             ).fetchone()
         return int(row["n"])
 
+    _DEDUP_STATUSES = ("done", "queued", "running")
+
+    def find_job_by_cache_key(
+        self, scene_id: str, cache_key: str, statuses: tuple[str, ...] = _DEDUP_STATUSES
+    ) -> dict[str, Any] | None:
+        """동일 요청(cache_key)의 job 을 찾는다.
+
+        기본값은 완료(done) + 처리 중(queued/running) 을 모두 포함해 **중복 호출을 막는다**.
+        같은 요청이 아직 처리 중이면 새 job 을 만들지 않고 그 job 을 그대로 돌려준다.
+        """
+        placeholders = ", ".join("?" for _ in statuses)
+        with self._conn() as conn:
+            row = conn.execute(
+                f"SELECT * FROM jobs WHERE scene_id = ? AND cache_key = ? "
+                f"AND status IN ({placeholders}) ORDER BY updated_at DESC LIMIT 1",
+                (scene_id, cache_key, *statuses),
+            ).fetchone()
+        return self._job_row(row)
+
     def find_done_job_by_cache_key(
         self, scene_id: str, cache_key: str
     ) -> dict[str, Any] | None:
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM jobs WHERE scene_id = ? AND cache_key = ? AND status = 'done' "
-                "ORDER BY updated_at DESC LIMIT 1",
-                (scene_id, cache_key),
-            ).fetchone()
-        return self._job_row(row)
+        return self.find_job_by_cache_key(scene_id, cache_key, statuses=("done",))
 
     @staticmethod
     def _job_row(row: sqlite3.Row | None) -> dict[str, Any] | None:

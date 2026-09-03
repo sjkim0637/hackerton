@@ -10,12 +10,16 @@ from .base import (
 )
 from .external import ExternalRemoveObjectProvider
 from .mock import MockRemoveObjectProvider
+from .objects import KNOWN_TYPES, is_known, normalize_object_type
 
 __all__ = [
     "ProviderError",
     "ProviderNotConfigured",
     "RemoveObjectProvider",
     "RemoveResult",
+    "KNOWN_TYPES",
+    "is_known",
+    "normalize_object_type",
     "build_provider",
     "provider_status",
 ]

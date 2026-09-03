@@ -20,20 +20,12 @@ import httpx
 from .base import ProviderError, ProviderNotConfigured, RemoveObjectProvider, RemoveResult
 from .imageops import ensure_jpeg_size, image_size
 from .mask import data_url_b64, location_hint, region_bbox, region_to_mask_png
+from .objects import normalize_object_type
 
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _DEFAULT_MODEL = "gemini-3.1-flash-image"
 
 _log = logging.getLogger("interior.ai.external")
-
-# 다양한 표기를 표준 키로 모은다 (앱 스피너는 tv/sofa/table/chair/shelf 를 보낸다).
-_OBJECT_ALIASES = {
-    "television": "tv", "monitor": "tv", "screen": "tv",
-    "couch": "sofa", "settee": "sofa", "loveseat": "sofa",
-    "desk": "table", "dining table": "table", "coffee table": "table", "side table": "table",
-    "armchair": "chair", "stool": "chair", "seat": "chair",
-    "bookshelf": "shelf", "bookcase": "shelf", "shelves": "shelf", "cabinet": "shelf",
-}
 
 # 사물 종류별로 "무엇을 복원해야 하는가" 가 다르다.
 _SURFACE_HINTS = {
@@ -69,11 +61,6 @@ _DEFAULT_HINT = (
     "Rebuild whatever surface was behind it — wall, floor, or both — matching the surrounding "
     "colour, texture, pattern and perspective, and remove any shadow it cast."
 )
-
-
-def _normalize_object_type(object_type: str) -> str:
-    key = (object_type or "").strip().lower()
-    return _OBJECT_ALIASES.get(key, key)
 
 
 class ExternalRemoveObjectProvider(RemoveObjectProvider):
@@ -156,9 +143,13 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
                 timeout=self.timeout,
             )
         except httpx.TimeoutException as exc:
-            raise ProviderError(f"Gemini 요청 시간 초과 ({self.timeout}s)") from exc
+            raise ProviderError(
+                f"Gemini 요청 시간 초과 ({self.timeout}s)", retryable=True
+            ) from exc
         except httpx.HTTPError as exc:  # ConnectError, ReadError, ProxyError ...
-            raise ProviderError(f"Gemini 네트워크 오류: {exc!s}") from exc
+            raise ProviderError(
+                f"Gemini 네트워크 오류: {exc!s}", retryable=True
+            ) from exc
 
         self._raise_for_status(resp)
 
@@ -181,7 +172,7 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
 
     @staticmethod
     def _build_prompt(object_type: str, region: dict, extra: str) -> str:
-        norm = _normalize_object_type(object_type)
+        norm = normalize_object_type(object_type)
         surface = _SURFACE_HINTS.get(norm, _DEFAULT_HINT)
         label = (object_type or "").strip() or norm or "object"
         where = location_hint(region)
@@ -210,7 +201,8 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
 
         code = resp.status_code
         if code == 429:
-            raise ProviderError(f"Gemini API 사용 한도 초과 (429): {detail}")
+            # 한도 초과는 잠깐 뒤 재시도하면 풀릴 수 있음
+            raise ProviderError(f"Gemini API 사용 한도 초과 (429): {detail}", retryable=True)
         if code in (401, 403):
             raise ProviderError(f"Gemini 인증 실패 ({code}) — API 키를 확인하세요: {detail}")
         if code == 400:
@@ -218,7 +210,7 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
         if code == 404:
             raise ProviderError(f"Gemini 모델 없음 (404) — INTERIOR_AI_MODEL 확인: {detail}")
         if 500 <= code < 600:
-            raise ProviderError(f"Gemini 서버 오류 ({code}): {detail}")
+            raise ProviderError(f"Gemini 서버 오류 ({code}): {detail}", retryable=True)
         raise ProviderError(f"Gemini 요청 실패 ({code}): {detail}")
 
     @staticmethod

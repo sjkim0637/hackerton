@@ -42,9 +42,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   `docs/handoffs/user2.md`.
 - [진단완료] 소파 실패 원인 = "배경 복잡"이 아니라 "bbox 안 다른 가구 겹침".
   타이트 bbox로 겹친 물체를 빼면 복잡 배경에서도 깨끗이 됨. 상세는 `docs/handoffs/user2.md`.
+- [DONE] 서버(사용자 3): objectType 정규화(별칭 흡수)·중복 요청 방지(처리 중 포함)·
+  일시적 오류 자동 재시도(1회)·타임아웃 대응·AI 호출 횟수/비용 로그. `docs/handoffs/user3.md`.
+- [DONE] 앱(사용자 1): 드래그 박스가 화면 40% 이상이면 겹침 경고 Toast, 선택 모드 안내 문구.
 - [TODO] 정밀 세그멘테이션 마스크(bbox → 실제 사물 윤곽) 또는 포인트/브러시 "이 사물만" 선택,
-  드래그 박스가 다른 가구를 포함할 것 같으면 경고, 재시도/중복호출 방지,
-  remove-object 를 BackgroundTasks 밖 워커로.
+  remove-object 를 BackgroundTasks 밖 워커/큐로.
 
 ## PHASE 2 이후 (개요만)
 

@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     # 프롬프트 끝에 덧붙일 추가 지시문 (프롬프트 튜닝/실험용, 코드 수정 없이).
     ai_extra_instruction: str = ""
 
-    # 작업당 외부 AI 호출 상한
+    # 일시적 오류(네트워크/타임아웃/429/5xx) 시 자동 재시도 횟수와 대기(초)
+    ai_max_retries: int = 1
+    ai_retry_backoff_seconds: float = 2.0
+
+    # 호출 1회당 대략적 비용(USD). 로그 집계용. gemini-2.5-flash-image ≈ $0.039/장.
+    ai_cost_per_call_usd: float = 0.039
+
+    # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20
 
     @property

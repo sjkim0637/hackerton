@@ -51,10 +51,17 @@ INTERIOR_AI_MODEL=gemini-3.1-flash-image
 서버를 재시작하면 `build_provider()` 가 설정만 보고 `ExternalRemoveObjectProvider`
 (`app/ai/external.py`)를 쓴다. 라우터·저장·작업 큐 코드는 그대로다.
 
-동작: 키프레임 이미지 + bbox 로 만든 흑백 마스크 PNG + 지시문을 Gemini
+동작: 키프레임 이미지 + bbox 로 만든 흑백 마스크 PNG + 사물 종류별 지시문을 Gemini
 `:generateContent` 에 보내고, 응답 파트에서 이미지(base64)를 받아 JPEG 로 재인코딩한다.
-실패는 `job.status="failed"` + `error` 메시지로 나온다 (429 한도 초과 / 401·403 인증 /
-400 잘못된 요청 / 404 모델 없음 / 5xx / 네트워크·타임아웃 / 이미지 없음 / 안전 차단).
+`object_type` 은 서버에서 정규화한다 (`couch→sofa`, `desk→table`, `television→tv` …).
+
+실패는 `job.status="failed"` + `error` 메시지로 나온다. **네트워크·타임아웃·429·5xx 는
+`INTERIOR_AI_MAX_RETRIES`(기본 1) 회 자동 재시도**(`INTERIOR_AI_RETRY_BACKOFF_SECONDS` 대기),
+인증(401/403)·400·404·안전차단·이미지없음 은 재시도 없이 바로 실패.
+
+동일 `(keyframe_id, region, object_type)` 요청은 **완료됐거나 처리 중이면** 그 job 을
+그대로 돌려준다(중복 AI 호출 방지). 서버 로그에 매 AI 호출마다 scene 누적 횟수와
+`INTERIOR_AI_COST_PER_CALL_USD`(기본 0.039) 기준 예상 비용을 남긴다.
 
 키를 넣은 뒤 실제 결과 확인 (실사진 권장):
 

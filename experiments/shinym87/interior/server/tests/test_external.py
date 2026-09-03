@@ -81,6 +81,7 @@ def test_rate_limit_maps_to_provider_error(monkeypatch):
     with pytest.raises(ProviderError) as exc:
         _call(_provider())
     assert "429" in str(exc.value)
+    assert exc.value.retryable is True  # 한도 초과 = 잠깐 뒤 재시도 대상
 
 
 def test_auth_error_maps_to_provider_error(monkeypatch):
@@ -92,6 +93,18 @@ def test_auth_error_maps_to_provider_error(monkeypatch):
     with pytest.raises(ProviderError) as exc:
         _call(_provider())
     assert "403" in str(exc.value)
+    assert exc.value.retryable is False  # 인증 오류는 재시도해도 소용 없음
+
+
+def test_server_error_is_retryable(monkeypatch):
+    def fake_post(url, headers=None, json=None, timeout=None):
+        return httpx.Response(503, json={"error": {"message": "unavailable"}},
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(ProviderError) as exc:
+        _call(_provider())
+    assert exc.value.retryable is True
 
 
 def test_network_error_wrapped(monkeypatch):
@@ -102,6 +115,7 @@ def test_network_error_wrapped(monkeypatch):
     with pytest.raises(ProviderError) as exc:
         _call(_provider())
     assert "네트워크" in str(exc.value)
+    assert exc.value.retryable is True
 
 
 def test_timeout_wrapped(monkeypatch):
@@ -112,6 +126,7 @@ def test_timeout_wrapped(monkeypatch):
     with pytest.raises(ProviderError) as exc:
         _call(_provider())
     assert "시간 초과" in str(exc.value)
+    assert exc.value.retryable is True
 
 
 def test_response_without_image_raises(monkeypatch):

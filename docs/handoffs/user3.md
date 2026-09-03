@@ -11,7 +11,49 @@ shinym87 (같은 사람이 앱 쪽 PHASE 1 을 이어서 진행) / 이후 합류
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 "사용자 3 (서버 / 통합)" 부분.
+PHASE 1 + PHASE 2 "사용자 3 (서버 / 통합)".
+
+## PHASE 2 — objectType 반영 / 중복 방지 / 재시도 / 타임아웃 / 비용 로그 (2026-09-03)
+
+1. **objectType 파라미터 정상 처리** (`app/ai/objects.py` 신설)
+   - `POST /scenes/{id}/remove-object` 가 `object_type` 을 `normalize_object_type()` 로
+     정규화(공백/대소문자 + `couch→sofa`, `desk/coffee table→table`, `television→tv` …).
+     알 수 없는 값은 거부하지 않고 경고 로그만 남기고 그대로 처리.
+   - 정규화된 종류로 `objects` 테이블 저장 + 캐시 키 + `_run_job` → provider →
+     `external._build_prompt` 의 종류별 지시문에 반영. 키프레임 메타의 `targetObject`
+     도 저장 시 정규화. **"tv" 하드코딩 없음** (앱이 tv/sofa/table/chair/shelf 전송).
+   - 테스트: `test_api.py::test_remove_object_uses_selected_object_type`,
+     `::test_object_type_aliases_are_normalized`.
+2. **동일 요청 중복 호출 방지 강화** (`store.find_job_by_cache_key`)
+   - 기존엔 `status='done'` 만 캐시. 이제 `done` + **처리 중(`queued`/`running`)** 도 포함.
+     같은 `(keyframe_id, region, object_type)` 요청이 아직 돌고 있으면 새 job 을 만들지
+     않고 그 job 을 그대로 반환 → 진짜 중복 호출 방지. `add_object` 도 재요청 시 안 늘어남.
+   - 테스트: `test_api.py::test_duplicate_request_reuses_job_and_no_extra_ai_call`.
+3. **AI 호출 실패 시 자동 재시도** (`_run_job`, `ProviderError.retryable`)
+   - `ProviderError(msg, retryable=True)` — 네트워크/타임아웃/429/5xx 는 재시도 대상.
+     인증(401/403)·400·404·안전차단·이미지없음 은 재시도 안 함.
+   - `_run_job` 이 `INTERIOR_AI_MAX_RETRIES`(기본 1) 회까지 `INTERIOR_AI_RETRY_BACKOFF_SECONDS`
+     (기본 2초) 대기 후 재시도. 그래도 실패하면 `job.status="failed"` + error.
+   - 테스트: `test_job_retry.py` (일시적 오류 1회 → 재시도 성공 / 인증 오류 → 재시도 없이 실패),
+     `test_external.py` 의 `retryable` 플래그 검증.
+4. **처리 시간 초과 대응**
+   - `httpx.post(timeout=INTERIOR_AI_TIMEOUT_SECONDS)` (기본 120s) 로 호출 자체를 제한.
+     타임아웃은 `retryable=True` 이므로 재시도 1회 후 실패 처리. 최악 대기 ≈
+     2×timeout + backoff 로 유계. 앱은 별도로 120초 폴링 제한.
+5. **AI 호출 횟수 / 대략 비용 로그** (`scenes.ai_calls` 컬럼, `store.bump_ai_calls`)
+   - 실제 provider 호출마다(재시도 포함) `scenes.ai_calls` 증가. `_run_job` 로그:
+     `[job X] AI 호출 (provider=…, 시도 n/m) · scene 누적 K회 · 예상 비용: 이번 ~$0.0390,
+     scene 누적 ~$…`. mock 은 비용 0.
+   - 비용 단가는 `INTERIOR_AI_COST_PER_CALL_USD` (기본 0.039, gemini-2.5-flash-image 기준).
+   - `max_ai_calls_per_scene` 한도 체크도 `count_jobs` 대신 `scenes.ai_calls` 기준으로 변경.
+   - 앱 UI 에도 종류 스피너에서 고른 값이 `objectType` 으로 전달됨(사용자 1).
+   - 서버 기동 시 AI 설정 요약 1줄 로그 (`main.py`).
+
+### 알려진 한계 (PHASE 3)
+- `remove-object` 는 아직 `BackgroundTasks` 로 실행 → 오래 걸리는 호출이 폴링을 길게 만든다.
+  워커/큐 분리 필요.
+- 중복 방지·한도 체크는 서버가 단일 프로세스라는 가정. 동시에 들어온 서로 다른 요청 2건이
+  한도 체크를 같이 통과할 수 있는 미세 레이스 존재 (해커톤 범위에선 무시).
 
 ## Completed
 

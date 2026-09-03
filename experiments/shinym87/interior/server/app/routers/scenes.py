@@ -4,12 +4,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
+from ..ai import ProviderError, is_known, normalize_object_type
 from ..ai.imageops import ensure_jpeg_size, image_size
 from ..config import get_settings
 from ..deps import get_provider, get_store
@@ -103,7 +105,7 @@ async def upload_keyframe(
     )
     store.add_keyframe(keyframe_id, scene_id, str(image_path), str(meta_path))
 
-    # 사물 정보가 함께 오면 형식 그대로 저장 (실제 인식은 아직 없음)
+    # 사물 정보가 함께 오면 저장 (실제 인식은 아직 없음). 종류는 정규화해서 보관.
     if meta_obj.target_object is not None:
         obj_seq = store.next_seq(scene_id, "obj_seq")
         object_id = meta_obj.target_object.id or new_object_id(scene_id, obj_seq)
@@ -111,7 +113,7 @@ async def upload_keyframe(
             object_id,
             scene_id,
             keyframe_id,
-            meta_obj.target_object.object_type,
+            normalize_object_type(meta_obj.target_object.object_type),
             meta_obj.target_object.region.model_dump(),
         )
 
@@ -154,50 +156,83 @@ def _run_job(
     object_type: str,
 ) -> None:
     store = get_store()
+    settings = get_settings()
+    provider = get_provider()
     store.update_job(job_id, status="running")
-    try:
-        provider = get_provider()
-        source_bytes = Path(image_path).read_bytes()
-        original_size = image_size(source_bytes)
+
+    source_bytes = Path(image_path).read_bytes()
+    original_size = image_size(source_bytes)
+    _log.info(
+        "[job %s] provider=%s keyframe=%s (%d bytes, %dx%d) object=%s region=%s",
+        job_id, provider.name, Path(image_path).name, len(source_bytes),
+        original_size[0], original_size[1], object_type, region,
+    )
+
+    per_call_cost = 0.0 if provider.name == "mock" else settings.ai_cost_per_call_usd
+    attempts = max(1, settings.ai_max_retries + 1)
+    last_exc: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        # --- AI 호출 횟수 / 대략 비용 기록 ---
+        scene_calls = store.bump_ai_calls(scene_id)
         _log.info(
-            "[job %s] provider=%s keyframe=%s (%d bytes, %dx%d) object=%s region=%s",
-            job_id, provider.name, Path(image_path).name, len(source_bytes),
-            original_size[0], original_size[1], object_type, region,
+            "[job %s] AI 호출 (provider=%s, 시도 %d/%d) · scene 누적 %d회 · "
+            "예상 비용: 이번 ~$%.4f, scene 누적 ~$%.4f",
+            job_id, provider.name, attempt, attempts, scene_calls,
+            per_call_cost, scene_calls * per_call_cost,
         )
-        # 프롬프트 문구는 프로바이더가 사물 종류에 맞춰 만든다 (app/ai/external.py._build_prompt).
-        # INTERIOR_AI_EXTRA_INSTRUCTION 이 있으면 프롬프트 끝에 덧붙인다 (튜닝/실험용).
-        result = provider.remove_object(
-            image_bytes=source_bytes,
-            region=region,
-            object_type=object_type,
-            prompt=get_settings().ai_extra_instruction,
-        )
-        # 공통 보정: 프로바이더가 무엇을 돌려주든 결과는 항상 원본과 같은 해상도의 JPEG.
-        final_bytes = ensure_jpeg_size(result.image_bytes, original_size)
+        try:
+            # 프롬프트 문구는 프로바이더가 사물 종류에 맞춰 만든다.
+            # INTERIOR_AI_EXTRA_INSTRUCTION 이 있으면 프롬프트 끝에 덧붙인다 (튜닝/실험용).
+            result = provider.remove_object(
+                image_bytes=source_bytes,
+                region=region,
+                object_type=object_type,
+                prompt=settings.ai_extra_instruction,
+            )
+            # 공통 보정: 결과는 항상 원본과 같은 해상도의 JPEG.
+            final_bytes = ensure_jpeg_size(result.image_bytes, original_size)
 
-        results_dir = get_settings().scenes_dir / scene_id / "results"
-        results_dir.mkdir(parents=True, exist_ok=True)
-        out_path = results_dir / f"{job_id}.jpg"
-        out_path.write_bytes(final_bytes)
+            results_dir = settings.scenes_dir / scene_id / "results"
+            results_dir.mkdir(parents=True, exist_ok=True)
+            out_path = results_dir / f"{job_id}.jpg"
+            out_path.write_bytes(final_bytes)
 
-        store.update_job(
-            job_id,
-            status="done",
-            result_path=str(out_path),
-            result_url=f"/scenes/{scene_id}/results/{job_id}.jpg",
-            changed_region=result.changed_region,
-        )
-        _log.info("[job %s] done → %s (%d bytes)", job_id, out_path.name, len(final_bytes))
-    except Exception as exc:  # noqa: BLE001 - 작업 실패는 상태로 보고한다
-        _log.warning("[job %s] failed: %s: %s", job_id, type(exc).__name__, exc)
-        store.update_job(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
+            store.update_job(
+                job_id,
+                status="done",
+                result_path=str(out_path),
+                result_url=f"/scenes/{scene_id}/results/{job_id}.jpg",
+                changed_region=result.changed_region,
+            )
+            _log.info(
+                "[job %s] done → %s (%d bytes, 시도 %d회)",
+                job_id, out_path.name, len(final_bytes), attempt,
+            )
+            return
+        except ProviderError as exc:
+            last_exc = exc
+            if getattr(exc, "retryable", False) and attempt < attempts:
+                _log.warning(
+                    "[job %s] 일시적 오류 (재시도 %d/%d), %.1fs 후 재시도: %s",
+                    job_id, attempt, attempts - 1, settings.ai_retry_backoff_seconds, exc,
+                )
+                time.sleep(settings.ai_retry_backoff_seconds)
+                continue
+            break
+        except Exception as exc:  # noqa: BLE001 - 그 외 오류는 재시도 안 함
+            last_exc = exc
+            break
+
+    _log.warning("[job %s] failed: %s: %s", job_id, type(last_exc).__name__, last_exc)
+    store.update_job(job_id, status="failed", error=f"{type(last_exc).__name__}: {last_exc}")
 
 
 @router.post("/scenes/{scene_id}/remove-object", response_model=JobOut, status_code=202)
 def remove_object(
     scene_id: str, body: RemoveObjectRequest, background: BackgroundTasks
 ) -> JobOut:
-    _require_scene(scene_id)
+    scene = _require_scene(scene_id)
     store = get_store()
     settings = get_settings()
 
@@ -205,26 +240,41 @@ def remove_object(
     if kf is None or kf["scene_id"] != scene_id:
         raise HTTPException(status_code=404, detail=f"키프레임 없음: {body.keyframe_id}")
 
+    # 사물 종류 정규화: 앱은 tv/sofa/table/chair/shelf 를 보낸다. couch→sofa 등 별칭도 흡수.
+    object_type = normalize_object_type(body.object_type)
+    if not object_type:
+        raise HTTPException(status_code=422, detail="object_type 이 비어 있습니다")
+    if not is_known(object_type):
+        _log.warning(
+            "[scene %s] 알 수 없는 object_type=%r (그대로 처리)", scene_id, body.object_type
+        )
+
     region = body.target.model_dump()
-    cache_key = _cache_key(body.keyframe_id, region, body.object_type)
+    cache_key = _cache_key(body.keyframe_id, region, object_type)
 
-    cached = store.find_done_job_by_cache_key(scene_id, cache_key)
-    if cached is not None:
-        return _job_out(cached)
+    # 중복 호출 방지: 완료됐거나 아직 처리 중인 동일 요청이 있으면 그 job 을 그대로 돌려준다.
+    existing = store.find_job_by_cache_key(scene_id, cache_key)
+    if existing is not None:
+        _log.info(
+            "[job %s] 중복 요청 → 기존 job 재사용 (status=%s)",
+            existing["job_id"], existing["status"],
+        )
+        return _job_out(existing)
 
-    if store.count_jobs(scene_id) >= settings.max_ai_calls_per_scene:
+    # 호출 한도: 이 scene 의 실제 AI 호출 누적 기준
+    if scene.get("ai_calls", 0) >= settings.max_ai_calls_per_scene:
         raise HTTPException(
             status_code=429,
             detail=f"이 작업의 외부 AI 호출 한도({settings.max_ai_calls_per_scene}회)를 초과했습니다",
         )
 
-    # 편집 대상 사물 정보도 저장 (형식만)
+    # 편집 대상 사물 정보도 저장 (형식만, 정규화된 종류로)
     obj_seq = store.next_seq(scene_id, "obj_seq")
     store.add_object(
         new_object_id(scene_id, obj_seq),
         scene_id,
         body.keyframe_id,
-        body.object_type,
+        object_type,
         region,
     )
 
@@ -232,7 +282,7 @@ def remove_object(
     job_id = new_job_id(scene_id, job_seq)
     store.create_job(job_id, scene_id, body.keyframe_id, cache_key)
     background.add_task(
-        _run_job, job_id, scene_id, kf["image_path"], region, body.object_type
+        _run_job, job_id, scene_id, kf["image_path"], region, object_type
     )
     return JobOut(job_id=job_id, keyframe_id=body.keyframe_id, status="queued")
 

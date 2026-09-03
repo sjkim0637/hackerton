@@ -34,6 +34,13 @@ def _setup_logging() -> None:
 def create_app() -> FastAPI:
     _setup_logging()
     settings = get_settings()
+    logging.getLogger("interior").info(
+        "AI 설정: provider=%s, model=%s, timeout=%.0fs, 재시도=%d회, "
+        "호출당 비용≈$%.4f, scene 당 최대 %d회",
+        settings.ai_provider, settings.ai_model, settings.ai_timeout_seconds,
+        settings.ai_max_retries, settings.ai_cost_per_call_usd,
+        settings.max_ai_calls_per_scene,
+    )
 
     app = FastAPI(
         title="Interior AR — Server / Integration",
