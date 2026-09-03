@@ -67,7 +67,10 @@ class MainActivity : AppCompatActivity() {
             onAfterCapture = { furniture.setAllVisible(true) },
         )
 
-        space.onFrame = { furniture.billboard() }
+        space.onFrame = {
+            furniture.billboard()
+            removal.onFrame()   // 결과 quad 를 벽 앵커에 스무딩해서 고정
+        }
         space.isIdle = { furniture.isIdle() }
 
         sceneView.setOnGestureListener(

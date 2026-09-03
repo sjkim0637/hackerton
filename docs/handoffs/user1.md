@@ -13,6 +13,35 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 + PHASE 2 "사용자 1 (공간 / AR)".
 
+## PHASE 3 — 공간 정합: 결과 quad 안정화 + 경계 블렌딩 + 지터 스무딩 (2026-09-03)
+
+기획서상 이 프로젝트의 기술적 핵심 단계. "완벽함보다 폰을 자연스럽게 움직여도 어색하지
+않은 수준"이 목표. **결과 이미지(quad)** 를 벽 앵커에 더 견고하게 붙인다.
+
+1. **카메라 이동 안정성 + 3. 지터 스무딩** (`RemovalController.onFrame()`)
+   - `applyResult()` 에서 결과 `AnchorNode` 를 만들 때 `updateAnchorPose = false` 로 두고,
+     `MainActivity` 의 `space.onFrame` 에서 `removal.onFrame()` 을 매 프레임 호출한다.
+   - `onFrame()`: 앵커 pose 를 읽어 **위치에 이동 평균(EMA, `SMOOTH_ALPHA = 0.2`)** 을
+     적용한 뒤 `resultNode.pose` 에 넣는다 → ARCore 재추적 지터가 완화된다.
+   - 앵커 `trackingState`:
+     - `TRACKING` → 스무딩 적용
+     - `PAUSED`(잠깐 놓침) → **아무것도 안 함(마지막 위치 유지)** → "미끄러짐" 방지
+     - `STOPPED`(영구 소실) → quad 숨김
+   - 앵커는 이미 `HitResult.createAnchorOrNull()` 로 만들어 평면 trackable 에 붙어 있다
+     (world anchor 보다 재추적에 강함).
+2. **경계 알파 블렌딩** (`remove/EdgeFade.kt`)
+   - 결과 이미지를 quad 로 붙이기 전에 `EdgeFade.feather()` 로 **네 가장자리 alpha 를
+     0 으로 그라데이션**(짧은 변의 8%, `PorterDuff.DST_IN` + `LinearGradient` 4장, 모서리는
+     두 램프가 곱해짐). 사각형 경계가 카메라 화면과 자연스럽게 섞인다.
+   - `ImageNode` 는 RGBA 비트맵의 alpha 를 그대로 렌더한다(반투명 머티리얼).
+
+### 아직 실기기 확인 필요
+- 코드/빌드 완료. "폰을 움직여도 quad 가 벽에 붙어 보이는지 / 지터가 눈에 덜 띄는지 /
+  경계가 덜 각져 보이는지" 는 실기기에서 눈으로 확인해야 한다.
+- 튜닝 포인트: `SMOOTH_ALPHA`(작을수록 더 부드럽지만 반응 느림),
+  `EdgeFade.feather(featherFrac=…)`(클수록 더 흐리게 섞임).
+- 회전은 스무딩하지 않음(회전 지터가 상대적으로 작음). 필요하면 quaternion slerp 추가.
+
 ## PHASE 2 — 선택 영역 실측 표시 (2026-09-03)
 
 그린 사각형의 실제 가로/세로를 재서 사각형 근처에 표시. **"가구 크기"가 아니라

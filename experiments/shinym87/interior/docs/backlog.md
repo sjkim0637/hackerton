@@ -50,7 +50,10 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 ## PHASE 2 이후 (개요만)
 
-- PHASE 3: 복원 이미지 공간 고정 안정화, 카메라 이동 시 흔들림/재투영 보정, 가림 처리
+- PHASE 3 (진행 중, 사용자 1): 결과 quad 를 벽 앵커에 프레임마다 EMA 스무딩해서 고정
+  (`RemovalController.onFrame`, `updateAnchorPose=false`), 추적 놓치면 마지막 위치 유지,
+  가장자리 알파 페이드아웃(`remove/EdgeFade.kt`). 실기기 확인 남음. 남은 것: 재투영 보정,
+  가림(occlusion) 처리, 회전 slerp
 - PHASE 4: 기존 가구 떼어내기(원위치 저장) → 이동/회전/크기, undo/redo
 - PHASE 5: 새 가구 카탈로그 배치, 바닥/벽 자동 맞춤, 벽지/색상 변경
 - PHASE 6/7: B(경량 모델) / C(자체 엔진) 실험 — 별도 `experiment/*` 브랜치

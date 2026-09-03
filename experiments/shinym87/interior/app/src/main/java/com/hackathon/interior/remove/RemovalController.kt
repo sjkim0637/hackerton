@@ -14,6 +14,7 @@ import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
+import com.google.ar.core.TrackingState
 import com.hackathon.interior.R
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
@@ -65,6 +66,9 @@ class RemovalController(
     private var resultNode: AnchorNode? = null
     private var showingAfter = false
     private var busy = false
+
+    /** 결과 quad 위치의 이동 평균값(지터 완화). onFrame 에서 갱신. */
+    private var smoothedPos: FloatArray? = null
 
     init {
         binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
@@ -301,7 +305,8 @@ class RemovalController(
     /** 결과 이미지를 벽 평면 quad 로 붙인다. 벽 앵커가 없으면 전체화면으로 대체 표시. */
     private fun applyResult(full: Bitmap, region: FloatArray) {
         clearResult()
-        val patch = cropNormalized(full, region)
+        // 가장자리를 투명하게 페이드아웃해 quad 경계가 카메라 화면과 자연스럽게 섞이게 한다.
+        val patch = EdgeFade.feather(cropNormalized(full, region))
         val anchor = wallAnchor
         if (anchor != null) {
             val image = ImageNode(
@@ -315,10 +320,13 @@ class RemovalController(
             }
             val node = AnchorNode(sceneView.engine, anchor).apply {
                 isPositionEditable = false
+                // pose 는 우리가 매 프레임 스무딩해서 직접 넣는다 (onFrame). SceneView 자동 갱신 끔.
+                updateAnchorPose = false
                 addChildNode(image)
             }
             sceneView.addChildNode(node)
             resultNode = node
+            smoothedPos = null
             binding.resultOverlay.visibility = View.GONE
         } else {
             binding.resultOverlay.setImageBitmap(full)
@@ -328,6 +336,42 @@ class RemovalController(
         binding.btnToggleRemoval.visibility = View.VISIBLE
         binding.btnToggleRemoval.text = "삭제 후 (보임)"
         status("완료 · '삭제 전/후'로 전환하세요")
+    }
+
+    /**
+     * 매 프레임 호출: 결과 quad 를 벽 앵커에 스무딩해서 고정한다.
+     * - 앵커가 추적 중이 아닐 땐 마지막 위치를 그대로 두어 "미끄러짐"을 막는다.
+     * - 위치 값에 이동 평균(EMA)을 걸어 ARCore 재추적 지터를 완화한다.
+     * - 회전은 앵커 값을 그대로 쓴다(회전 지터는 상대적으로 작다).
+     */
+    fun onFrame() {
+        val node = resultNode ?: return
+        val anchor = wallAnchor ?: return
+        val ts = anchor.trackingState
+        if (ts == TrackingState.STOPPED) {
+            node.isVisible = false
+            return
+        }
+        if (ts != TrackingState.TRACKING) return  // PAUSED: 마지막 위치 유지
+
+        val p = anchor.pose
+        val prev = smoothedPos
+        val nx: Float
+        val ny: Float
+        val nz: Float
+        if (prev == null) {
+            nx = p.tx(); ny = p.ty(); nz = p.tz()
+        } else {
+            nx = prev[0] + (p.tx() - prev[0]) * SMOOTH_ALPHA
+            ny = prev[1] + (p.ty() - prev[1]) * SMOOTH_ALPHA
+            nz = prev[2] + (p.tz() - prev[2]) * SMOOTH_ALPHA
+        }
+        smoothedPos = floatArrayOf(nx, ny, nz)
+
+        val quat = FloatArray(4)
+        p.getRotationQuaternion(quat, 0)
+        node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
+        if (!node.isVisible && showingAfter) node.isVisible = true
     }
 
     // -------------------------------------------------------------- 삭제 전/후 (P1-9)
@@ -349,6 +393,7 @@ class RemovalController(
             runCatching { node.destroy() }
         }
         resultNode = null
+        smoothedPos = null
         binding.btnToggleRemoval.visibility = View.GONE
         binding.resultOverlay.visibility = View.GONE
         binding.resultOverlay.setImageDrawable(null)
@@ -501,6 +546,9 @@ class RemovalController(
 
         /** 선택 사각형이 화면 면적의 이 비율 이상이면 "넓다" 경고. */
         const val LARGE_SELECTION_FRACTION = 0.40f
+
+        /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
+        const val SMOOTH_ALPHA = 0.2f
 
         /** 서버 키 → 화면 표시 라벨. server/catalog/furniture.json 의 category 와 맞춘다. */
         val OBJECT_TYPES = listOf(
