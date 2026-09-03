@@ -31,6 +31,10 @@ class FurnitureItem(
     var imageNode: ImageNode? = null,
     /** 회전 버튼으로 누적되는 평면 내 회전각(도). 큐브·이미지에 함께 적용. */
     var rotationDeg: Float = 0f,
+    /** PHASE 5: 카탈로그에서 온 가구면 그 항목 id (`GET /catalog` 의 id). 서버 저장/복원 키. */
+    var catalogItemId: String? = null,
+    /** 서버 저장용 사물 종류 (카탈로그 category: tv|sofa|table|chair|shelf). 큐브는 "other". */
+    var objectType: String = "other",
 ) {
     companion object {
         const val MIN_SCALE = 0.3f

@@ -109,8 +109,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   + `catalog_item_id` 컬럼(기존 행은 removed_object 로 ALTER 가드), `POST /placements` 분기
   (catalog 면 catalog_item_id 필수·존재 검증), `GET /placements` 응답에 `source` 포함.
   `pytest` 47개. 앱 연동은 사용자 1 TODO(`docs/handoffs/user1.md`). `docs/handoffs/user3.md`.
-- [TODO] 사용자 1: 카탈로그 배치 확정 시 `POST /placements`(source=catalog) 호출 +
-  `InteriorApiClient.createPlacement` 에 source/catalogItemId 파라미터. 복원 흐름.
+- [DONE] 사용자 1: 카탈로그 배치를 placements API 에 연동. `FurnitureController.ensureCatalogScene`
+  ("가구 추가" 최초 createScene), 배치/드래그/회전/크기 후 500ms 디바운스 `POST /placements`
+  (`source="catalog"`, `catalog_item_id`), `restoreCatalogFromServer`(catalog_item_id 별 최신
+  1건 → `GET /catalog/{id}` 크기 → 화면 기준 hitTest 재배치). `InteriorApiClient` 확장
+  (createPlacement source/catalogItemId 하위호환, listPlacements, getCatalogItem, Placement DTO).
+  removed_object 복원과 독립 공존. 실서버 스모크 OK. `docs/handoffs/user1.md`.
 - [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)

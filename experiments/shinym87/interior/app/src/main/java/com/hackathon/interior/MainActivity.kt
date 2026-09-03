@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity() {
             sceneView = sceneView,
             hitTest = space::hitTest,
             hitTestPreferring = space::hitTestPreferring,
+            scope = lifecycleScope,
+            serverBaseUrl = { removal.serverBaseUrl() },
             onSelectionChanged = ::renderSelectionPanel,
         )
 
@@ -97,6 +99,7 @@ class MainActivity : AppCompatActivity() {
             serverBaseUrl = { removal.serverBaseUrl() },
             furnitureHasSelection = furniture::hasSelection,
             status = { binding.removalStatusText.text = it },
+            onAlsoRestore = { furniture.restoreCatalogFromServer() },  // "서버 배치 복원" 이 카탈로그도 복원
         )
 
         // PHASE 5: 서버 카탈로그에서 새 가구 추가 (삭제-후-재배치와 별개 진입점).
@@ -105,12 +108,14 @@ class MainActivity : AppCompatActivity() {
             scope = lifecycleScope,
             binding = binding,
             serverBaseUrl = { removal.serverBaseUrl() },
+            onOpen = { furniture.ensureCatalogScene() },  // "가구 추가" 최초에 scene 확보 + 복원
             onPick = { item, thumb ->
                 furniture.beginCatalogPlacement(
                     name = item.name,
                     widthM = item.widthM, heightM = item.heightM, depthM = item.depthM,
                     wantWall = item.anchorHint == "wall",
                     thumb = thumb,
+                    catalogItemId = item.id, objectType = item.category,
                 )
                 binding.instructionText.text =
                     "‘${item.name}’ — ${if (item.anchorHint == "wall") "벽" else "바닥"}을 탭해 배치하세요"

@@ -51,6 +51,8 @@ class MovedObjectController(
     /** 지금 큐브가 선택돼 있으면 제스처는 큐브 몫 — 이동된 사물은 손대지 않는다. */
     private val furnitureHasSelection: () -> Boolean,
     private val status: (String) -> Unit,
+    /** "서버 배치 복원" 을 누를 때 함께 호출 — 카탈로그 가구 복원 등. */
+    private val onAlsoRestore: () -> Unit = {},
 ) {
 
     private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
@@ -299,6 +301,7 @@ class MovedObjectController(
     }
 
     private fun restoreFromServer() {
+        onAlsoRestore()   // 카탈로그 가구 등 다른 복원도 함께
         val sceneId = currentSceneId ?: run { status("복원할 세션이 없습니다"); return }
         val base = serverBaseUrl()
         status("서버에서 배치 불러오는 중…")

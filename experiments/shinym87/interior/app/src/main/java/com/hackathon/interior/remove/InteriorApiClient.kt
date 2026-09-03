@@ -43,17 +43,51 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         val anchorHint: String,      // "wall" | "floor"
     )
 
-    /** PHASE 4: 서버에 저장된 재배치(이동/회전/크기) 한 건. */
+    /** PHASE 4/5: 서버에 저장된 배치(이동/회전/크기) 한 건. */
     data class Placement(
         val placementId: String,
-        val jobId: String?,
+        val source: String,           // "removed_object" | "catalog"
         val objectType: String,
+        val jobId: String?,           // removed_object 전용
+        val sourceRect: FloatArray?,  // removed_object 전용: source_region.rect [x,y,w,h]
+        val catalogItemId: String?,   // catalog 전용
         val scale: Float,
         val rotationDeg: Float,
         val plane: String?,           // "wall" | "floor" | null
-        val sourceRect: FloatArray?,  // source_region.rect [x, y, w, h] 정규화
         val status: String,           // active | undone
     )
+
+    private fun parsePlacement(o: JSONObject): Placement {
+        val rect = o.optJSONObject("source_region")?.optJSONArray("rect")?.let { a ->
+            FloatArray(a.length()) { i -> a.getDouble(i).toFloat() }
+        }
+        return Placement(
+            placementId = o.getString("placement_id"),
+            source = o.optString("source", "removed_object"),
+            objectType = o.optString("object_type", "other"),
+            jobId = o.optString("job_id").ifEmpty { null },
+            sourceRect = rect,
+            catalogItemId = o.optString("catalog_item_id").ifEmpty { null },
+            scale = o.optDouble("scale", 1.0).toFloat(),
+            rotationDeg = o.optDouble("rotation_deg", 0.0).toFloat(),
+            plane = o.optString("plane").ifEmpty { null },
+            status = o.optString("status", "active"),
+        )
+    }
+
+    private fun parseCatalogItem(o: JSONObject): CatalogItem {
+        val s = o.optJSONObject("size_m") ?: JSONObject()
+        return CatalogItem(
+            id = o.optString("id"),
+            name = o.optString("name", o.optString("id")),
+            category = o.optString("category", ""),
+            widthM = s.optDouble("w", 0.5).toFloat(),
+            heightM = s.optDouble("h", 0.5).toFloat(),
+            depthM = s.optDouble("d", 0.5).toFloat(),
+            thumbnailUrl = o.optString("thumbnail").ifEmpty { null },
+            anchorHint = o.optString("anchor_hint", "floor"),
+        )
+    }
 
     suspend fun createScene(): String = withContext(Dispatchers.IO) {
         val conn = open("/scenes", "POST")
@@ -134,25 +168,24 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
     /** `GET /catalog` — 서버 가구 카탈로그 5종. */
     suspend fun getCatalog(): List<CatalogItem> = withContext(Dispatchers.IO) {
         val arr = JSONArray(readBody(open("/catalog", "GET")))
-        List(arr.length()) { i ->
-            val o = arr.getJSONObject(i)
-            val s = o.optJSONObject("size_m") ?: JSONObject()
-            CatalogItem(
-                id = o.optString("id"),
-                name = o.optString("name", o.optString("id")),
-                category = o.optString("category", ""),
-                widthM = s.optDouble("w", 0.5).toFloat(),
-                heightM = s.optDouble("h", 0.5).toFloat(),
-                depthM = s.optDouble("d", 0.5).toFloat(),
-                thumbnailUrl = o.optString("thumbnail").ifEmpty { null },
-                anchorHint = o.optString("anchor_hint", "floor"),
-            )
-        }
+        List(arr.length()) { i -> parseCatalogItem(arr.getJSONObject(i)) }
     }
 
-    // ---------------------------------------------------------- 재배치 (PHASE 4)
+    /** `GET /catalog/{id}` — 항목 하나. 없으면 null(404). */
+    suspend fun getCatalogItem(catalogId: String): CatalogItem? = withContext(Dispatchers.IO) {
+        val conn = open("/catalog/$catalogId", "GET")
+        if (conn.responseCode == 404) return@withContext null
+        parseCatalogItem(JSONObject(readBody(conn)))
+    }
 
-    /** `POST /scenes/{id}/placements` — 이동/회전/크기 상태 저장. placement_id 반환. */
+    // ---------------------------------------------------------- 배치 (PHASE 4/5)
+
+    /**
+     * `POST /scenes/{id}/placements` — 배치(이동/회전/크기) 저장. placement_id 반환.
+     *
+     * 하위 호환: 기존 removed_object 호출은 `source`/`catalogItemId` 를 안 넘기면 그대로 동작.
+     * 카탈로그 배치는 `source="catalog"` + `catalogItemId` 를 넘긴다 (job_id/sourceRect 대신).
+     */
     suspend fun createPlacement(
         sceneId: String,
         objectType: String,
@@ -161,11 +194,14 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         scale: Float,
         rotationDeg: Float,
         plane: String?,           // "wall" | "floor" | null
-        jobId: String?,
-        sourceRect: FloatArray?,  // 원래 제거 bbox [x, y, w, h] 정규화
+        jobId: String? = null,
+        sourceRect: FloatArray? = null,   // removed_object: 원래 제거 bbox [x,y,w,h]
+        source: String = "removed_object",
+        catalogItemId: String? = null,    // catalog 전용
     ): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("object_type", objectType)
+            .put("source", source)
             .put(
                 "pose",
                 JSONObject()
@@ -182,6 +218,7 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
                 JSONObject().put("type", "bbox").put("rect", JSONArray(sourceRect.map { it.toDouble() })),
             )
         }
+        if (catalogItemId != null) body.put("catalog_item_id", catalogItemId)
         val conn = open("/scenes/$sceneId/placements", "POST")
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
@@ -189,25 +226,15 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         JSONObject(readBody(conn)).getString("placement_id")
     }
 
-    /** `GET /scenes/{id}/placements` 의 마지막(최신) active 배치. 없으면 null. */
-    suspend fun latestActivePlacement(sceneId: String): Placement? = withContext(Dispatchers.IO) {
+    /** `GET /scenes/{id}/placements` — active 배치 전부 (서버 정렬: 최신순). */
+    suspend fun listPlacements(sceneId: String): List<Placement> = withContext(Dispatchers.IO) {
         val arr = JSONArray(readBody(open("/scenes/$sceneId/placements", "GET")))
-        if (arr.length() == 0) return@withContext null
-        val o = arr.getJSONObject(0)   // 서버가 최신순 정렬
-        val rect = o.optJSONObject("source_region")?.optJSONArray("rect")?.let { a ->
-            FloatArray(a.length()) { i -> a.getDouble(i).toFloat() }
-        }
-        Placement(
-            placementId = o.getString("placement_id"),
-            jobId = o.optString("job_id").ifEmpty { null },
-            objectType = o.optString("object_type", "other"),
-            scale = o.optDouble("scale", 1.0).toFloat(),
-            rotationDeg = o.optDouble("rotation_deg", 0.0).toFloat(),
-            plane = o.optString("plane").ifEmpty { null },
-            sourceRect = rect,
-            status = o.optString("status", "active"),
-        )
+        List(arr.length()) { i -> parsePlacement(arr.getJSONObject(i)) }
     }
+
+    /** 마지막 active **removed_object** 배치 (PHASE 4 이동 복원용). 없으면 null. */
+    suspend fun latestActivePlacement(sceneId: String): Placement? =
+        listPlacements(sceneId).firstOrNull { it.source == "removed_object" }
 
     /** `POST /scenes/{id}/placements/undo` — true=취소함, false=취소할 배치 없음(404). */
     suspend fun undoPlacement(sceneId: String): Boolean = withContext(Dispatchers.IO) {

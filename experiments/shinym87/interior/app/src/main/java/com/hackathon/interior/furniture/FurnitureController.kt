@@ -1,15 +1,22 @@
 package com.hackathon.interior.furniture
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.HitResult
 import com.hackathon.interior.ar.PlaneKind
+import com.hackathon.interior.remove.InteriorApiClient
 import com.hackathon.interior.ui.FurnitureInfoDialog
 import io.github.sceneview.ar.ARSceneView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import io.github.sceneview.ar.arcore.createAnchorOrNull
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.material.setColor
@@ -39,9 +46,16 @@ class FurnitureController(
     private val hitTest: (Float, Float) -> HitResult?,
     /** 사물 종류에 맞는 평면(벽/바닥) 우선 hitTest. 카탈로그 배치·드래그에 쓴다. */
     private val hitTestPreferring: (Float, Float, Boolean) -> HitResult?,
+    /** 코루틴 스코프 (카탈로그 배치를 서버 placements 에 저장/복원). */
+    private val scope: CoroutineScope,
+    /** 현재 서버 주소 (부수효과 없이). */
+    private val serverBaseUrl: () -> String,
     /** 선택 대상이나 크기가 바뀔 때 호출. null 이면 선택 해제. */
     private val onSelectionChanged: (FurnitureItem?) -> Unit,
 ) {
+
+    private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
+    private val handler = Handler(Looper.getMainLooper())
 
     private val items = mutableListOf<FurnitureItem>()
     private var selected: FurnitureItem? = null
@@ -58,7 +72,17 @@ class FurnitureController(
         val size: Size,
         val wantWall: Boolean,
         val thumb: Bitmap?,
+        val catalogItemId: String?,
+        val objectType: String,
     )
+
+    /** PHASE 5: 카탈로그 가구 배치를 저장할 서버 scene. "가구 추가" 최초에 확보한다. */
+    private var catalogSceneId: String? = null
+    private var catalogRestored = false
+
+    /** 500ms 디바운스 저장 대상 (마지막으로 조작한 카탈로그 가구). */
+    private var pendingSaveItem: FurnitureItem? = null
+    private val catalogSaveRunnable = Runnable { pendingSaveItem?.let { saveCatalogPlacement(it) } }
 
     private var draggingSelected = false
     private var dragIsVertical = false
@@ -69,15 +93,50 @@ class FurnitureController(
     // ------------------------------------------------- PHASE 5: 카탈로그 가구 배치
 
     /**
+     * "가구 추가" 를 처음 누른 시점에 호출한다. 서버 scene 을 확보하고
+     * (지난 실행 것이 있으면 재사용), 그 scene 의 카탈로그 배치를 복원한다.
+     */
+    fun ensureCatalogScene() {
+        if (catalogSceneId != null) {
+            maybeRestoreCatalog()
+            return
+        }
+        val saved = prefs.getString(KEY_CATALOG_SCENE, null)
+        if (saved != null) {
+            catalogSceneId = saved
+            maybeRestoreCatalog()
+            return
+        }
+        scope.launch {
+            try {
+                val id = InteriorApiClient(serverBaseUrl()).createScene()
+                catalogSceneId = id
+                prefs.edit().putString(KEY_CATALOG_SCENE, id).apply()
+                Log.d(TAG, "카탈로그 scene 생성: $id")
+            } catch (e: Exception) {
+                Log.w(TAG, "카탈로그 scene 생성 실패: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun maybeRestoreCatalog() {
+        if (!catalogRestored) restoreCatalogFromServer()
+    }
+
+    /**
      * 카탈로그에서 한 항목을 골랐다. 이제 [wantWall] 이면 벽, 아니면 바닥을 탭하면
      * 그 자리에 이 가구를 배치한다. [thumb] 가 있으면 이미지로, 없으면 큐브+이름표로.
+     * [catalogItemId]/[objectType] 는 배치 후 서버 저장(source="catalog")에 쓴다.
      */
     fun beginCatalogPlacement(
         name: String, widthM: Float, heightM: Float, depthM: Float,
         wantWall: Boolean, thumb: Bitmap?,
+        catalogItemId: String? = null, objectType: String = "other",
     ) {
         deselect()
-        pendingCatalog = PendingCatalog(name, Size(widthM, heightM, depthM), wantWall, thumb)
+        pendingCatalog = PendingCatalog(
+            name, Size(widthM, heightM, depthM), wantWall, thumb, catalogItemId, objectType,
+        )
     }
 
     /** 카탈로그 배치 대기 취소. */
@@ -100,7 +159,119 @@ class FurnitureController(
             return
         }
         pendingCatalog = null
-        createFurniture(anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit), pc.thumb)
+        val item = createFurniture(
+            anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit), pc.thumb,
+            catalogItemId = pc.catalogItemId, objectType = pc.objectType,
+        )
+        scheduleCatalogSave(item)
+    }
+
+    // ------------------------------------------------- 서버 저장 / 복원 (source="catalog")
+
+    /** 배치/조작이 잦아들면(500ms 디바운스) 한 번만 서버에 저장한다. */
+    private fun scheduleCatalogSave(item: FurnitureItem) {
+        if (catalogSceneId == null || item.catalogItemId == null) return
+        val prev = pendingSaveItem
+        if (prev != null && prev !== item) saveCatalogPlacement(prev)  // 다른 가구면 즉시 flush
+        pendingSaveItem = item
+        handler.removeCallbacks(catalogSaveRunnable)
+        handler.postDelayed(catalogSaveRunnable, CATALOG_SAVE_DEBOUNCE_MS)
+    }
+
+    private fun saveCatalogPlacement(item: FurnitureItem) {
+        val sceneId = catalogSceneId ?: return
+        val catId = item.catalogItemId ?: return
+        if (item !in items) return  // 그 사이 삭제됨
+        val p = item.anchorNode.anchor.pose
+        val pos = FloatArray(3).also { p.getTranslation(it, 0) }
+        val quat = FloatArray(4).also { p.getRotationQuaternion(it, 0) }
+        val plane = if (item.onVerticalPlane) "wall" else "floor"
+        val type = item.objectType
+        val sc = item.scaleFactor
+        val rot = item.rotationDeg
+        val base = serverBaseUrl()
+        scope.launch {
+            try {
+                InteriorApiClient(base).createPlacement(
+                    sceneId = sceneId, objectType = type,
+                    position = pos, rotation = quat,
+                    scale = sc, rotationDeg = rot, plane = plane,
+                    source = "catalog", catalogItemId = catId,
+                )
+                Log.d(TAG, "카탈로그 배치 저장: $catId scale=$sc rot=$rot plane=$plane")
+            } catch (e: Exception) {
+                Log.w(TAG, "카탈로그 배치 저장 실패: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /**
+     * 서버에 저장된 `source=="catalog"` 배치를 현재 세션에 복원한다.
+     * pose 는 세션 로컬이라 못 쓰고, `catalog_item_id` 로 크기를 얻어 화면 기준 hitTest 로 재정합.
+     * 같은 catalog_item_id 는 최신 1건만(append 로그라 조작마다 행이 쌓이므로).
+     */
+    fun restoreCatalogFromServer() {
+        val sceneId = catalogSceneId ?: return
+        if (catalogRestored) return
+        catalogRestored = true
+        val base = serverBaseUrl()
+        scope.launch {
+            val client = InteriorApiClient(base)
+            val rows = try {
+                client.listPlacements(sceneId)
+            } catch (e: Exception) {
+                Log.w(TAG, "카탈로그 배치 조회 실패: ${e.message ?: e.javaClass.simpleName}")
+                return@launch
+            }
+            val seen = HashSet<String>()
+            val latest = rows
+                .filter { it.source == "catalog" && it.catalogItemId != null }
+                .filter { seen.add(it.catalogItemId!!) }   // 목록은 최신순 → 첫 등장이 최신
+            var placed = 0
+            for (row in latest) {
+                val cat = try {
+                    client.getCatalogItem(row.catalogItemId!!)
+                } catch (_: Exception) {
+                    null
+                } ?: continue
+                val thumb: Bitmap? = cat.thumbnailUrl?.let { url ->
+                    try {
+                        val b = client.downloadBytes(url)
+                        BitmapFactory.decodeByteArray(b, 0, b.size)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                val wantWall = when (row.plane) {
+                    "wall" -> true
+                    "floor" -> false
+                    else -> cat.anchorHint == "wall"
+                }
+                // 겹치지 않게 화면을 조금씩 나눠 재 hitTest.
+                val frac = 0.30f + 0.20f * (placed % 3)
+                val cx = sceneView.width * frac
+                val cy = sceneView.height * (if (wantWall) 0.42f else 0.62f)
+                val hit = hitTestPreferring(cx, cy, wantWall) ?: continue
+                val anchor = hit.createAnchorOrNull()
+                    ?: runCatching { sceneView.session?.createAnchor(hit.hitPose) }.getOrNull()
+                    ?: continue
+                val item = createFurniture(
+                    anchor, cat.name, Size(cat.widthM, cat.heightM, cat.depthM),
+                    PlaneKind.isVerticalHit(hit), thumb,
+                    catalogItemId = row.catalogItemId, objectType = cat.category,
+                    autoSelect = false,
+                )
+                item.scaleFactor = row.scale.coerceIn(FurnitureItem.MIN_SCALE, FurnitureItem.MAX_SCALE)
+                item.rotationDeg = row.rotationDeg
+                item.cubeNode.scale = Scale(item.scaleFactor)
+                applyPlacement(item)
+                placed++
+            }
+            if (placed > 0) {
+                Toast.makeText(activity, "카탈로그 가구 ${placed}개 복원", Toast.LENGTH_SHORT).show()
+            }
+            Log.d(TAG, "카탈로그 배치 복원: $placed / ${latest.size}")
+        }
     }
 
     /** 지금 선택된 큐브가 있는지. (제스처를 큐브 vs 이동된 사물 중 누구에게 줄지 판단용) */
@@ -172,6 +343,7 @@ class FurnitureController(
         item.cubeNode.scale = Scale(item.scaleFactor)
         applyPlacement(item)
         onSelectionChanged(item)
+        scheduleCatalogSave(item)
     }
 
     /** "회전" 버튼에서 호출. 평면 안에서 [deg] 만큼 누적 회전 (큐브·이미지 공통). */
@@ -180,6 +352,7 @@ class FurnitureController(
         if (draggingSelected) return
         item.rotationDeg = (item.rotationDeg + deg).mod(360f)
         applyPlacement(item)
+        scheduleCatalogSave(item)
     }
 
     fun deleteSelected() {
@@ -225,7 +398,10 @@ class FurnitureController(
         baseSize: Size,
         isVertical: Boolean,
         thumb: Bitmap? = null,
-    ) {
+        catalogItemId: String? = null,
+        objectType: String = "other",
+        autoSelect: Boolean = true,
+    ): FurnitureItem {
         val material = sceneView.materialLoader.createColorInstance(color = FurnitureItem.COLOR_NORMAL)
 
         // 오프셋/회전은 노드에서 처리하므로 지오메트리는 원점 중심으로 만든다.
@@ -267,15 +443,18 @@ class FurnitureController(
         val item = FurnitureItem(
             anchorNode, cubeNode, labelNode, baseSize, 1f, name, material, isVertical,
             imageNode = imageNode,
+            catalogItemId = catalogItemId,
+            objectType = objectType,
         )
         items += item
-        select(item)          // 방금 놓은 가구를 바로 선택 → 조작 패널 표시
+        if (autoSelect) select(item)   // 방금 놓은 가구를 바로 선택 → 조작 패널 표시
         applyPlacement(item)
         Log.d(
             TAG,
             "가구 생성: '$name' size=${baseSize.x}x${baseSize.y}x${baseSize.z}m " +
-                "vertical=$isVertical thumb=${imageNode != null} at ${anchor.pose}",
+                "vertical=$isVertical thumb=${imageNode != null} catalog=$catalogItemId at ${anchor.pose}",
         )
+        return item
     }
 
     /**
@@ -359,10 +538,13 @@ class FurnitureController(
         item.anchorNode.updateAnchorPose = true
         item.onVerticalPlane = dragIsVertical
         applyPlacement(item)
+        scheduleCatalogSave(item)   // 제스처 완료 → 최신 상태 저장
         Log.d(TAG, "'${item.name}' 이동 완료 (vertical=${item.onVerticalPlane}) -> $newPose")
     }
 
     private companion object {
         const val TAG = "InteriorAR"
+        const val KEY_CATALOG_SCENE = "catalog_scene_id"
+        const val CATALOG_SAVE_DEBOUNCE_MS = 500L
     }
 }

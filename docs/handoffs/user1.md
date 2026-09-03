@@ -49,35 +49,42 @@ PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
 빌드: `:app:assembleDebug` 성공 (`app-debug.apk` ≈ 47MB). 실기기 확인 남음: 카탈로그
 로드/배치, 회전 버튼 방향, 벽/바닥 자동 선택.
 
-### [TODO 사용자 1] 카탈로그 배치를 placements API 에 연동 (서버는 준비됨)
+### ✅ 카탈로그 배치를 placements API 에 연동 완료 (2026-09-03)
 
-사용자 3 이 `placements` API 를 카탈로그 출처까지 확장해 뒀다 (`source="catalog"`,
-`catalog_item_id`). 지금 `FurnitureController` 는 **서버 호출이 전혀 없다** — 카탈로그
-가구를 놓아도 placements 에 저장 안 된다. `MovedObjectController` 가 PHASE 4 에서 한 것과
-같은 방식으로 붙이면 된다:
+`FurnitureController` 가 카탈로그 가구를 `source="catalog"` 로 서버에 저장·복원한다.
 
-1. **저장** — `placeCatalog()` 성공 시 + 그 가구를 드래그/회전/크기 조절한 뒤(제스처 완료,
-   500ms 디바운스 권장) `POST /scenes/{id}/placements` 호출:
-   ```json
-   { "source": "catalog", "catalog_item_id": "<CatalogItem.id>",
-     "object_type": "<category: tv|sofa|...>",
-     "pose": { "position": [x,y,z], "rotation": [x,y,z,w] },   // anchor.pose
-     "scale": <FurnitureItem.scaleFactor>, "rotation_deg": <FurnitureItem.rotationDeg>,
-     "plane": "wall" | "floor" }
-   ```
-   - `FurnitureController` 는 지금 `sceneId` 가 없다. 방법: (a) `RemovalController` 의
-     마지막 scene(`prefs "moved_last_scene"`) 재사용, (b) "가구 추가" 최초 시 `createScene()`
-     한 번. → **(b) 권장** (삭제 흐름과 독립).
-   - `CatalogController.onPick` 이 `CatalogItem` 전체(특히 `id`)를 `FurnitureController` 로
-     넘기도록 `beginCatalogPlacement` 시그니처에 `catalogItemId` 추가 필요.
-   - `InteriorApiClient.createPlacement(...)` 에 `source`/`catalogItemId` 파라미터 추가 필요
-     (지금은 removed_object 모양만 지원).
-2. **복원** — `GET /scenes/{id}/placements` → `source=="catalog"` 인 active 항목마다:
-   `catalog_item_id` 로 `GET /catalog/{id}` 조회해 크기/카테고리 얻고, 화면 중앙(또는
-   `plane` 방향)에서 `hitTestPreferring` → `FurnitureController` 로 재생성.
-   (removed_object 는 `source_region` 이 있지만 catalog 는 없으니 화면 기준으로만 재정합.)
-3. **실행 취소** — 기존 `POST /scenes/{id}/placements/undo` 그대로. 출처 구분 없이 최신
-   active 를 되짚는다. 화면에서도 해당 노드 제거.
+1. **sceneId 확보** — `CatalogController` 가 패널을 열 때(`onOpen` 콜백) →
+   `FurnitureController.ensureCatalogScene()`. `prefs "catalog_scene_id"` 있으면 재사용,
+   없으면 `createScene()` 한 번 하고 저장. (삭제/이동 흐름 scene 과 독립.)
+2. **저장** (`saveCatalogPlacement` / `scheduleCatalogSave`)
+   - `beginCatalogPlacement(... catalogItemId, objectType)` 로 카탈로그 id·카테고리를 받아
+     `FurnitureItem.catalogItemId`/`objectType` 에 보관.
+   - `placeCatalog()` 성공 + `finalizeDrag`(드래그 종료) + `scaleSelectedBy`(핀치/＋－) +
+     `rotateSelectedBy` 마다 `scheduleCatalogSave(item)` → **500ms 디바운스** 후
+     `POST /scenes/{id}/placements` 1회. body: `source:"catalog"`, `catalog_item_id`,
+     `object_type`(카테고리), `pose{position[3],rotation[4]}`(앵커 월드 pose),
+     `scale`, `rotation_deg`, `plane`. (다른 가구를 만지면 이전 예약분을 즉시 flush.)
+   - `catalogItemId == null` 인 아이템(이름/크기 다이얼로그 큐브)은 저장 안 함.
+3. **복원** (`restoreCatalogFromServer`, 세션당 1회)
+   - "가구 추가" 패널 최초 열 때(기존 scene 이면) + "서버 배치 복원" 버튼
+     (`MovedObjectController.onAlsoRestore` → 이것도 호출)에서 트리거.
+   - `GET /scenes/{id}/placements` → `source=="catalog"` 만, **`catalog_item_id` 별 최신 1건**
+     (append 로그라 조작마다 행이 쌓임 → 최신순 목록의 첫 등장). 각각 `GET /catalog/{id}` 로
+     크기/카테고리, 썸네일 다운로드, `plane`(없으면 `anchor_hint`)에 맞춰 화면을 조금씩
+     나눈 지점에서 `hitTestPreferring` → `createFurniture(autoSelect=false)`, 저장된
+     `scale`/`rotation_deg` 적용.
+   - `MovedObjectController` 의 removed_object 복원과 **독립적으로 함께 동작** — 서로 다른
+     scene·노드. `latestActivePlacement()` 는 `source=="removed_object"` 만 고르도록 필터.
+4. **실행 취소** — 기존 `POST /scenes/{id}/placements/undo` 그대로(출처 무관 최신 되짚기).
+   카탈로그 가구는 로컬 "삭제" 버튼으로 화면에서 제거.
+
+`InteriorApiClient`: `createPlacement(... source, catalogItemId)` 파라미터 추가(기본
+`removed_object` → 기존 호출 하위호환), `listPlacements`, `getCatalogItem`, `Placement` DTO 에
+`source`/`catalogItemId` 추가. 실서버 스모크 통과(카탈로그 3건 저장 → 목록 3 → 클라 dedup
+2개(최신 편집 반영) → `GET /catalog/{id}` 크기 → undo). `:app:assembleDebug` OK.
+
+**한계**: 같은 카탈로그 모델을 2개 놓으면 복원 시 1개로 합쳐진다(placements 에 개별 객체
+식별자 없음, `catalog_item_id` 로만 dedup). 복원 위치는 `source_region` 이 없어 화면 기준 근사.
 
 ## PHASE 4 — 재배치를 서버(placements API)와 연동 (2026-09-03)
 
@@ -311,13 +318,13 @@ experiments/shinym87/interior/app/src/main/
    ├─ MainActivity.kt                          Removal/Moved/Catalog 배선 + 공유 before/afterCapture + 제스처 라우팅
    ├─ ar/ArSpaceController.kt                  latestFrame, setPlaneVisualizationEnabled(), hitTestPreferring()
    ├─ furniture/
-   │  ├─ FurnitureController.kt                큐브/카탈로그 가구 배치·드래그·핀치·회전·삭제 (hasSelection/beginCatalogPlacement/rotateSelectedBy)
-   │  ├─ FurnitureItem.kt                      노드 묶음 (imageNode?/rotationDeg 추가)
-   │  └─ CatalogController.kt                  PHASE 5: "가구 추가" → GET /catalog 목록 패널 → onPick
+   │  ├─ FurnitureController.kt                큐브/카탈로그 가구 배치·드래그·핀치·회전·삭제 + 카탈로그 placements 저장/복원 (ensureCatalogScene/scheduleCatalogSave/restoreCatalogFromServer)
+   │  ├─ FurnitureItem.kt                      노드 묶음 (imageNode?/rotationDeg/catalogItemId?/objectType 추가)
+   │  └─ CatalogController.kt                  PHASE 5: "가구 추가" → GET /catalog 목록 패널 → onOpen/onPick
    ├─ keyframe/BackgroundKeyframe.kt           "배경 촬영" 캡처 (동일 오버레이 제거 적용)
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
-      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json (+ createPlacement/latestActivePlacement/undoPlacement)
+      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json (createPlacement(source/catalogItemId)/listPlacements/getCatalog(Item)/undoPlacement)
       ├─ MovedObjectController.kt              PHASE 4: 이동(탭/드래그/핀치/회전, 벽·바닥 자동) + placements 저장·복원·undo
       └─ RemovalController.kt                  서버주소(serverBaseUrl)·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후·원래위치+scene/job 전달
 ```

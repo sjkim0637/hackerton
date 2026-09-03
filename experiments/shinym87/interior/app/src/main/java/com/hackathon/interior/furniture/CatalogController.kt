@@ -23,6 +23,8 @@ class CatalogController(
     private val scope: CoroutineScope,
     private val binding: ActivityMainBinding,
     private val serverBaseUrl: () -> String,
+    /** 패널을 열 때 호출 (서버 scene 확보 + 이전 세션 카탈로그 배치 복원). */
+    private val onOpen: () -> Unit = {},
     private val onPick: (InteriorApiClient.CatalogItem, Bitmap?) -> Unit,
 ) {
 
@@ -36,6 +38,7 @@ class CatalogController(
             hide()
         } else {
             binding.catalogPanel.visibility = View.VISIBLE
+            onOpen()
             fetchAndRender()
         }
     }
