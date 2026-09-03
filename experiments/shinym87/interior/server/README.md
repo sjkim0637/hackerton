@@ -16,7 +16,8 @@
 | 사물 정보 저장 (형식만, 인식 없음) | 키프레임 메타의 `targetObject` 또는 `remove-object` 요청 → `objects` 테이블, `GET /scenes/{id}/objects` |
 | 외부 AI 연결 구조 | `app/ai/` — `base.RemoveObjectProvider`, `mock`, `external`(자리만), `build_provider()` |
 | 사물 제거 + 복원 작업 | `POST /scenes/{id}/remove-object` → job, `GET /scenes/{id}/jobs/{job_id}`, `GET /scenes/{id}/results/{job_id}.jpg` |
-| 복원 결과 버전 목록 | `GET /scenes/{id}/results` — scene 의 모든 job 을 최신순으로 (정리된 버전은 `available:false`) |
+| 복원 결과 버전 목록 | `GET /scenes/{id}/results` — scene 의 모든 job 을 최신순으로 (정리된 버전은 `available:false`). `removed_object_image_url` = 제거된 사물 크롭 |
+| 제거된 사물 크롭 | `GET /scenes/{id}/results/{job}_object.jpg` — 원본 키프레임에서 bbox 만 잘라낸 것 (AI 없음, 이동 배치 재사용용) |
 | 가구 데이터 API | `GET /catalog`, `GET /catalog/{id}` (`catalog/furniture.json`) |
 
 부가: 동일 `(keyframe_id, target)` 재요청은 캐시된 job 반환, 작업당 외부 AI 호출 상한
@@ -80,6 +81,10 @@ INTERIOR_AI_MODEL=gemini-3.1-flash-image
   지워진 버전의 이미지 요청은 410. 각 값 `0` = 해당 정리 안 함.
 - 폰 전달 최적화 — 결과 JPEG 이 `INTERIOR_RESULT_MAX_BYTES`(기본 5MB)를 넘으면
   품질만 낮춰 재인코딩(해상도 유지).
+- 제거된 사물 크롭 — `INTERIOR_SAVE_REMOVED_OBJECT_CROP`(기본 true)면 원본 키프레임에서
+  `region` 만큼 잘라 `{job}_object.jpg` 로 저장(AI 호출 없음). 앱은 로컬에서 만들지만,
+  다른 기기/세션·웹 뷰어가 "이동된 사물"을 재구성할 수 있게 서버에도 남긴다. 개수 정리 시
+  메인 결과와 함께 지워진다.
 
 키를 넣은 뒤 실제 결과 확인 (실사진 권장):
 

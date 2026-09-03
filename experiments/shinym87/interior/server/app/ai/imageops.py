@@ -26,6 +26,31 @@ def image_size(image_bytes: bytes) -> tuple[int, int]:
         return im.size
 
 
+def crop_normalized_jpeg(
+    image_bytes: bytes,
+    rect: tuple[float, float, float, float],
+    *,
+    quality: int = 90,
+) -> bytes:
+    """`rect`(정규화 x, y, w, h)로 이미지를 잘라 RGB JPEG 로 돌려준다.
+
+    "제거된 사물"의 겉모습을 원본 키프레임에서 그대로 오려낸다 (배경 포함, AI 없음).
+    좌표는 이미지 경계로 클램프하고 최소 1px 를 보장한다.
+    """
+    x, y, w, h = rect
+    with Image.open(io.BytesIO(image_bytes)) as im:
+        rgb = im.convert("RGB")
+        width, height = rgb.size
+        left = max(0, min(int(round(x * width)), width - 1))
+        top = max(0, min(int(round(y * height)), height - 1))
+        right = max(left + 1, min(int(round((x + w) * width)), width))
+        bottom = max(top + 1, min(int(round((y + h) * height)), height))
+        crop = rgb.crop((left, top, right, bottom))
+        out = io.BytesIO()
+        crop.save(out, format="JPEG", quality=quality)
+        return out.getvalue()
+
+
 def cap_jpeg_bytes(
     image_bytes: bytes,
     max_bytes: int,

@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from ..ai import ProviderError, is_known, normalize_object_type
 from ..ai.colormatch import check_result_anomaly, match_to_source
-from ..ai.imageops import cap_jpeg_bytes, ensure_jpeg_size, image_size
+from ..ai.imageops import cap_jpeg_bytes, crop_normalized_jpeg, ensure_jpeg_size, image_size
+from ..ai.mask import region_bbox
 from ..cleanup import prune_scene_results
 from ..config import get_settings
 from ..deps import get_provider, get_store
@@ -247,6 +248,24 @@ def _run_job(
                 "[job %s] done → %s (%d bytes, 시도 %d회)",
                 job_id, out_path.name, len(final_bytes), attempt,
             )
+
+            # 제거된 사물의 크롭 이미지도 저장 (AI 없이 원본 키프레임에서 bbox 만 잘라냄).
+            # 앱은 로컬에서 크롭하지만, 다른 기기/세션·웹 뷰어가 재사용할 수 있게 서버에도 남긴다.
+            if settings.save_removed_object_crop:
+                try:
+                    obj_bytes = crop_normalized_jpeg(source_bytes, region_bbox(region))
+                    obj_path = results_dir / f"{job_id}_object.jpg"
+                    obj_path.write_bytes(obj_bytes)
+                    store.update_job(
+                        job_id,
+                        removed_object_path=str(obj_path),
+                        removed_object_url=f"/scenes/{scene_id}/results/{job_id}_object.jpg",
+                    )
+                    _log.info("[job %s] 제거 사물 크롭 저장 → %s (%d bytes)",
+                              job_id, obj_path.name, len(obj_bytes))
+                except Exception as exc:  # noqa: BLE001 - 부가 산출물, 실패해도 job 은 done
+                    _log.warning("[job %s] 제거 사물 크롭 저장 실패: %s", job_id, exc)
+
             # 오래된 결과 정리 (scene 당 개수 상한). job 기록은 남기고 파일만 지운다.
             prune_scene_results(
                 settings.scenes_dir, scene_id, settings.result_keep_per_scene
@@ -356,12 +375,19 @@ def list_results(scene_id: str) -> list[dict]:
             if p.is_file():
                 available = True
                 size_bytes = p.stat().st_size
+
+        removed_object_url: str | None = None
+        rop = job.get("removed_object_path")
+        if rop and Path(rop).is_file():
+            removed_object_url = job.get("removed_object_url")
+
         out.append(
             {
                 "job_id": job["job_id"],
                 "keyframe_id": job["keyframe_id"],
                 "status": job["status"],
                 "result_image_url": job.get("result_url") if available else None,
+                "removed_object_image_url": removed_object_url,
                 "changed_region": job.get("changed_region"),
                 "error": job.get("error"),
                 "created_at": job["created_at"],
@@ -371,6 +397,26 @@ def list_results(scene_id: str) -> list[dict]:
             }
         )
     return out
+
+
+@router.get("/scenes/{scene_id}/results/{job_id}_object.jpg")
+def get_removed_object_image(scene_id: str, job_id: str) -> FileResponse:
+    """제거된 사물을 원본 키프레임에서 그대로 오려낸 크롭(배경 포함). 이동 배치 재사용용.
+
+    (`{job_id}.jpg` 라우트보다 먼저 등록되어야 `_object.jpg` 가 여기로 매칭된다.)
+    """
+    _require_scene(scene_id)
+    job = get_store().get_job(job_id)
+    if job is None or job["scene_id"] != scene_id:
+        raise HTTPException(status_code=404, detail=f"작업 없음: {job_id}")
+    path = job.get("removed_object_path")
+    if not path:
+        raise HTTPException(status_code=404, detail=f"제거 사물 크롭이 없습니다: {job_id}")
+    if not Path(path).is_file():
+        raise HTTPException(
+            status_code=410, detail=f"제거 사물 크롭이 정리되어 없습니다: {job_id}"
+        )
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/scenes/{scene_id}/results/{job_id}.jpg")

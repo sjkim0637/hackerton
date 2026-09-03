@@ -69,6 +69,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 ## PHASE 4 (진행 중)
 
+- [DONE] 사용자 2: 제거된 사물 크롭을 서버에도 저장(`{job}_object.jpg`, AI 없음) +
+  `GET /scenes/{id}/results` 에 `removed_object_image_url` + `_object.jpg` 서빙 라우트.
+  판단·근거는 `docs/handoffs/user2.md` (앱은 로컬 크롭으로 충분하나 크로스 기기/세션·웹
+  뷰어 재사용 + 결과 API 완결성 + 나중 투명 컷아웃 자리 확보 목적, 거의 공짜라 채택).
+  `INTERIOR_SAVE_REMOVED_OBJECT_CROP` 로 끔. `pytest` 36개.
 - [DONE] 사용자 1: 삭제한 사물을 다른 위치로 "이동" (개념 증명). `remove/MovedObjectController.kt`
   — 원래 위치(`originalObjectPose`)·삭제 전 사물 이미지(`capturedObjectBitmap`) 저장,
   "여기로 옮기기" → 새 지점 탭 배치, 드래그 이동 / 핀치·＋－ 크기 / 회전 버튼,
@@ -109,3 +114,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 <!-- 날짜 · 한 줄 아이디어 · (선택) 왜 유용한지 -->
 - 2026-09-02 · 이 백로그 문서 신설
+- 2026-09-03 · **이동된 사물의 배경 투명 컷아웃** — 지금 `{job}_object.jpg` 는 bbox 사각형
+  크롭이라 배경이 딸려온다. 사물 윤곽만 분리(알파 투명)하면 새 위치에 붙였을 때 훨씬 자연스럽다.
+  방법 비교: (a) Gemini 후속 1콜 "removed 사물만 투명 배경 PNG" — 가장 저마찰(키프레임+마스크
+  이미 전송), AI 1콜(~$0.039)+지연, 가는 경계 약함 · (b) `rembg`(u2net) 오프라인 — 모델 170MB,
+  CPU 1~2s, 범용 무난 · (c) OpenCV GrabCut(bbox seed) — 가볍고 AI 비용 0, 잡동사니 배경엔 중간
+  이하 · (d) ML Kit Subject Segmentation — 온디바이스지만 사람 위주. **현시점 판단: 미구현**
+  (이동은 개념 증명, 페더링된 사각형이면 충분 / 비용·의존성 과함). 크롭 경로·URL 을 이미
+  고정해 뒀으니 나중에 `crop_normalized_jpeg` → 컷아웃 함수, `.jpg`→`.png` 만 바꾸면 됨.
+  상세는 `../../../../docs/handoffs/user2.md` PHASE 4 절.

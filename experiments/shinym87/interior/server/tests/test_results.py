@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.ai.imageops import cap_jpeg_bytes
+from app.ai.imageops import cap_jpeg_bytes, crop_normalized_jpeg
 from app.cleanup import sweep_old_results
 from app.config import get_settings
 from app.deps import get_store
@@ -65,6 +65,12 @@ def test_list_results_keeps_every_job_as_version(client):
         assert r["size_bytes"] > 0
         assert r["result_image_url"].endswith(f"/results/{r['job_id']}.jpg")
         assert client.get(r["result_image_url"]).status_code == 200
+        # 제거된 사물 크롭도 저장되어 URL 로 받을 수 있다.
+        assert r["removed_object_image_url"].endswith(f"/results/{r['job_id']}_object.jpg")
+        crop = client.get(r["removed_object_image_url"])
+        assert crop.status_code == 200
+        assert crop.headers["content-type"] == "image/jpeg"
+        assert Image.open(io.BytesIO(crop.content)).size[0] > 0
 
     # 같은 요청 재호출은 새 버전을 만들지 않는다 (중복 방지).
     again = _remove(client, scene_id, kf, [0.50, 0.50, 0.20, 0.20])
@@ -86,19 +92,25 @@ def test_old_results_pruned_by_count(client, monkeypatch):
     j3 = _remove(client, scene_id, kf, [0.60, 0.60, 0.15, 0.15])
 
     results_dir = get_settings().scenes_dir / scene_id / "results"
-    remaining = sorted(p.stem for p in results_dir.glob("*.jpg"))
-    assert remaining == sorted([j2, j3])
+    # 메인 결과는 최근 2개만. 동반 크롭({job}_object.jpg)도 함께 정리된다.
+    main = sorted(p.stem for p in results_dir.glob("*.jpg") if not p.stem.endswith("_object"))
+    objs = sorted(p.stem for p in results_dir.glob("*_object.jpg"))
+    assert main == sorted([j2, j3])
+    assert objs == sorted([f"{j2}_object", f"{j3}_object"])
 
     # 가장 오래된 버전: 기록은 남고 파일만 없다.
     rows = {r["job_id"]: r for r in client.get(f"/scenes/{scene_id}/results").json()}
     assert rows[j1]["available"] is False
     assert rows[j1]["result_image_url"] is None
+    assert rows[j1]["removed_object_image_url"] is None
     assert rows[j1]["size_bytes"] is None
     assert rows[j2]["available"] is True
 
     # 정리된 결과 이미지 요청은 410.
     assert client.get(f"/scenes/{scene_id}/results/{j1}.jpg").status_code == 410
+    assert client.get(f"/scenes/{scene_id}/results/{j1}_object.jpg").status_code == 410
     assert client.get(f"/scenes/{scene_id}/results/{j2}.jpg").status_code == 200
+    assert client.get(f"/scenes/{scene_id}/results/{j2}_object.jpg").status_code == 200
 
 
 def test_sweep_old_results_by_age(client, tmp_path):
@@ -153,3 +165,17 @@ def test_cap_jpeg_bytes_noop_when_small_or_disabled():
     assert out is small and info["capped"] is False
     out2, info2 = cap_jpeg_bytes(small, 0)
     assert out2 is small and info2["capped"] is False
+
+
+# ------------------------------------------------- 제거된 사물 크롭 (서버 저장)
+
+def test_crop_normalized_jpeg_size_and_clamp():
+    src = _busy_jpeg(400, 300)
+    # 정상 영역: 200x150 근처.
+    out = crop_normalized_jpeg(src, (0.25, 0.25, 0.5, 0.5))
+    w, h = Image.open(io.BytesIO(out)).size
+    assert 195 <= w <= 205 and 145 <= h <= 155
+    # 경계를 넘는 값도 이미지 안으로 클램프되고 최소 1px 보장.
+    out2 = crop_normalized_jpeg(src, (0.9, 0.9, 0.5, 0.5))
+    w2, h2 = Image.open(io.BytesIO(out2)).size
+    assert w2 >= 1 and h2 >= 1 and w2 <= 400 and h2 <= 300

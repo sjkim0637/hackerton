@@ -14,11 +14,15 @@ _log = logging.getLogger("interior.cleanup")
 
 
 def _result_files(results_dir: Path) -> list[Path]:
+    """메인 결과 파일(`{job}.jpg`)만. 동반 크롭 `{job}_object.jpg` 는 제외한다."""
     if not results_dir.is_dir():
         return []
     # mtime 우선, 동률이면 파일명(job_..._001 처럼 seq 가 zero-pad 되어 생성순과 일치).
     return sorted(
-        (p for p in results_dir.glob("*.jpg") if p.is_file()),
+        (
+            p for p in results_dir.glob("*.jpg")
+            if p.is_file() and not p.stem.endswith("_object")
+        ),
         key=lambda p: (p.stat().st_mtime, p.name),
     )
 
@@ -39,6 +43,11 @@ def prune_scene_results(scenes_dir: Path, scene_id: str, keep_max: int) -> int:
             old.unlink()
             removed += 1
             _log.info("[scene %s] 오래된 결과 정리(개수 초과): %s", scene_id, old.name)
+            # 동반 크롭({job}_object.jpg)도 같이 지운다.
+            companion = old.with_name(f"{old.stem}_object.jpg")
+            if companion.is_file():
+                companion.unlink()
+                _log.info("[scene %s] 동반 크롭 정리: %s", scene_id, companion.name)
         except OSError as exc:  # noqa: PERF203
             _log.warning("[scene %s] 결과 삭제 실패 %s: %s", scene_id, old.name, exc)
     return removed

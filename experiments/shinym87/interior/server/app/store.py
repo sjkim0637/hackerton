@@ -36,17 +36,19 @@ CREATE TABLE IF NOT EXISTS objects (
     created_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS jobs (
-    job_id              TEXT PRIMARY KEY,
-    scene_id            TEXT NOT NULL,
-    keyframe_id         TEXT NOT NULL,
-    cache_key           TEXT,
-    status              TEXT NOT NULL,
-    result_path         TEXT,
-    result_url          TEXT,
-    changed_region_json TEXT,
-    error               TEXT,
-    created_at          TEXT NOT NULL,
-    updated_at          TEXT NOT NULL
+    job_id               TEXT PRIMARY KEY,
+    scene_id             TEXT NOT NULL,
+    keyframe_id          TEXT NOT NULL,
+    cache_key            TEXT,
+    status               TEXT NOT NULL,
+    result_path          TEXT,
+    result_url           TEXT,
+    removed_object_path  TEXT,
+    removed_object_url   TEXT,
+    changed_region_json  TEXT,
+    error                TEXT,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
 );
 """
 
@@ -58,6 +60,10 @@ def utcnow() -> str:
 # 이미 만들어진 DB 에 뒤늦게 추가된 컬럼 (CREATE IF NOT EXISTS 로는 안 붙는다).
 _EXTRA_COLUMNS = {
     "scenes": {"ai_calls": "INTEGER NOT NULL DEFAULT 0"},
+    "jobs": {
+        "removed_object_path": "TEXT",
+        "removed_object_url": "TEXT",
+    },
 }
 
 
@@ -210,6 +216,8 @@ class Store:
             "status",
             "result_path",
             "result_url",
+            "removed_object_path",
+            "removed_object_url",
             "changed_region_json",
             "error",
         }

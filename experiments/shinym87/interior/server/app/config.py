@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     result_max_bytes: int = 5_000_000        # 이보다 크면 품질을 낮춰 압축해서 저장 (0=안 함)
     result_keep_per_scene: int = 12          # scene 당 유지할 최근 결과 개수 (0=무제한)
     result_max_age_hours: float = 72.0       # 기동 시 이보다 오래된 결과 파일 정리 (0=안 함)
+    # 제거된 사물의 크롭 이미지(원본 키프레임에서 bbox 만 잘라낸 것)도 저장한다.
+    # AI 호출 없음. 앱은 로컬에서 만들지만 다른 기기/세션·웹 뷰어 재사용용으로 서버에도 남긴다.
+    save_removed_object_crop: bool = True
 
     # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20

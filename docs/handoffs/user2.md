@@ -13,6 +13,56 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## PHASE 4 — 제거된 사물 크롭 서버 저장 + 결과 API 필드 (2026-09-03)
+
+### 1. 판단: 서버에도 저장한다 (조건부로 의미 있음 → 거의 공짜라 채택)
+
+- 앱(사용자 1)은 이미 삭제 요청 시점에 **클라이언트에서** 키프레임을 bbox 로 잘라
+  (`RemovalController.capturedObjectBitmap`) 이동 배치에 쓴다 → **현재 단일 기기 데모
+  흐름만 보면 서버 저장은 불필요**하다.
+- 그래도 저장하기로 한 이유:
+  - **AI 호출이 전혀 없다** (Pillow crop 한 번). 디스크만 조금 더 쓴다.
+  - 결과 API 가 self-contained 해진다 — `keyframe` / `result` / `removed_object` 세 장이
+    모두 URL 로 나와, 다른 기기·다음 세션·웹 뷰어가 "삭제 전/후/이동"을 서버 URL 만으로
+    재구성할 수 있다 (사용자가 지적한 "크로스 기기/세션 재사용" 용도).
+  - 나중에 배경 투명 컷아웃(아래 3번)을 넣으면 **같은 경로/URL 자리에** PNG 로 갈아끼우면
+    되므로, 지금 자리를 잡아두는 게 이득.
+- 끌 수 있다: `INTERIOR_SAVE_REMOVED_OBJECT_CROP=false`.
+
+### 2. 구현
+
+- `app/ai/imageops.py::crop_normalized_jpeg(image_bytes, rect)` — 정규화 `[x,y,w,h]` 로
+  잘라 RGB JPEG. 경계 클램프 + 최소 1px.
+- `_run_job`: 결과 저장 직후(`status=done` 이후, 개수 정리 전) `region_bbox(region)` 으로
+  원본 키프레임을 잘라 `data/scenes/{scene}/results/{job_id}_object.jpg` 저장,
+  job 에 `removed_object_path`/`removed_object_url` 기록. 실패해도 job 은 done 유지(부가 산출물).
+- `store.jobs` 에 `removed_object_path`/`removed_object_url` 컬럼(+ 기존 DB용 ALTER 가드).
+- `GET /scenes/{id}/results` 응답에 **`removed_object_image_url`** 추가 (파일 있을 때만).
+- `GET /scenes/{id}/results/{job}_object.jpg` 신설 — `{job}.jpg` 라우트보다 **먼저** 등록해
+  `_object.jpg` 가 여기로 매칭되게 함. 없으면 404, 정리됐으면 410.
+- `cleanup.py`: 개수 정리는 메인 결과(`{job}.jpg`)만 세고(`_object` 접미사 제외), 메인을
+  지울 때 동반 크롭도 함께 unlink. 기간 정리는 오래된 `.jpg` 를 종류 구분 없이 지운다.
+- 테스트: `test_results.py` — 목록에 `removed_object_image_url` + 다운로드 확인,
+  개수 정리 시 `_object.jpg` 동반 삭제/410, `crop_normalized_jpeg` 단위. `pytest` 36개,
+  mock e2e 14/14 (`{job}_object.jpg` 생성·DB URL 채워짐 확인).
+
+### 3. 배경 투명 컷아웃 — 지금은 검토만 (idea-backlog 기록)
+
+지금 크롭은 사각형이라 배경이 딸려온다. 사물 윤곽만 분리(알파 투명)하는 방법 후보:
+
+| 방법 | 비용/무게 | 품질 | 메모 |
+|---|---|---|---|
+| Gemini 후속 1콜 ("removed 사물만 투명 배경 PNG 로") | AI 1콜(~$0.039)·지연 +수초 | 선명한 사물엔 양호, 가는/털 경계 약함 | 이미 키프레임+마스크를 보내니 프롬프트만 추가하면 됨 (가장 저마찰) |
+| `rembg`(u2net) 오프라인 | 모델 ~170MB·CPU 1~2s | 범용적으로 무난 | 무거운 의존성 추가 |
+| OpenCV GrabCut (bbox seed) | 가벼움(opencv 이미 후보) | 잡동사니 책상에선 중간 이하 | 추가 AI 비용 0 |
+| ML Kit Subject Segmentation | 온디바이스 | 사람 위주 튜닝 | 가구/소품엔 부적합 |
+
+**판단: 지금은 구현하지 않는다.** 이동 배치는 개념 증명이고 `EdgeFade` 페더링된
+사각형이 "사물 사진 카드"로 충분히 읽힌다. 투명 컷아웃은 (a) 반복 AI 비용/지연 또는
+(b) 170MB 의존성을 부르는데, 데모 가치 대비 과함. 크롭 경로/URL 을 이번에 고정해 뒀으니
+나중에 `crop_normalized_jpeg` → 컷아웃 함수로 바꾸고 `.jpg`→`.png` 만 하면 됨.
+`experiments/shinym87/interior/docs/backlog.md` 아이디어란에 방법 비교와 함께 기록.
+
 ## PHASE 3 — objectType 범용값(other) + 잘못된 힌트 방지 프롬프트 (2026-09-03)
 
 실기기 사례: 책상 위 컵을 지우려 했으나 앱 스피너가 TV 기본값이라 서버가 TV 전용

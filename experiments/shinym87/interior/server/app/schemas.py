@@ -129,6 +129,8 @@ class ResultInfoOut(BaseModel):
     keyframe_id: str
     status: Literal["queued", "running", "done", "failed"]
     result_image_url: str | None = None
+    # 제거된 사물을 원본 키프레임에서 그대로 오려낸 크롭(배경 포함). 이동 배치 재사용용.
+    removed_object_image_url: str | None = None
     changed_region: dict | None = None
     error: str | None = None
     created_at: str
