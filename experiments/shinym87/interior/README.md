@@ -38,14 +38,15 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
 | 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` |
-| TV 영역 드래그 지정 (bbox) | `remove/BboxSelectionView.kt` |
+| 제거할 물체 영역 드래그 지정 (bbox) + 선택 취소 | `remove/BboxSelectionView.kt`, `RemovalController.clearSelection()` |
 | 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
 | job 폴링 → 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
 
-서버 주소는 `remove/InteriorApiClient.DEFAULT_BASE_URL = "http://localhost:8000"` 하드코딩
-(실기기에서는 PC LAN IP 로 바꿔야 함).
+서버 주소는 **화면 상단 입력창**에서 지정한다(값은 저장돼 유지). 실기기에서는
+`localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,
+서버는 `uvicorn app.main:app --host 0.0.0.0` 로 띄운다.
 
-미구현: 가구 회전, 실제 3D 모델(glTF), 실제 외부 AI 연동(P1-10), 결과 정합 다듬기(PHASE 3).
+미구현: 가구 회전, 실제 3D 모델(glTF), 결과 정합 다듬기(PHASE 3).
 
 ## 프로젝트 구조
 
@@ -67,9 +68,9 @@ experiments/shinym87/interior/
 │     │  ├─ keyframe/
 │     │  │  └─ BackgroundKeyframe.kt     # 빈 배경 캡처 + 반투명 오버레이
 │     │  ├─ remove/
-│     │  │  ├─ BboxSelectionView.kt      # 드래그로 제거 대상 사각형 지정
-│     │  │  ├─ InteriorApiClient.kt      # 서버 HTTP (baseUrl 하드코딩)
-│     │  │  └─ RemovalController.kt      # 캡처·메타·플로우·결과 quad·전/후 토글
+│     │  │  ├─ BboxSelectionView.kt      # 드래그로 제거 대상 사각형 지정 / clear()
+│     │  │  ├─ InteriorApiClient.kt      # 서버 HTTP (baseUrl 주입)
+│     │  │  └─ RemovalController.kt      # 서버주소(prefs)·선택취소·캡처·메타·플로우·결과·전/후
 │     │  └─ ui/
 │     │     └─ FurnitureInfoDialog.kt    # 이름/실물 크기 입력 팝업
 │     └─ res/

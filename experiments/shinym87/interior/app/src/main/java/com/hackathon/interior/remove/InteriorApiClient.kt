@@ -12,13 +12,15 @@ import java.net.URL
  * `experiments/shinym87/interior/server/` 의 FastAPI 서버와 통신한다.
  *
  * PHASE 1 목표(흐름 연결)에 맞춰 최소 구현이다. OkHttp 같은 의존성 없이
- * `HttpURLConnection` + `org.json` 만 쓴다. 서버 주소는 우선 하드코딩한다.
+ * `HttpURLConnection` + `org.json` 만 쓴다.
+ *
+ * `baseUrl` 은 [RemovalController] 가 화면 상단 입력창 값을 정규화해서 넘긴다
+ * (실기기에서는 서버 PC 의 LAN IP). [DEFAULT_BASE_URL] 은 입력이 비었을 때의 예비값.
  */
 class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
     companion object {
-        // 실기기 네트워크 연결은 나중에. 지금은 로컬 서버 고정.
-        const val DEFAULT_BASE_URL = "http://localhost:8000"
+        const val DEFAULT_BASE_URL = "http://192.168.0.2:8000"
     }
 
     data class JobStatus(

@@ -1,6 +1,7 @@
 package com.hackathon.interior.remove
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Rect
@@ -33,11 +34,10 @@ import java.util.TimeZone
 import kotlin.math.sqrt
 
 /**
- * 사물(TV) 제거 흐름: 영역 지정 → 키프레임 캡처 → 서버 호출 → job 폴링 →
+ * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 서버 호출 → job 폴링 →
  * 결과 이미지를 벽 평면에 붙이기 → "삭제 전/후" 전환.
  *
- * PHASE 1 목표는 흐름 연결이다. 서버는 아직 mock(Pillow) 이라 결과 품질은 기대하지 않는다.
- * 3D 배치의 방향/스케일은 대략치이며 실기기에서 다듬는다(PHASE 3).
+ * PHASE 1 목표는 흐름 연결이다. 3D 배치의 방향/스케일은 대략치이며 실기기에서 다듬는다.
  */
 class RemovalController(
     private val activity: Activity,
@@ -45,12 +45,12 @@ class RemovalController(
     private val sceneView: ARSceneView,
     private val space: ArSpaceController,
     private val binding: ActivityMainBinding,
-    private val api: InteriorApiClient = InteriorApiClient(),
     private val onBeforeCapture: () -> Unit = {},
     private val onAfterCapture: () -> Unit = {},
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
 
     private var selectionMode = false
     private var bboxNorm: FloatArray? = null          // [x, y, w, h] — sceneView 대비 정규화
@@ -65,8 +65,10 @@ class RemovalController(
     private var busy = false
 
     init {
+        binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
         binding.bboxSelectionView.onRectFinalized = ::onRectSelected
         binding.btnTvSelectMode.setOnClickListener { toggleSelectionMode() }
+        binding.btnClearSelection.setOnClickListener { clearSelection() }
         binding.btnRequestRemove.setOnClickListener { requestRemoval() }
         binding.btnToggleRemoval.setOnClickListener { toggleBeforeAfter() }
     }
@@ -74,12 +76,42 @@ class RemovalController(
     // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
 
     fun toggleSelectionMode() {
-        selectionMode = !selectionMode
-        binding.bboxSelectionView.isSelecting = selectionMode
-        binding.bboxSelectionView.visibility =
-            if (selectionMode || bboxNorm != null) View.VISIBLE else View.GONE
-        binding.btnTvSelectMode.text = if (selectionMode) "선택 모드 끄기" else "TV 선택 모드"
-        status(if (selectionMode) "화면에서 TV 위를 사각형으로 드래그하세요" else "")
+        if (!selectionMode) {
+            clearSelection(announce = false)   // 새로 그리기 전에 이전 선택 정리
+            selectionMode = true
+            binding.bboxSelectionView.isSelecting = true
+            binding.bboxSelectionView.visibility = View.VISIBLE
+            binding.btnTvSelectMode.text = "선택 모드 끄기"
+            binding.btnClearSelection.visibility = View.VISIBLE
+            status("화면에서 지울 물체 위를 사각형으로 드래그하세요")
+        } else {
+            selectionMode = false
+            binding.bboxSelectionView.isSelecting = false
+            val hasSelection = bboxNorm != null
+            binding.bboxSelectionView.visibility = if (hasSelection) View.VISIBLE else View.GONE
+            binding.btnTvSelectMode.text = "TV 선택 모드"
+            binding.btnClearSelection.visibility = if (hasSelection) View.VISIBLE else View.GONE
+            status(if (hasSelection) "영역 지정됨 · '삭제 요청'을 누르세요" else "")
+        }
+    }
+
+    /** 지정한 영역/그린 사각형/결과를 모두 지운다. (선택 취소 버튼 + 모드 재진입 시) */
+    fun clearSelection(announce: Boolean = true) {
+        bboxNorm = null
+        wallAnchor?.let { runCatching { it.detach() } }
+        wallAnchor = null
+        wallPlaneJson = null
+        planeIsVertical = false
+
+        selectionMode = false
+        binding.bboxSelectionView.isSelecting = false
+        binding.bboxSelectionView.clear()
+        binding.bboxSelectionView.visibility = View.GONE
+        binding.btnTvSelectMode.text = "TV 선택 모드"
+        binding.btnClearSelection.visibility = View.GONE
+        binding.btnRequestRemove.isEnabled = false
+        clearResult()
+        if (announce) status("선택을 취소했습니다")
     }
 
     private fun onRectSelected(rect: RectF) {
@@ -98,8 +130,9 @@ class RemovalController(
         binding.bboxSelectionView.isSelecting = false
         binding.bboxSelectionView.visibility = View.VISIBLE   // 그린 사각형은 확인용으로 유지
         binding.btnTvSelectMode.text = "TV 선택 모드"
+        binding.btnClearSelection.visibility = View.VISIBLE
         binding.btnRequestRemove.isEnabled = true
-        status("영역 지정됨 · '삭제 요청'을 누르세요")
+        status("영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 'TV 선택 모드')")
     }
 
     /** 사각형 중심/네 변에서 hitTest 해 벽 앵커와 실제 크기(m), 평면 정보를 잡는다. */
@@ -128,12 +161,24 @@ class RemovalController(
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
 
+    /** 입력창의 서버 주소를 정규화(스킴 보정, 끝 슬래시 제거)하고 저장한다. */
+    private fun currentBaseUrl(): String {
+        var url = binding.serverUrlInput.text?.toString()?.trim().orEmpty()
+        if (url.isEmpty()) url = DEFAULT_SERVER_URL
+        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
+        url = url.trimEnd('/')
+        prefs.edit().putString(KEY_SERVER_URL, url).apply()
+        binding.serverUrlInput.setText(url)
+        return url
+    }
+
     private fun requestRemoval() {
         if (busy) return
         val bbox = bboxNorm ?: run {
-            status("먼저 'TV 선택 모드'로 영역을 지정하세요")
+            status("먼저 'TV 선택 모드'로 지울 영역을 지정하세요")
             return
         }
+        val client = InteriorApiClient(currentBaseUrl())
         busy = true
         setControlsEnabled(false)
         status("현재 화면 캡처 중…")
@@ -148,9 +193,9 @@ class RemovalController(
             val meta = buildMetaJson(imageW, imageH, bbox)
             scope.launch {
                 try {
-                    runFlow(jpeg, meta, bbox)
+                    runFlow(client, jpeg, meta, bbox)
                 } catch (e: Exception) {
-                    status("실패: ${e.message}")
+                    status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
                 } finally {
                     busy = false
                     setControlsEnabled(true)
@@ -159,22 +204,27 @@ class RemovalController(
         }
     }
 
-    private suspend fun runFlow(jpeg: ByteArray, metaJson: String, bbox: FloatArray) {
+    private suspend fun runFlow(
+        client: InteriorApiClient,
+        jpeg: ByteArray,
+        metaJson: String,
+        bbox: FloatArray,
+    ) {
         status("세션 생성 중…")
-        val sceneId = api.createScene()
+        val sceneId = client.createScene()
 
         status("키프레임 업로드 중…")
-        val keyframeId = api.uploadKeyframe(sceneId, jpeg, metaJson)
+        val keyframeId = client.uploadKeyframe(sceneId, jpeg, metaJson)
 
         status("삭제 요청 전송 중…")
-        val jobId = api.requestRemoveObject(sceneId, keyframeId, bbox, "tv")
+        val jobId = client.requestRemoveObject(sceneId, keyframeId, bbox, "tv")
 
-        var job = api.getJob(sceneId, jobId)
+        var job = client.getJob(sceneId, jobId)
         var tries = 0
-        while (job.status != "done" && job.status != "failed" && tries < 60) {
+        while (job.status != "done" && job.status != "failed" && tries < 120) {
             status("AI 처리 중… (${job.status})")
             delay(1000)
-            job = api.getJob(sceneId, jobId)
+            job = client.getJob(sceneId, jobId)
             tries++
         }
         if (job.status != "done") {
@@ -187,7 +237,7 @@ class RemovalController(
             return
         }
         status("결과 이미지 받는 중…")
-        val bytes = api.downloadBytes(url)
+        val bytes = client.downloadBytes(url)
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             ?: run {
                 status("결과 이미지 디코드 실패")
@@ -387,10 +437,15 @@ class RemovalController(
 
     private fun setControlsEnabled(enabled: Boolean) {
         binding.btnTvSelectMode.isEnabled = enabled
+        binding.btnClearSelection.isEnabled = enabled
         binding.btnRequestRemove.isEnabled = enabled && bboxNorm != null
+        binding.serverUrlInput.isEnabled = enabled
     }
 
     private companion object {
+        const val DEFAULT_SERVER_URL = "http://192.168.0.2:8000"
+        const val KEY_SERVER_URL = "server_url"
+
         val IDENTITY_16 = floatArrayOf(
             1f, 0f, 0f, 0f,
             0f, 1f, 0f, 0f,

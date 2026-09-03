@@ -28,9 +28,14 @@ PHASE 1 사용자 1 항목(P1-2, P1-3, P1-8, P1-9)을 Android 앱에 구현했�
   - 캡처 시점의 카메라 pose/intrinsics(`ArSpaceController.latestFrame`)와 벽 평면
     정보, bbox 를 `docs/data-model.md` 4절 형식의 메타 JSON 으로 만든다.
   - `POST /scenes` → `POST /scenes/{id}/keyframes` (multipart: `image` + `meta`).
-  - 서버 주소는 `InteriorApiClient.DEFAULT_BASE_URL = "http://localhost:8000"` 하드코딩.
+  - **서버 주소는 화면 상단 입력창(`serverUrlInput`)에서 지정**한다. 실기기에서는
+    `localhost` 가 폰 자신을 가리키므로 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를
+    넣어야 한다. 입력값은 `SharedPreferences("interior")` 에 저장돼 다음 실행에도 유지.
+    스킴 생략 시 `http://` 자동 보정, 끝 슬래시 제거.
+- **선택 취소**: `btnClearSelection` — 지정한 영역/그린 사각형/결과 quad 를 모두 지운다.
+  "TV 선택 모드" 를 다시 켜면 이전 선택을 자동으로 지우고 새로 그린다.
 - **P1-8 결과 폴링 + 화면 적용**:
-  - `POST /scenes/{id}/remove-object` → `GET .../jobs/{id}` 를 1초 간격 폴링(최대 60초).
+  - `POST /scenes/{id}/remove-object` → `GET .../jobs/{id}` 를 1초 간격 폴링(최대 120초).
   - `done` 이면 `GET .../results/{job}.jpg` 로 결과 이미지를 받아
     `changed_region`(없으면 bbox)으로 잘라 벽 평면 앵커에 `ImageNode` quad 로 붙인다.
   - 벽 앵커를 못 잡으면 전체화면 `ImageView`(`resultOverlay`)로 대체 표시.
@@ -45,32 +50,35 @@ PHASE 1 사용자 1 항목(P1-2, P1-3, P1-8, P1-9)을 Android 앱에 구현했�
 ```
 experiments/shinym87/interior/app/src/main/
 ├─ AndroidManifest.xml                         INTERNET + usesCleartextTraffic
-├─ res/layout/activity_main.xml                bboxSelectionView / resultOverlay /
-│                                              btnTvSelectMode / btnRequestRemove /
-│                                              btnToggleRemoval / removalStatusText 추가
+├─ res/layout/activity_main.xml                serverUrlInput / bboxSelectionView /
+│                                              resultOverlay / btnTvSelectMode /
+│                                              btnClearSelection / btnRequestRemove /
+│                                              btnToggleRemoval / removalStatusText
 └─ java/com/hackathon/interior/
    ├─ MainActivity.kt                          RemovalController 배선
    ├─ ar/ArSpaceController.kt                  latestFrame 노출
    └─ remove/
-      ├─ BboxSelectionView.kt                  드래그로 사각형 지정
-      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json, baseUrl 하드코딩
-      └─ RemovalController.kt                  캡처·메타·플로우·결과 quad·전/후 토글
+      ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
+      ├─ InteriorApiClient.kt                  HttpURLConnection + org.json, baseUrl 주입
+      └─ RemovalController.kt                  서버주소(prefs)·선택취소·캡처·메타·플로우·결과 quad·전/후
 ```
 
 ## Decisions
 
 - 네트워킹은 의존성 최소화를 위해 OkHttp 없이 `HttpURLConnection` + `org.json`.
-- 서버 주소는 우선 `http://localhost:8000` 하드코딩(요청 사항). 실기기에서는 PC IP 로
-  바꿔야 함 — `InteriorApiClient.DEFAULT_BASE_URL` 한 곳.
+- 서버 주소는 화면 상단 입력창에서 지정하고 `SharedPreferences` 에 저장한다.
+  기본값 `http://192.168.0.2:8000` (거의 항상 사용자가 바꿔야 함).
 - 결과 이미지는 "바뀐 영역"만 잘라 벽에 붙인다(전체 키프레임 X). 정밀 정합은 PHASE 3.
 - 3D quad 의 방향(수직 평면에서 X축 -90°)·크기(사각형 네 변 hitTest 거리)는 대략치.
   실기기에서 다듬는다.
 
 ## Constraints
 
-- **실기기 네트워크 검증은 아직 안 함**(요청대로 코드/빌드까지만). `localhost` 는
-  기기 자신을 가리키므로 실기기에서는 서버 PC 의 LAN IP 로 바꿔야 한다.
-- 서버는 mock(Pillow) 이므로 결과는 "TV 자리를 벽 색으로 덮은" 수준. 정합/품질 기대 X.
+- 실기기에서 서버에 연결하려면: ① 서버를 `uvicorn app.main:app --host 0.0.0.0` 로
+  띄우고 ② 폰과 PC 가 같은 Wi-Fi ③ 앱 상단 입력창에 `http://<PC-LAN-IP>:8000`
+  입력 ④ Windows 방화벽에서 8000 포트(또는 python) 인바운드 허용.
+  `localhost` / `127.0.0.1` 로 두면 폰 자신을 가리켜 "Failed to connect" 가 난다.
+- 서버가 mock 이면 결과는 "영역을 벽 색으로 덮은" 수준, external(Gemini) 이면 실제 복원.
 - 캡처는 화면 픽셀(`PixelCopy`) 기준이라 카메라 원본 해상도/intrinsics 와 정확히
   일치하지 않는다. 메타의 intrinsics 는 스케일 근사값.
 - "TV 선택 모드" 중에는 SceneView 제스처(큐브 생성/드래그)가 막힌다(의도).
@@ -87,11 +95,10 @@ experiments/shinym87/interior/app/src/main/
 
 ## Next
 
-1. 서버를 `uvicorn app.main:app --host 0.0.0.0` 로 띄우고, 앱의
-   `InteriorApiClient.DEFAULT_BASE_URL` 을 PC LAN IP 로 바꿔 실기기에서
-   캡처→전송→응답→화면적용 한 번 관통 확인 (P1-11 데모).
-2. 서버 `app/ai/external.py` 의 `TODO(P1-10)` 를 실제 외부 AI 호출로 교체.
-3. 결과 quad 의 방향/스케일/정합 다듬기 (PHASE 3 로 이어짐).
+1. 실기기 P1-11: 서버 `--host 0.0.0.0`, 앱 입력창에 PC LAN IP → 캡처→전송→응답→화면적용
+   한 번 관통 + 데모 녹화. (서버는 external=Gemini 로 이미 검증됨 — P1-10 완료)
+2. 결과 quad 의 방향/스케일/정합 다듬기 (PHASE 3 로 이어짐).
+3. 벽 앵커를 못 잡을 때가 잦으면 전체화면 fallback UX 개선.
 
 ## Relevant Commits
 

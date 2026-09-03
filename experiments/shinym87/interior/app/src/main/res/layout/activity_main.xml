@@ -91,12 +91,31 @@
             android:progress="50"
             android:visibility="gone" />
 
-        <!-- 사물 제거(P1-2/P1-3/P1-8/P1-9) 흐름 조작 -->
+        <!-- 사물 제거 흐름 (P1-2/P1-3/P1-8/P1-9) -->
+
+        <!-- 서버 주소. 실기기에서는 localhost 가 아니라 서버 PC 의 LAN IP 를 넣어야 한다.
+             입력값은 저장되어 다음 실행에도 유지된다. -->
+        <EditText
+            android:id="@+id/serverUrlInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#33FFFFFF"
+            android:textColor="@android:color/white"
+            android:textColorHint="#99FFFFFF"
+            android:textSize="13sp"
+            android:padding="8dp"
+            android:singleLine="true"
+            android:inputType="textUri"
+            android:imeOptions="actionDone"
+            android:hint="서버 주소 (예: http://192.168.0.10:8000)"
+            android:importantForAutofill="no" />
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:orientation="horizontal">
 
             <Button
@@ -106,10 +125,25 @@
                 android:text="TV 선택 모드" />
 
             <Button
-                android:id="@+id/btnRequestRemove"
+                android:id="@+id/btnClearSelection"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:visibility="gone"
+                android:text="선택 취소" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnRequestRemove"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:enabled="false"
                 android:text="삭제 요청" />
 
