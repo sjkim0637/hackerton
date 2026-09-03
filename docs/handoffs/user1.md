@@ -11,7 +11,43 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 "사용자 1 (공간 / AR)".
+PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
+
+## PHASE 5 — 서버 카탈로그에서 새 가구 배치 (2026-09-03)
+
+지금까지 빈 평면을 탭하면 이름/크기를 직접 입력해 큐브를 만들었다. 이번엔 **서버
+카탈로그(`GET /catalog`, 5종)**에서 골라 배치하는 진입점을 추가했다.
+
+1. **카탈로그 목록** (`furniture/CatalogController.kt`, `activity_main.xml`)
+   - 상단에 **"가구 추가"** 버튼(`btnAddFurniture`). 누르면 하단 `catalogPanel`(스크롤 목록)
+     이 열리고 `GET /catalog` 결과를 항목마다 한 줄 버튼으로:
+     `이름 / 카테고리(TV·소파…) / 000×000×000cm / 벽|바닥`. "닫기" 로 접는다.
+   - `InteriorApiClient.getCatalog()` → `CatalogItem(id, name, category, w/h/d(m),
+     thumbnailUrl, anchorHint)` 파싱.
+2. **배치**
+   - 항목을 고르면 `CatalogController` 가 썸네일(`thumbnail` URL)을 받아보고
+     (`downloadBytes`, 실패/없으면 null), `onPick` → `FurnitureController.beginCatalogPlacement(
+     name, w, h, d, wantWall = anchorHint=="wall", thumb)`.
+   - 이후 평면 탭 → `handleTap` 이 `pendingCatalog` 분기 → `placeCatalog()` 가
+     **`hitTestPreferring(x, y, wantWall)`** (PHASE 4 에서 만든 것 재사용)으로 TV·선반은 벽,
+     소파·테이블·의자는 바닥에 우선 배치. 안내: "'<이름>' — 벽/바닥을 탭해 배치하세요".
+   - 표시: 썸네일이 있으면 `ImageNode` quad, 없으면 **기존 그대로** 이름표 붙은 반투명 큐브
+     (`FurnitureItem.imageNode` 가 null 이면 큐브, 있으면 큐브 숨기고 이미지).
+     ※ 서버가 아직 `/assets/*` 를 서빙하지 않아 현재 5종 모두 큐브 폴백 — 서버가 썸네일을
+     주면 코드 변경 없이 이미지로 바뀐다.
+3. **조작 재사용 (중복 구현 없음)**
+   - 카탈로그 가구도 **같은 `FurnitureItem` + 같은 제스처 로직**을 쓴다:
+     드래그(`beginDrag/drag/endDrag`, `drag` 는 이제 종류에 맞는 평면을 우선 hitTest),
+     핀치/＋－(`scaleSelectedBy`), 회전(신규 `rotateSelectedBy(15°)` — `FurnitureItem.rotationDeg`
+     를 큐브·이미지에 함께 적용, `selectionPanel` 에 "회전 ⟳" 버튼 추가).
+   - 배치 직후 `select(item)` 으로 바로 선택 상태 → 조작 패널이 뜬다.
+4. **기존 기능과 구분**
+   - "가구 추가"(상단, 카탈로그) ↔ 빈 평면 탭 시 이름/크기 입력 다이얼로그(기존 큐브 생성) ↔
+     "여기로 옮기기"(PHASE 4, 삭제한 사물 재배치, `movedObjectPanel`) — **세 진입점이 서로
+     다른 버튼/패널**. 카탈로그 배치 대기 중엔 상단 안내 문구가 바뀐다.
+
+빌드: `:app:assembleDebug` 성공 (`app-debug.apk` ≈ 47MB). 실기기 확인 남음: 카탈로그
+로드/배치, 회전 버튼 방향, 벽/바닥 자동 선택.
 
 ## PHASE 4 — 재배치를 서버(placements API)와 연동 (2026-09-03)
 
@@ -242,9 +278,12 @@ experiments/shinym87/interior/app/src/main/
 │                                              btnClearSelection / btnRequestRemove /
 │                                              btnToggleRemoval / removalStatusText
 └─ java/com/hackathon/interior/
-   ├─ MainActivity.kt                          Removal/Moved 배선 + 공유 before/afterCapture 람다 + 제스처 라우팅
+   ├─ MainActivity.kt                          Removal/Moved/Catalog 배선 + 공유 before/afterCapture + 제스처 라우팅
    ├─ ar/ArSpaceController.kt                  latestFrame, setPlaneVisualizationEnabled(), hitTestPreferring()
-   ├─ furniture/FurnitureController.kt         큐브 배치 (hasSelection() 추가)
+   ├─ furniture/
+   │  ├─ FurnitureController.kt                큐브/카탈로그 가구 배치·드래그·핀치·회전·삭제 (hasSelection/beginCatalogPlacement/rotateSelectedBy)
+   │  ├─ FurnitureItem.kt                      노드 묶음 (imageNode?/rotationDeg 추가)
+   │  └─ CatalogController.kt                  PHASE 5: "가구 추가" → GET /catalog 목록 패널 → onPick
    ├─ keyframe/BackgroundKeyframe.kt           "배경 촬영" 캡처 (동일 오버레이 제거 적용)
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움

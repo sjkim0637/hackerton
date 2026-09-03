@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
+import com.hackathon.interior.furniture.CatalogController
 import com.hackathon.interior.furniture.FurnitureController
 import com.hackathon.interior.furniture.FurnitureItem
 import com.hackathon.interior.keyframe.BackgroundKeyframe
@@ -17,9 +18,11 @@ import com.hackathon.interior.remove.RemovalController
  *
  * 화면 구성은 네 조각으로 나뉜다.
  * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
- * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 삭제
+ * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 회전 · 삭제
+ * - [CatalogController]  : "가구 추가" → 서버 카탈로그 목록 → 골라서 배치 (PHASE 5)
  * - [BackgroundKeyframe] : "빈 배경" 대표 이미지 캡처와 반투명 오버레이
  * - [RemovalController]  : TV 영역 지정 → 키프레임 캡처 → 서버 호출 → 결과를 벽에 적용
+ * - [MovedObjectController]: 삭제한 사물을 다른 위치로 이동 + placements 서버 저장/복원
  *
  * MainActivity 는 이 조각들을 레이아웃 위젯과 제스처에 연결만 한다.
  */
@@ -31,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyframe: BackgroundKeyframe
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
+    private lateinit var catalog: CatalogController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +49,7 @@ class MainActivity : AppCompatActivity() {
             activity = this,
             sceneView = sceneView,
             hitTest = space::hitTest,
+            hitTestPreferring = space::hitTestPreferring,
             onSelectionChanged = ::renderSelectionPanel,
         )
 
@@ -94,6 +99,24 @@ class MainActivity : AppCompatActivity() {
             status = { binding.removalStatusText.text = it },
         )
 
+        // PHASE 5: 서버 카탈로그에서 새 가구 추가 (삭제-후-재배치와 별개 진입점).
+        catalog = CatalogController(
+            activity = this,
+            scope = lifecycleScope,
+            binding = binding,
+            serverBaseUrl = { removal.serverBaseUrl() },
+            onPick = { item, thumb ->
+                furniture.beginCatalogPlacement(
+                    name = item.name,
+                    widthM = item.widthM, heightM = item.heightM, depthM = item.depthM,
+                    wantWall = item.anchorHint == "wall",
+                    thumb = thumb,
+                )
+                binding.instructionText.text =
+                    "‘${item.name}’ — ${if (item.anchorHint == "wall") "벽" else "바닥"}을 탭해 배치하세요"
+            },
+        )
+
         space.onFrame = {
             furniture.billboard()
             removal.onFrame()   // 결과 quad 를 벽 앵커에 스무딩해서 고정
@@ -114,6 +137,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnGrow.setOnClickListener { furniture.scaleSelectedBy(FurnitureItem.SCALE_STEP) }
         binding.btnShrink.setOnClickListener { furniture.scaleSelectedBy(1f / FurnitureItem.SCALE_STEP) }
+        binding.btnRotate.setOnClickListener { furniture.rotateSelectedBy(15f) }
         binding.btnDeselect.setOnClickListener { furniture.deselect() }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
     }

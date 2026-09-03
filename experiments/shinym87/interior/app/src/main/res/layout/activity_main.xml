@@ -80,6 +80,14 @@
                 android:layout_marginStart="8dp"
                 android:enabled="false"
                 android:text="배경 표시" />
+
+            <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). -->
+            <Button
+                android:id="@+id/btnAddFurniture"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="가구 추가" />
         </LinearLayout>
 
         <SeekBar
@@ -333,10 +341,23 @@
                 android:text="＋" />
 
             <Button
-                android:id="@+id/btnDelete"
+                android:id="@+id/btnRotate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:text="회전 ⟳" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDelete"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="삭제" />
 
             <Button
@@ -346,6 +367,53 @@
                 android:layout_marginStart="8dp"
                 android:text="선택 해제" />
         </LinearLayout>
+    </LinearLayout>
+
+    <!-- PHASE 5: "가구 추가" 를 누르면 뜨는 서버 카탈로그 목록. 한 항목을 고르면
+         해당 종류에 맞는 평면(벽/바닥)을 탭해 배치한다. -->
+    <LinearLayout
+        android:id="@+id/catalogPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#E6000000"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="가구 카탈로그 (서버)"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/btnCatalogClose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="닫기" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="6dp">
+
+            <LinearLayout
+                android:id="@+id/catalogList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
     </LinearLayout>
 
 </FrameLayout>

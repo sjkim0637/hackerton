@@ -1,6 +1,7 @@
 package com.hackathon.interior.furniture
 
 import android.app.Activity
+import android.graphics.Bitmap
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
@@ -26,15 +27,18 @@ import io.github.sceneview.node.Node
  * 가구(현재는 반투명 큐브)의 생성 · 선택 · 이동 · 크기 조절 · 삭제를 담당한다.
  *
  * 설계서 "사용자 1 — 공간 / AR" 작업 흐름 중
- * - 임시 가구 배치 (탭)
- * - 가구 이동 (드래그)
- * - 가구 크기 조절 (핀치 / ＋－ 버튼)
- * 부분. 회전은 아직 미구현이며 이후 추가한다.
+ * - 임시 가구 배치 (탭 + 이름/크기 입력, 또는 PHASE 5 서버 카탈로그에서 선택)
+ * - 가구 이동 (드래그) · 크기 조절 (핀치 / ＋－) · 회전 (회전 버튼)
+ *
+ * 카탈로그 가구도 같은 [FurnitureItem]/제스처 로직을 그대로 쓴다. 표시만 썸네일이 있으면
+ * 큐브 대신 이미지 quad 이고, 없으면 기존처럼 이름표 붙은 반투명 큐브다.
  */
 class FurnitureController(
     private val activity: Activity,
     private val sceneView: ARSceneView,
     private val hitTest: (Float, Float) -> HitResult?,
+    /** 사물 종류에 맞는 평면(벽/바닥) 우선 hitTest. 카탈로그 배치·드래그에 쓴다. */
+    private val hitTestPreferring: (Float, Float, Boolean) -> HitResult?,
     /** 선택 대상이나 크기가 바뀔 때 호출. null 이면 선택 해제. */
     private val onSelectionChanged: (FurnitureItem?) -> Unit,
 ) {
@@ -46,11 +50,58 @@ class FurnitureController(
     private var pendingAnchor: Anchor? = null
     private var pendingIsVertical = false
 
+    /** PHASE 5: 카탈로그에서 고른 뒤, 평면 탭을 기다리는 가구. null 이면 카탈로그 배치 모드 아님. */
+    private var pendingCatalog: PendingCatalog? = null
+
+    private class PendingCatalog(
+        val name: String,
+        val size: Size,
+        val wantWall: Boolean,
+        val thumb: Bitmap?,
+    )
+
     private var draggingSelected = false
     private var dragIsVertical = false
 
     /** 선택/입력 중이 아니면 true. 안내 문구 자동 갱신 조건으로 쓰인다. */
-    fun isIdle(): Boolean = selected == null && pendingAnchor == null
+    fun isIdle(): Boolean = selected == null && pendingAnchor == null && pendingCatalog == null
+
+    // ------------------------------------------------- PHASE 5: 카탈로그 가구 배치
+
+    /**
+     * 카탈로그에서 한 항목을 골랐다. 이제 [wantWall] 이면 벽, 아니면 바닥을 탭하면
+     * 그 자리에 이 가구를 배치한다. [thumb] 가 있으면 이미지로, 없으면 큐브+이름표로.
+     */
+    fun beginCatalogPlacement(
+        name: String, widthM: Float, heightM: Float, depthM: Float,
+        wantWall: Boolean, thumb: Bitmap?,
+    ) {
+        deselect()
+        pendingCatalog = PendingCatalog(name, Size(widthM, heightM, depthM), wantWall, thumb)
+    }
+
+    /** 카탈로그 배치 대기 취소. */
+    fun cancelCatalogPlacement() {
+        pendingCatalog = null
+    }
+
+    fun isPlacingCatalog(): Boolean = pendingCatalog != null
+
+    private fun placeCatalog(xPx: Float, yPx: Float) {
+        val pc = pendingCatalog ?: return
+        val hit = hitTestPreferring(xPx, yPx, pc.wantWall)
+        val anchor = hit?.createAnchorOrNull()
+        if (hit == null || anchor == null) {
+            Toast.makeText(
+                activity,
+                "격자가 보이는 ${if (pc.wantWall) "벽" else "바닥"} 위를 탭하세요",
+                Toast.LENGTH_SHORT,
+            ).show()
+            return
+        }
+        pendingCatalog = null
+        createFurniture(anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit), pc.thumb)
+    }
 
     /** 지금 선택된 큐브가 있는지. (제스처를 큐브 vs 이동된 사물 중 누구에게 줄지 판단용) */
     fun hasSelection(): Boolean = selected != null
@@ -67,11 +118,18 @@ class FurnitureController(
 
     // ---------------------------------------------------------------- 제스처 진입점
 
-    /** 단일 탭: 가구를 탭하면 선택, 빈 곳을 탭하면 (선택 해제 후) 새 가구 생성 흐름. */
+    /**
+     * 단일 탭:
+     * - 가구를 탭하면 선택
+     * - 카탈로그 배치 대기 중이면(빈 곳 탭) 그 자리에 카탈로그 가구 배치
+     * - 선택된 게 있으면 선택 해제
+     * - 그 외 빈 곳 탭이면 이름/크기 입력 다이얼로그로 큐브 생성
+     */
     fun handleTap(motionEvent: MotionEvent, node: Node?) {
         val item = markerOf(node)
         when {
             item != null -> select(item)
+            pendingCatalog != null -> placeCatalog(motionEvent.x, motionEvent.y)
             selected != null -> deselect()
             else -> startCreateFlow(motionEvent.x, motionEvent.y)
         }
@@ -92,7 +150,9 @@ class FurnitureController(
     fun drag(motionEvent: MotionEvent) {
         if (!draggingSelected) return
         val item = selected ?: return
-        val hit = hitTest(motionEvent.x, motionEvent.y) ?: return
+        // 벽 가구는 벽만, 바닥 가구는 바닥만 따라가도록 종류에 맞는 평면을 우선한다.
+        val hit = hitTestPreferring(motionEvent.x, motionEvent.y, item.onVerticalPlane)
+            ?: hitTest(motionEvent.x, motionEvent.y) ?: return
         item.anchorNode.pose = hit.hitPose
         dragIsVertical = PlaneKind.isVerticalHit(hit)
     }
@@ -112,6 +172,14 @@ class FurnitureController(
         item.cubeNode.scale = Scale(item.scaleFactor)
         applyPlacement(item)
         onSelectionChanged(item)
+    }
+
+    /** "회전" 버튼에서 호출. 평면 안에서 [deg] 만큼 누적 회전 (큐브·이미지 공통). */
+    fun rotateSelectedBy(deg: Float) {
+        val item = selected ?: return
+        if (draggingSelected) return
+        item.rotationDeg = (item.rotationDeg + deg).mod(360f)
+        applyPlacement(item)
     }
 
     fun deleteSelected() {
@@ -151,7 +219,13 @@ class FurnitureController(
         )
     }
 
-    private fun createFurniture(anchor: Anchor, name: String, baseSize: Size, isVertical: Boolean) {
+    private fun createFurniture(
+        anchor: Anchor,
+        name: String,
+        baseSize: Size,
+        isVertical: Boolean,
+        thumb: Bitmap? = null,
+    ) {
         val material = sceneView.materialLoader.createColorInstance(color = FurnitureItem.COLOR_NORMAL)
 
         // 오프셋/회전은 노드에서 처리하므로 지오메트리는 원점 중심으로 만든다.
@@ -172,20 +246,35 @@ class FurnitureController(
             ),
         ).apply { isTouchable = false }
 
+        // 카탈로그 썸네일이 있으면 이미지 quad 로 표시하고 큐브는 숨긴다(형태 프록시로만 유지).
+        val imageNode: ImageNode? = thumb?.let {
+            ImageNode(
+                materialLoader = sceneView.materialLoader,
+                bitmap = it,
+                size = Size(baseSize.x, baseSize.y),
+            ).apply { isTouchable = false }
+        }
+        cubeNode.isVisible = imageNode == null
+
         val anchorNode = AnchorNode(sceneView.engine, anchor).apply {
             isPositionEditable = false // 이동은 직접 제어한다.
             addChildNode(cubeNode)
             addChildNode(labelNode)
+            imageNode?.let { addChildNode(it) }
         }
         sceneView.addChildNode(anchorNode)
 
-        val item = FurnitureItem(anchorNode, cubeNode, labelNode, baseSize, 1f, name, material, isVertical)
+        val item = FurnitureItem(
+            anchorNode, cubeNode, labelNode, baseSize, 1f, name, material, isVertical,
+            imageNode = imageNode,
+        )
         items += item
+        select(item)          // 방금 놓은 가구를 바로 선택 → 조작 패널 표시
         applyPlacement(item)
         Log.d(
             TAG,
             "가구 생성: '$name' size=${baseSize.x}x${baseSize.y}x${baseSize.z}m " +
-                "vertical=$isVertical at ${anchor.pose}",
+                "vertical=$isVertical thumb=${imageNode != null} at ${anchor.pose}",
         )
     }
 
@@ -199,14 +288,27 @@ class FurnitureController(
     private fun applyPlacement(item: FurnitureItem) {
         val f = item.scaleFactor
         val s = item.baseSize
+        val r = item.rotationDeg
         if (item.onVerticalPlane) {
-            item.cubeNode.rotation = Rotation(x = -90f, y = 0f, z = 0f)
-            item.cubeNode.position = Position(x = 0f, y = s.z * f / 2f, z = 0f)
-            item.labelNode.position = Position(x = 0f, y = s.z * f + FurnitureItem.LABEL_GAP_METERS, z = 0f)
+            val h = s.z * f
+            item.cubeNode.rotation = Rotation(x = -90f, y = 0f, z = r)
+            item.cubeNode.position = Position(x = 0f, y = h / 2f, z = 0f)
+            item.labelNode.position = Position(x = 0f, y = h + FurnitureItem.LABEL_GAP_METERS, z = 0f)
+            item.imageNode?.let {
+                it.scale = Scale(f)
+                it.rotation = Rotation(x = -90f, y = 0f, z = r)
+                it.position = Position(x = 0f, y = h / 2f, z = 0f)
+            }
         } else {
-            item.cubeNode.rotation = Rotation(0f, 0f, 0f)
-            item.cubeNode.position = Position(x = 0f, y = s.y * f / 2f, z = 0f)
-            item.labelNode.position = Position(x = 0f, y = s.y * f + FurnitureItem.LABEL_GAP_METERS, z = 0f)
+            val h = s.y * f
+            item.cubeNode.rotation = Rotation(0f, r, 0f)
+            item.cubeNode.position = Position(x = 0f, y = h / 2f, z = 0f)
+            item.labelNode.position = Position(x = 0f, y = h + FurnitureItem.LABEL_GAP_METERS, z = 0f)
+            item.imageNode?.let {
+                it.scale = Scale(f)
+                it.rotation = Rotation(x = 0f, y = r, z = 0f)
+                it.position = Position(x = 0f, y = h / 2f, z = 0f)
+            }
         }
     }
 
@@ -215,8 +317,10 @@ class FurnitureController(
     private fun markerOf(node: Node?): FurnitureItem? {
         var current = node
         while (current != null) {
-            items.firstOrNull { it.cubeNode == current || it.anchorNode == current || it.labelNode == current }
-                ?.let { return it }
+            items.firstOrNull {
+                it.cubeNode == current || it.anchorNode == current ||
+                    it.labelNode == current || it.imageNode == current
+            }?.let { return it }
             current = current.parent
         }
         return null

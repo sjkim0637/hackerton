@@ -24,6 +24,13 @@ class FurnitureItem(
     val material: MaterialInstance,
     /** 수직 평면(벽)에 붙어 있으면 true. 큐브 방향/오프셋이 달라진다. */
     var onVerticalPlane: Boolean,
+    /**
+     * PHASE 5: 카탈로그 가구에 썸네일이 있으면 큐브 대신 이 이미지 quad 로 표시한다.
+     * (없으면 null → 기존처럼 이름표 붙은 반투명 큐브.)
+     */
+    var imageNode: ImageNode? = null,
+    /** 회전 버튼으로 누적되는 평면 내 회전각(도). 큐브·이미지에 함께 적용. */
+    var rotationDeg: Float = 0f,
 ) {
     companion object {
         const val MIN_SCALE = 0.3f

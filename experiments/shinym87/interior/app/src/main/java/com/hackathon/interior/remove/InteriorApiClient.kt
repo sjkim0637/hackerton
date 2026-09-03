@@ -31,6 +31,18 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         val error: String?,
     )
 
+    /** PHASE 5: 서버 가구 카탈로그 항목 (`GET /catalog`). */
+    data class CatalogItem(
+        val id: String,
+        val name: String,
+        val category: String,        // tv | sofa | table | chair | shelf
+        val widthM: Float,
+        val heightM: Float,
+        val depthM: Float,
+        val thumbnailUrl: String?,   // 예: /assets/xxx.png (서버가 아직 안 줄 수도 있음)
+        val anchorHint: String,      // "wall" | "floor"
+    )
+
     /** PHASE 4: 서버에 저장된 재배치(이동/회전/크기) 한 건. */
     data class Placement(
         val placementId: String,
@@ -115,6 +127,27 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
             changedRect = rect,
             error = json.optString("error").ifEmpty { null },
         )
+    }
+
+    // ---------------------------------------------------------- 카탈로그 (PHASE 5)
+
+    /** `GET /catalog` — 서버 가구 카탈로그 5종. */
+    suspend fun getCatalog(): List<CatalogItem> = withContext(Dispatchers.IO) {
+        val arr = JSONArray(readBody(open("/catalog", "GET")))
+        List(arr.length()) { i ->
+            val o = arr.getJSONObject(i)
+            val s = o.optJSONObject("size_m") ?: JSONObject()
+            CatalogItem(
+                id = o.optString("id"),
+                name = o.optString("name", o.optString("id")),
+                category = o.optString("category", ""),
+                widthM = s.optDouble("w", 0.5).toFloat(),
+                heightM = s.optDouble("h", 0.5).toFloat(),
+                depthM = s.optDouble("d", 0.5).toFloat(),
+                thumbnailUrl = o.optString("thumbnail").ifEmpty { null },
+                anchorHint = o.optString("anchor_hint", "floor"),
+            )
+        }
     }
 
     // ---------------------------------------------------------- 재배치 (PHASE 4)
