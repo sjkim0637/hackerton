@@ -60,7 +60,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   `INTERIOR_RESULT_KEEP_PER_SCENE`, 기동 시 기간 `INTERIOR_RESULT_MAX_AGE_HOURS`) ·
   폰 전달 최적화(`cap_jpeg_bytes` — `INTERIOR_RESULT_MAX_BYTES` 초과 시 품질만 낮춤,
   해상도 유지). `pytest` 34개. `docs/handoffs/user3.md`.
+- [DONE] 잘못된 결과 재발 방지: 앱 스피너에 "기타/소품"(other) 옵션 + "사물 종류 선택…"
+  초기값(미선택 시 삭제 요청 비활성화), 서버 `other`/소품 별칭 → 범용 `_DEFAULT_HINT`
+  ("없던 평평한 벽 만들지 말 것"), 키프레임 캡처 직전 평면 격자/특징점 시각화 off.
+  `docs/handoffs/user1.md`, `docs/handoffs/user2.md`.
 - [TODO] 재투영 보정, 가림(occlusion) 처리, 회전 slerp. 정리된 job row TTL, 기간 정리 주기 실행.
+- [TODO] bbox → 정밀 세그멘테이션 (겹친 물체 자동 배제). 컵 사례처럼 소품엔 특히 필요.
 
 ## PHASE 2 이후 (개요만)
 

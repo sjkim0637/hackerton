@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import com.google.ar.core.Anchor
@@ -73,22 +74,37 @@ class RemovalController(
     init {
         binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
 
+        // 0번은 "선택 안 함" 안내 항목. 사용자가 실제 종류를 고르기 전엔 삭제 요청을 막는다.
         binding.objectTypeSpinner.adapter = ArrayAdapter(
             activity,
             R.layout.spinner_item_light,
-            OBJECT_TYPES.map { it.second },
+            listOf(SPINNER_PROMPT) + OBJECT_TYPES.map { it.second },
         ).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        binding.objectTypeSpinner.setSelection(0)
+        binding.objectTypeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = refreshRequestButton()
+            override fun onNothingSelected(p: AdapterView<*>?) = refreshRequestButton()
+        }
 
         binding.bboxSelectionView.onRectFinalized = ::onRectSelected
         binding.btnTvSelectMode.setOnClickListener { toggleSelectionMode() }
         binding.btnClearSelection.setOnClickListener { clearSelection() }
         binding.btnRequestRemove.setOnClickListener { requestRemoval() }
         binding.btnToggleRemoval.setOnClickListener { toggleBeforeAfter() }
+        refreshRequestButton()
     }
 
-    /** 스피너에서 고른 사물의 서버 키(tv / sofa / table …). */
-    private fun selectedObjectType(): String =
-        OBJECT_TYPES[binding.objectTypeSpinner.selectedItemPosition.coerceIn(0, OBJECT_TYPES.lastIndex)].first
+    /** 스피너에서 고른 사물의 서버 키(tv / sofa / table / other …). 미선택이면 null. */
+    private fun selectedObjectTypeOrNull(): String? {
+        val pos = binding.objectTypeSpinner.selectedItemPosition
+        return OBJECT_TYPES.getOrNull(pos - 1)?.first   // pos 0 = SPINNER_PROMPT
+    }
+
+    /** bbox 도 있고 사물 종류도 골랐을 때만 "삭제 요청" 을 활성화한다. */
+    private fun refreshRequestButton() {
+        binding.btnRequestRemove.isEnabled =
+            !busy && bboxNorm != null && selectedObjectTypeOrNull() != null
+    }
 
     // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
 
@@ -129,7 +145,7 @@ class RemovalController(
         binding.bboxSelectionView.visibility = View.GONE
         binding.btnTvSelectMode.text = "영역 선택 모드"
         binding.btnClearSelection.visibility = View.GONE
-        binding.btnRequestRemove.isEnabled = false
+        refreshRequestButton()
         clearResult()
         if (announce) status("선택을 취소했습니다")
     }
@@ -152,8 +168,13 @@ class RemovalController(
         binding.bboxSelectionView.visibility = View.VISIBLE   // 그린 사각형은 확인용으로 유지
         binding.btnTvSelectMode.text = "영역 선택 모드"
         binding.btnClearSelection.visibility = View.VISIBLE
-        binding.btnRequestRemove.isEnabled = true
-        status("영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')")
+        refreshRequestButton()
+        status(
+            if (selectedObjectTypeOrNull() == null)
+                "영역 지정됨 · 위에서 '지울 사물' 종류를 고르면 삭제 요청이 활성화됩니다"
+            else
+                "영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')"
+        )
 
         // 선택 영역이 화면의 큰 비율을 덮으면 겹친 가구가 포함됐을 수 있다.
         // 삭제를 막지는 않고 경고만 잠깐 띄운다 (진단 실험: 겹침 시 결과 불안정).
@@ -232,7 +253,10 @@ class RemovalController(
             status("먼저 '영역 선택 모드'로 지울 영역을 지정하세요")
             return
         }
-        val objectType = selectedObjectType()
+        val objectType = selectedObjectTypeOrNull() ?: run {
+            status("지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')")
+            return
+        }
         val client = InteriorApiClient(currentBaseUrl())
         busy = true
         setControlsEnabled(false)
@@ -535,9 +559,9 @@ class RemovalController(
     private fun setControlsEnabled(enabled: Boolean) {
         binding.btnTvSelectMode.isEnabled = enabled
         binding.btnClearSelection.isEnabled = enabled
-        binding.btnRequestRemove.isEnabled = enabled && bboxNorm != null
         binding.serverUrlInput.isEnabled = enabled
         binding.objectTypeSpinner.isEnabled = enabled
+        refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
     }
 
     private companion object {
@@ -550,13 +574,21 @@ class RemovalController(
         /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
 
-        /** 서버 키 → 화면 표시 라벨. server/catalog/furniture.json 의 category 와 맞춘다. */
+        /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
+        const val SPINNER_PROMPT = "사물 종류 선택…"
+
+        /**
+         * 서버 키 → 화면 표시 라벨. 앞 5개는 server/catalog/furniture.json 의 category 와 맞춘다.
+         * "other"(기타/소품)는 목록에 없는 작은 물건(컵 등)용이며, 서버는 이 값을 특정 사물
+         * 힌트 없이 범용 배경 복원(_DEFAULT_HINT)으로 처리한다.
+         */
         val OBJECT_TYPES = listOf(
             "tv" to "TV",
             "sofa" to "소파",
             "table" to "테이블",
             "chair" to "의자",
             "shelf" to "선반",
+            "other" to "기타/소품",
         )
 
         val IDENTITY_16 = floatArrayOf(

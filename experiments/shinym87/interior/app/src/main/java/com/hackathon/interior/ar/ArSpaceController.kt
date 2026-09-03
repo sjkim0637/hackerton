@@ -73,6 +73,16 @@ class ArSpaceController(
     fun hitTest(xPx: Float, yPx: Float): HitResult? =
         sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
 
+    /**
+     * 평면 격자·특징점 시각화를 켜고 끈다.
+     *
+     * 키프레임 캡처 직전에 잠깐 꺼서, 서버(AI)로 보내는 이미지에 흰 점/격자가 찍히지 않게 한다.
+     * 캡처가 끝나면 다시 켠다. (인식 자체는 계속 동작하고, 화면 표시만 멈춘다.)
+     */
+    fun setPlaneVisualizationEnabled(enabled: Boolean) {
+        runCatching { sceneView.planeRenderer.isEnabled = enabled }
+    }
+
     private fun logTrackingState(session: Session, frame: Frame) {
         val trackingState = frame.camera.trackingState
         val failureReason = frame.camera.trackingFailureReason.name

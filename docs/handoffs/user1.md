@@ -42,6 +42,37 @@ PHASE 1 + PHASE 2 "사용자 1 (공간 / AR)".
   `EdgeFade.feather(featherFrac=…)`(클수록 더 흐리게 섞임).
 - 회전은 스무딩하지 않음(회전 지터가 상대적으로 작음). 필요하면 quaternion slerp 추가.
 
+## PHASE 3 — 잘못된 결과 재발 방지: 사물 종류 필수 선택 + 캡처 오버레이 제거 (2026-09-03)
+
+실기기에서 "책상 위 컵을 지우려 했는데 스피너가 TV 기본값이라 서버가 TV 전용 지시문
+('벽 복원')을 받아 책상을 회색 벽으로 대체" 한 사례 진단(서버측 로그/DB 재구성) 반영.
+
+1. **objectType 확장 — '기타/소품' + 필수 선택**
+   - `OBJECT_TYPES` 에 `"other" to "기타/소품"` 추가 (목록에 없는 작은 물건: 컵·소품 등).
+   - 스피너 0번은 안내 항목 `SPINNER_PROMPT = "사물 종류 선택…"` (실제 종류 아님).
+     `binding.objectTypeSpinner.setSelection(0)` 로 시작.
+   - `selectedObjectType()` → **`selectedObjectTypeOrNull(): String?`** — 0번이면 null.
+   - `refreshRequestButton()`: `!busy && bboxNorm != null && selectedObjectTypeOrNull() != null`
+     일 때만 '삭제 요청' 활성화. 스피너 `onItemSelectedListener` + `onRectSelected` +
+     `clearSelection` + `setControlsEnabled` 에서 호출. **기본값 방치로 인한 오요청 불가.**
+   - `requestRemoval()` 진입 시 종류 미선택이면 상태문구
+     "지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')" 후 return.
+   - 서버(`app/ai/objects.py`)가 `other` 및 `cup/mug/plant/lamp/...` 별칭을 `other` 로
+     정규화하고, `external.py` `_build_prompt` 가 `other`(및 힌트 없는 종류)면 TV 전용
+     `_SURFACE_HINTS` 대신 **범용 `_DEFAULT_HINT`**("주변에 실제로 있던 면을 이어서 복원,
+     없던 평평한 벽을 만들지 말 것")로 처리. 상세는 `docs/handoffs/user2.md`.
+2. **키프레임 캡처 시 평면 격자/특징점 제거**
+   - `ArSpaceController.setPlaneVisualizationEnabled(Boolean)` 신설
+     (`sceneView.planeRenderer.isEnabled` 토글, 인식 자체는 계속 동작).
+   - `MainActivity` 의 `beforeCapture`/`afterCapture` 람다(=`RemovalController` 와
+     `BackgroundKeyframe` 이 공유)에 `space.setPlaneVisualizationEnabled(false/true)` 추가.
+     캡처 직전 잠깐 끄고( `postDelayed` 100~120ms 뒤 `PixelCopy` ), 콜백에서 다시 켠다.
+     기존 가구 노드 숨김과 같은 지점·같은 타이밍. → AI 로 가는 이미지에 흰 점/격자 안 찍힘.
+
+빌드: `:app:assembleDebug` 성공 (`app-debug.apk` ≈ 47MB, `JAVA_HOME=jbr-21.0.11`).
+실기기 확인 남음: (a) 스피너에서 '기타/소품' 고르고 컵 삭제 시 회색 벽 안 나오는지,
+(b) 캡처 이미지에 평면 점/격자 사라졌는지.
+
 ## PHASE 2 — 선택 영역 실측 표시 (2026-09-03)
 
 그린 사각형의 실제 가로/세로를 재서 사각형 근처에 표시. **"가구 크기"가 아니라
@@ -135,12 +166,13 @@ experiments/shinym87/interior/app/src/main/
 │                                              btnClearSelection / btnRequestRemove /
 │                                              btnToggleRemoval / removalStatusText
 └─ java/com/hackathon/interior/
-   ├─ MainActivity.kt                          RemovalController 배선
-   ├─ ar/ArSpaceController.kt                  latestFrame 노출
+   ├─ MainActivity.kt                          RemovalController 배선 + 공유 before/afterCapture 람다
+   ├─ ar/ArSpaceController.kt                  latestFrame 노출, setPlaneVisualizationEnabled()
+   ├─ keyframe/BackgroundKeyframe.kt           "배경 촬영" 캡처 (동일 오버레이 제거 적용)
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
       ├─ InteriorApiClient.kt                  HttpURLConnection + org.json, baseUrl 주입
-      └─ RemovalController.kt                  서버주소(prefs)·선택취소·캡처·메타·플로우·결과 quad·전/후
+      └─ RemovalController.kt                  서버주소·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후
 ```
 
 ## Decisions

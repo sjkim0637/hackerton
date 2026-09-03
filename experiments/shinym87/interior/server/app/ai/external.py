@@ -20,7 +20,7 @@ import httpx
 from .base import ProviderError, ProviderNotConfigured, RemoveObjectProvider, RemoveResult
 from .imageops import ensure_jpeg_size, image_size
 from .mask import data_url_b64, location_hint, region_bbox, region_to_mask_png
-from .objects import normalize_object_type
+from .objects import GENERIC_TYPE, normalize_object_type
 
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _DEFAULT_MODEL = "gemini-3.1-flash-image"
@@ -58,8 +58,12 @@ _SURFACE_HINTS = {
     ),
 }
 _DEFAULT_HINT = (
-    "Rebuild whatever surface was behind it — wall, floor, or both — matching the surrounding "
-    "colour, texture, pattern and perspective, and remove any shadow it cast."
+    "Rebuild whatever was directly behind and beneath it by smoothly continuing the surfaces "
+    "that already surround it — the desk or table top, the floor, the wall, a shelf — carrying "
+    "their colour, texture, material, pattern and perspective straight through the area. Remove "
+    "any shadow, reflection or small clutter that clearly belonged to it. Do NOT invent a plain "
+    "flat wall, a blank panel or any new surface that was not already visible right next to the "
+    "object; only extend what is genuinely there."
 )
 
 
@@ -173,19 +177,29 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
     @staticmethod
     def _build_prompt(object_type: str, region: dict, extra: str) -> str:
         norm = normalize_object_type(object_type)
-        surface = _SURFACE_HINTS.get(norm, _DEFAULT_HINT)
-        label = (object_type or "").strip() or norm or "object"
         where = location_hint(region)
+        # 목록에 없는 소품(other) 이거나 특정 힌트가 없는 종류 → 범용 배경 복원 지시문.
+        is_generic = norm == GENERIC_TYPE or norm not in _SURFACE_HINTS
+        surface = _DEFAULT_HINT if is_generic else _SURFACE_HINTS[norm]
+        if is_generic:
+            label = "object"
+            parts_clause = (
+                "including any lid, handle, cable, small parts or contact shadow that clearly "
+                "belong to it"
+            )
+        else:
+            label = (object_type or "").strip() or norm
+            parts_clause = "including its legs, base, stand and any attached parts"
         text = (
             f"You are a photo inpainting tool for interior photos. "
             f"In the first image, completely remove the {label} located in the {where} area, "
-            f"including its legs, base, stand and any attached parts. "
+            f"{parts_clause}. "
             f"The white region of the second image is a mask marking exactly where you may edit. "
             f"{surface} "
             f"Match the lighting, white balance and grain of the rest of the photo so the edit is "
             f"invisible. Do not move, add, resize or restyle anything outside the masked region and "
-            f"do not introduce any new furniture. Keep the exact same resolution, framing and "
-            f"camera angle as the input. Return only the edited image, with no text."
+            f"do not introduce any new furniture or objects. Keep the exact same resolution, framing "
+            f"and camera angle as the input. Return only the edited image, with no text."
         )
         return f"{text} {extra}".strip() if extra else text
 

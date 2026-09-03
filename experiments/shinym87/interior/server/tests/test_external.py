@@ -158,6 +158,16 @@ def test_prompt_is_object_type_aware():
     # 별칭은 sofa 힌트를 쓰되 라벨은 입력한 단어 유지
     assert "the couch" in couch and "skirting" in couch
 
+    # 목록에 없는 소품(other / cup) → TV 같은 특정 힌트가 아니라 범용 배경 복원 지시문.
+    other = ExternalRemoveObjectProvider._build_prompt("other", r, "")
+    cup = ExternalRemoveObjectProvider._build_prompt("cup", r, "")  # alias → other
+    for p in (other, cup):
+        assert "remove the object" in p
+        assert "do not invent a plain" in p.lower()
+        # TV 전용 문구("mounted on the wall", "bracket")가 들어가면 안 됨
+        assert "bracket" not in p and "mounted on the wall" not in p
+        assert "legs, base, stand" not in p
+
 
 def test_mask_is_feathered_and_larger_than_rect(monkeypatch):
     buf = io.BytesIO()

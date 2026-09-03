@@ -11,7 +11,7 @@ from .base import (
 from .colormatch import AnomalyReport, check_result_anomaly, match_to_source
 from .external import ExternalRemoveObjectProvider
 from .mock import MockRemoveObjectProvider
-from .objects import KNOWN_TYPES, is_known, normalize_object_type
+from .objects import GENERIC_TYPE, KNOWN_TYPES, is_generic, is_known, normalize_object_type
 
 __all__ = [
     "ProviderError",
@@ -19,7 +19,9 @@ __all__ = [
     "RemoveObjectProvider",
     "RemoveResult",
     "KNOWN_TYPES",
+    "GENERIC_TYPE",
     "is_known",
+    "is_generic",
     "normalize_object_type",
     "AnomalyReport",
     "check_result_anomaly",

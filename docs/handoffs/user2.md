@@ -13,6 +13,31 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## PHASE 3 — objectType 범용값(other) + 잘못된 힌트 방지 프롬프트 (2026-09-03)
+
+실기기 사례: 책상 위 컵을 지우려 했으나 앱 스피너가 TV 기본값이라 서버가 TV 전용
+지시문("This TV is mounted on the wall. Rebuild the flat wall…")을 받아 책상 전체를
+몰딩 있는 회색 벽으로 대체(할루시네이션). 서버 로그/DB 재구성으로 원인 확정.
+
+1. **`app/ai/objects.py` — 범용 키 `other` 추가**
+   - `GENERIC_TYPE = "other"`. `ALIASES` 에 `기타/소품/etc` + `cup/mug/tumbler/glass/
+     bottle/vase/plant/lamp/fan/book/box/clock/...` → `other` 매핑.
+   - `is_generic()` 신설. `is_known()` 은 `KNOWN_TYPES` + `other` 를 인정(경고 로그 억제).
+2. **`app/ai/external.py` — 종류에 맞는 힌트만 사용**
+   - `_build_prompt`: `norm == "other"` 이거나 `_SURFACE_HINTS` 에 없는 종류면
+     **`_DEFAULT_HINT`** 사용 + 라벨을 `"object"` 로, 부속 문구도 소품용
+     ("lid, handle, cable, small parts or contact shadow")으로 바꾼다.
+     가구일 때만 "legs, base, stand" 문구.
+   - `_DEFAULT_HINT` 강화: "주변에 실제로 있던 면(책상 상판/바닥/벽/선반)을 그대로 이어서
+     복원. **없던 평평한 벽·빈 패널·새 표면을 만들지 말 것(Do NOT invent a plain flat
+     wall…)**. 실제로 있는 것만 연장." → 회색 벽 할루시네이션 억제.
+   - 회귀 확인: tv/sofa/table/couch 프롬프트 기존 문구 유지
+     (`tests/test_external.py::test_prompt_is_object_type_aware` 에 other/cup 케이스 추가).
+   - `tests/test_api.py::test_generic_object_type_is_accepted` (other 그대로, cup→other).
+   - 앱(사용자 1): 스피너에 "기타/소품" 옵션 + "사물 종류 선택…" 초기값,
+     미선택 시 '삭제 요청' 비활성화. 상세 `docs/handoffs/user1.md`.
+   - `pytest` 35개 통과. mock e2e 회귀 없음.
+
 ## PHASE 3 — 색감 보정 + 이상 결과 감지 (2026-09-03)
 
 `app/ai/colormatch.py` 신설. 기준은 **마스크(선택 영역) 밖**이다 — AI 는 그 밖을

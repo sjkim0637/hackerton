@@ -46,6 +46,16 @@ class MainActivity : AppCompatActivity() {
             onSelectionChanged = ::renderSelectionPanel,
         )
 
+        // 캡처 직전: 가구 노드 + 평면 격자/특징점 시각화를 끈다 (AI 로 보내는 이미지에 안 찍히게).
+        val beforeCapture = {
+            furniture.setAllVisible(false)
+            space.setPlaneVisualizationEnabled(false)
+        }
+        val afterCapture = {
+            furniture.setAllVisible(true)
+            space.setPlaneVisualizationEnabled(true)
+        }
+
         keyframe = BackgroundKeyframe(
             activity = this,
             sceneView = sceneView,
@@ -53,8 +63,8 @@ class MainActivity : AppCompatActivity() {
             captureButton = binding.btnCaptureBg,
             toggleButton = binding.btnToggleBg,
             opacityBar = binding.opacitySeekBar,
-            beforeCapture = { furniture.setAllVisible(false) },
-            afterCapture = { furniture.setAllVisible(true) },
+            beforeCapture = beforeCapture,
+            afterCapture = afterCapture,
         )
 
         removal = RemovalController(
@@ -63,8 +73,8 @@ class MainActivity : AppCompatActivity() {
             sceneView = sceneView,
             space = space,
             binding = binding,
-            onBeforeCapture = { furniture.setAllVisible(false) },
-            onAfterCapture = { furniture.setAllVisible(true) },
+            onBeforeCapture = beforeCapture,
+            onAfterCapture = afterCapture,
         )
 
         space.onFrame = {

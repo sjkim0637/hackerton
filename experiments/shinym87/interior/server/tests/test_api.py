@@ -128,6 +128,26 @@ def test_object_type_aliases_are_normalized(client):
     assert objs[-1]["object_type"] == "sofa"
 
 
+def test_generic_object_type_is_accepted(client):
+    """목록에 없는 소품: 'other' 는 그대로, 'cup' 은 other 로 정규화되어 job 이 done."""
+    scene_id, kf = _new_scene_with_keyframe(client)
+    r = client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={"keyframe_id": kf, "object_type": "other",
+              "target": {"type": "bbox", "rect": [0.4, 0.4, 0.15, 0.15]}},
+    )
+    assert r.status_code == 202
+    assert client.get(f"/scenes/{scene_id}/jobs/{r.json()['job_id']}").json()["status"] == "done"
+
+    client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={"keyframe_id": kf, "object_type": "cup",
+              "target": {"type": "bbox", "rect": [0.1, 0.1, 0.15, 0.15]}},
+    )
+    types = [o["object_type"] for o in client.get(f"/scenes/{scene_id}/objects").json()]
+    assert types[-2:] == ["other", "other"]
+
+
 def test_duplicate_request_reuses_job_and_no_extra_ai_call(client):
     """동일 요청 재호출 → 같은 job, AI 호출 수 증가 없음."""
     scene_id, kf = _new_scene_with_keyframe(client)
