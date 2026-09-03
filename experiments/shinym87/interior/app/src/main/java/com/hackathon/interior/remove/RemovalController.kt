@@ -10,6 +10,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
@@ -85,9 +86,6 @@ class RemovalController(
     private fun selectedObjectType(): String =
         OBJECT_TYPES[binding.objectTypeSpinner.selectedItemPosition.coerceIn(0, OBJECT_TYPES.lastIndex)].first
 
-    private fun selectedObjectLabel(): String =
-        OBJECT_TYPES[binding.objectTypeSpinner.selectedItemPosition.coerceIn(0, OBJECT_TYPES.lastIndex)].second
-
     // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
 
     fun toggleSelectionMode() {
@@ -98,7 +96,10 @@ class RemovalController(
             binding.bboxSelectionView.visibility = View.VISIBLE
             binding.btnTvSelectMode.text = "선택 모드 끄기"
             binding.btnClearSelection.visibility = View.VISIBLE
-            status("화면에서 지울 ${selectedObjectLabel()} 위를 사각형으로 드래그하세요")
+            status(
+                "지우고 싶은 사물 하나만 딱 맞게 사각형으로 그려주세요.\n" +
+                    "다른 가구가 겹치지 않게 그릴수록 결과가 좋습니다."
+            )
         } else {
             selectionMode = false
             binding.bboxSelectionView.isSelecting = false
@@ -148,6 +149,17 @@ class RemovalController(
         binding.btnClearSelection.visibility = View.VISIBLE
         binding.btnRequestRemove.isEnabled = true
         status("영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')")
+
+        // 선택 영역이 화면의 큰 비율을 덮으면 겹친 가구가 포함됐을 수 있다.
+        // 삭제를 막지는 않고 경고만 잠깐 띄운다 (진단 실험: 겹침 시 결과 불안정).
+        val areaFraction = (rect.width() / vw) * (rect.height() / vh)
+        if (areaFraction >= LARGE_SELECTION_FRACTION) {
+            Toast.makeText(
+                activity,
+                "선택 영역이 넓습니다. 다른 가구가 포함되지 않았는지 확인해주세요",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     /** 사각형 중심/네 변에서 hitTest 해 벽 앵커와 실제 크기(m), 평면 정보를 잡는다. */
@@ -463,6 +475,9 @@ class RemovalController(
     private companion object {
         const val DEFAULT_SERVER_URL = "http://192.168.0.2:8000"
         const val KEY_SERVER_URL = "server_url"
+
+        /** 선택 사각형이 화면 면적의 이 비율 이상이면 "넓다" 경고. */
+        const val LARGE_SELECTION_FRACTION = 0.40f
 
         /** 서버 키 → 화면 표시 라벨. server/catalog/furniture.json 의 category 와 맞춘다. */
         val OBJECT_TYPES = listOf(

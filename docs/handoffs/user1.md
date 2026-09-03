@@ -13,6 +13,21 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 + PHASE 2 "사용자 1 (공간 / AR)".
 
+## PHASE 2 — 선택 영역 겹침 경고 (2026-09-03, 진단 실험 반영)
+
+사용자 2 진단 실험에서 "사각형 안에 다른 가구가 겹치면 삭제 결과가 불안정"이 확인됨
+(`docs/handoffs/user2.md`). 이를 UI 에 반영. **삭제를 막지는 않고 안내/경고만.**
+
+- `RemovalController.toggleSelectionMode()` 켤 때 안내 문구 변경:
+  > 지우고 싶은 사물 하나만 딱 맞게 사각형으로 그려주세요.
+  > 다른 가구가 겹치지 않게 그릴수록 결과가 좋습니다.
+- `RemovalController.onRectSelected()`: 그린 사각형 면적이 화면의
+  `LARGE_SELECTION_FRACTION`(0.40) 이상이면
+  `Toast` "선택 영역이 넓습니다. 다른 가구가 포함되지 않았는지 확인해주세요" 를
+  `LENGTH_LONG` 으로 잠깐 표시. 상태 문구("영역 지정됨 …")와 '삭제 요청' 버튼은 그대로.
+- 이제 종류별 드래그 안내에 사물 라벨을 넣지 않으므로 `selectedObjectLabel()` 제거
+  (`selectedObjectType()` 만 사용).
+
 ## PHASE 2 — 사물 종류 선택 (2026-09-03)
 
 "TV 선택 모드" 하나로 고정이던 걸, **지울 사물 종류를 고를 수 있게** 바꿨다.
