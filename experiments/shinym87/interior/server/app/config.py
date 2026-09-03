@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_model: str = "gemini-3.1-flash-image"
     ai_timeout_seconds: float = 120.0
+    # 프롬프트 끝에 덧붙일 추가 지시문 (프롬프트 튜닝/실험용, 코드 수정 없이).
+    ai_extra_instruction: str = ""
 
     # 작업당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20

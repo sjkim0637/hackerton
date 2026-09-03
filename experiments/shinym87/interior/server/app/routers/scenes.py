@@ -165,11 +165,12 @@ def _run_job(
             original_size[0], original_size[1], object_type, region,
         )
         # 프롬프트 문구는 프로바이더가 사물 종류에 맞춰 만든다 (app/ai/external.py._build_prompt).
+        # INTERIOR_AI_EXTRA_INSTRUCTION 이 있으면 프롬프트 끝에 덧붙인다 (튜닝/실험용).
         result = provider.remove_object(
             image_bytes=source_bytes,
             region=region,
             object_type=object_type,
-            prompt="",
+            prompt=get_settings().ai_extra_instruction,
         )
         # 공통 보정: 프로바이더가 무엇을 돌려주든 결과는 항상 원본과 같은 해상도의 JPEG.
         final_bytes = ensure_jpeg_size(result.image_bytes, original_size)

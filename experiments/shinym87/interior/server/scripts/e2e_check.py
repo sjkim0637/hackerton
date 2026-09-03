@@ -102,6 +102,9 @@ def add_server_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ai-api-key",
                         help="자동 기동하는 서버의 INTERIOR_AI_API_KEY (Gemini 키). "
                              "생략하면 .env / 환경변수를 그대로 쓴다")
+    parser.add_argument("--ai-extra-prompt",
+                        help="자동 기동하는 서버의 INTERIOR_AI_EXTRA_INSTRUCTION "
+                             "(프롬프트 끝에 덧붙일 지시문, 실험용)")
 
 
 def ensure_server(args: argparse.Namespace) -> tuple[str, subprocess.Popen | None]:
@@ -118,6 +121,8 @@ def ensure_server(args: argparse.Namespace) -> tuple[str, subprocess.Popen | Non
         env["INTERIOR_AI_PROVIDER"] = args.ai_provider
     if args.ai_api_key:
         env["INTERIOR_AI_API_KEY"] = args.ai_api_key
+    if args.ai_extra_prompt is not None:
+        env["INTERIOR_AI_EXTRA_INSTRUCTION"] = args.ai_extra_prompt
     print(
         f"서버가 없어 uvicorn 을 기동합니다 (port {args.port}, "
         f"provider={env.get('INTERIOR_AI_PROVIDER', 'mock')}) …"
