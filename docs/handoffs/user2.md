@@ -13,6 +13,35 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## PHASE 5 — 가구 카탈로그 썸네일 서빙 (2026-09-03)
+
+사용자 1 이 카탈로그 배치 UI 를 만들었지만 서버가 `/assets/*` 를 안 줘서 5종 모두 큐브
+폴백이었다. 썸네일 이미지를 만들고 정적 서빙을 붙였다.
+
+1. **썸네일 이미지** (`scripts/make_furniture_thumbnails.py`)
+   - 무료 스톡 사진 대신 **Pillow 라인아트 카드**로 생성 (라이선스/네트워크 무관, 결정적).
+     흰 라운드 카드 + 카테고리별 색 외곽선 가구 + 한글 이름(Malgun Gothic).
+   - 출력: `catalog/assets/furniture/{tv,sofa,table,chair,shelf}.png` (640×640 RGBA,
+     각 ~5KB, git 포함). 다시 만들려면 스크립트 재실행.
+2. **정적 서빙** (`app/main.py`, `app/config.py`)
+   - `app.mount("/assets", StaticFiles(directory=settings.assets_dir))` — `assets_dir` 은
+     기존 설정값 `catalog/assets/`(`INTERIOR_ASSETS_DIR` 로 override 가능). `get_settings()`
+     가 이 디렉터리도 mkdir 한다.
+   - `catalog/furniture.json` 의 `thumbnail` 을 `/assets/furniture/<종류>.png` 로 갱신
+     (기존 `/assets/tv-wall-55.png` 등 존재 안 하던 경로 → 실제 파일).
+   - `model.url`(glb)은 손대지 않음 — 파일 없고 앱도 안 씀.
+3. **검증**
+   - 실서버: `GET /catalog` 의 5개 `thumbnail` 을 각각 열어 `200 image/png`,
+     유효 PNG 640×640, 없는 파일은 404 확인.
+   - 테스트: `tests/test_api.py::test_catalog_thumbnails_are_served` — 모든 항목의
+     thumbnail 이 `/assets/furniture/` 로 시작하고 `client.get` → 200 + PNG 시그니처.
+     `pytest` **43개 통과**, mock e2e 회귀 없음.
+   - 앱 쪽은 코드 변경 불필요 — `CatalogController` 가 이미 `thumbnail` URL 을 받아
+     `downloadBytes` 하므로, 서버만 붙이면 카탈로그 목록 선택 시 이미지 quad 로 뜬다.
+
+향후: 실제 제품 사진으로 교체하고 싶으면 같은 파일명으로 `catalog/assets/furniture/` 에
+덮어쓰면 된다. (썸네일 배경 투명화는 지금 라인아트라 불필요.)
+
 ## PHASE 4 — 제거된 사물 크롭 서버 저장 + 결과 API 필드 (2026-09-03)
 
 ### 1. 판단: 서버에도 저장한다 (조건부로 의미 있음 → 거의 공짜라 채택)

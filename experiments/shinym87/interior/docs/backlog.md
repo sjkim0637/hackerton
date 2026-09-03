@@ -101,9 +101,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   이미지 quad, 없으면 기존 큐브+이름표(`FurnitureItem.imageNode?`). 드래그/핀치/회전은 큐브
   로직 그대로 재사용 — 회전만 신규(`rotateSelectedBy`, `FurnitureItem.rotationDeg`,
   "회전 ⟳" 버튼). "삭제 후 재배치"와 별개 진입점. 빌드만 확인. `docs/handoffs/user1.md`.
-  ※ 서버가 `/assets/*` 썸네일을 아직 안 줘서 현재 5종 모두 큐브 폴백(코드 변경 없이 전환됨).
-- [TODO] 서버: 카탈로그 썸네일 정적 서빙(`/assets/`) 또는 카테고리별 placeholder PNG.
-- [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경.
+- [DONE] 사용자 2: 카탈로그 썸네일 서빙. `scripts/make_furniture_thumbnails.py`(Pillow
+  라인아트) → `catalog/assets/furniture/{종류}.png`, `app.mount("/assets", StaticFiles(...))`,
+  `furniture.json` thumbnail 을 `/assets/furniture/<종류>.png` 로 갱신. 실서버·pytest 검증.
+  이제 카탈로그 목록에서 고르면 이미지 quad 로 뜬다(앱 코드 변경 없음). `docs/handoffs/user2.md`.
+- [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)
 

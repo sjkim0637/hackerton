@@ -20,6 +20,7 @@
 | 제거된 사물 크롭 | `GET /scenes/{id}/results/{job}_object.jpg` — 원본 키프레임에서 bbox 만 잘라낸 것 (AI 없음, 이동 배치 재사용용) |
 | 재배치 상태 저장 | `POST /scenes/{id}/placements` (이동/회전/크기), `GET /scenes/{id}/placements`, `POST /scenes/{id}/placements/undo` |
 | 가구 데이터 API | `GET /catalog`, `GET /catalog/{id}` (`catalog/furniture.json`) |
+| 정적 파일 | `/assets/*` → `catalog/assets/` (가구 썸네일 `catalog/assets/furniture/<종류>.png`) |
 
 부가: 동일 `(keyframe_id, target)` 재요청은 캐시된 job 반환, 작업당 외부 AI 호출 상한
 (`INTERIOR_MAX_AI_CALLS_PER_SCENE`), 요청 로깅은 uvicorn 기본 액세스 로그 사용.
@@ -39,6 +40,8 @@ uvicorn app.main:app --reload
 
 - API 문서: http://127.0.0.1:8000/docs
 - 업로드 이미지 / DB / 결과물은 `data/` 아래에 쌓인다 (git 무시).
+- 가구 카탈로그 썸네일은 `catalog/assets/furniture/<종류>.png` (git 포함), `/assets/*` 로
+  서빙된다. 다시 만들려면 `python scripts/make_furniture_thumbnails.py` (Pillow 라인아트).
 
 ## 외부 AI: Google Gemini (`INTERIOR_AI_PROVIDER=external`)
 

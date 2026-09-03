@@ -5,7 +5,7 @@
     "category": "tv",
     "size_m": { "w": 1.24, "h": 0.72, "d": 0.06 },
     "model": { "type": "glb", "url": "/assets/tv-wall-55.glb", "placeholder": "cube" },
-    "thumbnail": "/assets/tv-wall-55.png",
+    "thumbnail": "/assets/furniture/tv.png",
     "anchor_hint": "wall"
   },
   {
@@ -14,7 +14,7 @@
     "category": "sofa",
     "size_m": { "w": 2.1, "h": 0.85, "d": 0.95 },
     "model": { "type": "glb", "url": "/assets/nordic-3seat.glb", "placeholder": "cube" },
-    "thumbnail": "/assets/nordic-3seat.png",
+    "thumbnail": "/assets/furniture/sofa.png",
     "anchor_hint": "floor"
   },
   {
@@ -23,7 +23,7 @@
     "category": "table",
     "size_m": { "w": 1.1, "h": 0.4, "d": 0.6 },
     "model": { "type": "glb", "url": "/assets/low-oak-table.glb", "placeholder": "cube" },
-    "thumbnail": "/assets/low-oak-table.png",
+    "thumbnail": "/assets/furniture/table.png",
     "anchor_hint": "floor"
   },
   {
@@ -32,7 +32,7 @@
     "category": "chair",
     "size_m": { "w": 0.46, "h": 0.9, "d": 0.5 },
     "model": { "type": "glb", "url": "/assets/dining-chair.glb", "placeholder": "cube" },
-    "thumbnail": "/assets/dining-chair.png",
+    "thumbnail": "/assets/furniture/chair.png",
     "anchor_hint": "floor"
   },
   {
@@ -41,7 +41,7 @@
     "category": "shelf",
     "size_m": { "w": 0.8, "h": 0.9, "d": 0.25 },
     "model": { "type": "glb", "url": "/assets/wall-shelf-3tier.glb", "placeholder": "cube" },
-    "thumbnail": "/assets/wall-shelf-3tier.png",
+    "thumbnail": "/assets/furniture/shelf.png",
     "anchor_hint": "wall"
   }
 ]

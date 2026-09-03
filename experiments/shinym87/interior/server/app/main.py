@@ -14,6 +14,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .ai import provider_status
 from .cleanup import sweep_old_results
@@ -61,6 +62,10 @@ def create_app() -> FastAPI:
     app.include_router(scenes.router)
     app.include_router(catalog.router)
     app.include_router(placements.router)
+
+    # 가구 카탈로그 썸네일 등 정적 파일. catalog/furniture.json 의 thumbnail 이
+    # /assets/furniture/<종류>.png 를 가리킨다.
+    app.mount("/assets", StaticFiles(directory=str(settings.assets_dir)), name="assets")
 
     @app.get("/health", tags=["meta"])
     def health() -> dict:

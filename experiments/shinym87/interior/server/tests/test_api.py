@@ -174,6 +174,21 @@ def test_catalog_endpoints(client):
     assert client.get("/catalog/nope").status_code == 404
 
 
+def test_catalog_thumbnails_are_served(client):
+    """모든 카탈로그 항목의 thumbnail 이 /assets 정적 서빙으로 실제 이미지를 준다."""
+    items = client.get("/catalog").json()
+    assert len(items) == 5
+    for it in items:
+        url = it["thumbnail"]
+        assert url.startswith("/assets/furniture/")
+        r = client.get(url)
+        assert r.status_code == 200, f"{url} -> {r.status_code}"
+        assert r.headers["content-type"] == "image/png"
+        assert r.content[:8] == b"\x89PNG\r\n\x1a\n"  # 유효한 PNG 시그니처
+
+    assert client.get("/assets/furniture/does-not-exist.png").status_code == 404
+
+
 def test_missing_scene_is_404(client):
     assert client.get("/scenes/scene_deadbeef").status_code == 404
 

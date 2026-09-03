@@ -70,4 +70,5 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.scenes_dir.mkdir(parents=True, exist_ok=True)
+    settings.assets_dir.mkdir(parents=True, exist_ok=True)  # /assets 정적 서빙 루트
     return settings
