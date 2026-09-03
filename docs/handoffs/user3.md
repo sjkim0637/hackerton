@@ -138,6 +138,39 @@ PHASE 1 + PHASE 2 "사용자 3 (서버 / 통합)".
   (사용자 1 앱은 로컬 상태만) — 서버는 저장/undo 만 제공, 실제 복원 연동은 다음 작업.
 - undo 만 있고 redo 없음. per-object 가 아니라 scene 전체의 "마지막 변경" 기준.
 
+## PHASE 5 — placements 를 카탈로그 가구까지 확장 (2026-09-03)
+
+PHASE 4 placements 는 "삭제 후 재배치"한 사물만 다뤘다. 사용자 1 이 만든 "카탈로그에서
+새로 추가한 가구"도 같은 테이블/엔드포인트로 저장·복원되게 확장했다.
+
+1. **출처(`source`) 구분**
+   - `placements` 에 `source TEXT NOT NULL DEFAULT 'removed_object'` 추가 → `_EXTRA_COLUMNS`
+     ALTER 가드가 **기존 행을 전부 `removed_object`** 로 채운다(상수 DEFAULT 라 SQLite ALTER 허용).
+   - `catalog_item_id TEXT` 컬럼 추가. 카탈로그 배치는 `job_id`/`source_region` 대신 이걸 쓴다.
+   - `source` 값: `"removed_object"` | `"catalog"` (`schemas.PlacementSource`).
+2. **`POST /scenes/{id}/placements`** — `PlacementCreate` 에 `source`(기본 removed_object),
+   `catalog_item_id` 추가. 라우터 분기:
+   - `removed_object`: 기존대로 `job_id`(주면 scene 소속 검증) + `source_region` 저장,
+     `catalog_item_id` 은 무시(null).
+   - `catalog`: `catalog_item_id` **필수**(없으면 422), 카탈로그에 존재하는 id 인지 확인
+     (`routers/catalog.catalog_has()`, 없으면 404), `job_id`/`source_region` 은 무시(null).
+3. **`GET /scenes/{id}/placements`** — 응답에 `source` + `catalog_item_id` 포함
+   (`PlacementOut`). 클라이언트가 "삭제 자리에서 옮긴 것" vs "새로 추가한 가구" 를 구분.
+   undo 는 출처 구분 없이 동일(최신 active 되짚기).
+- `store.create_placement(source=, catalog_item_id=, ...)` 확장. `_placement_row` 는
+  `dict(row)` 라 새 컬럼 자동 포함. INSERT 컬럼 목록 갱신.
+- 테스트: `tests/test_placements.py` +4 — 카탈로그 출처 저장/조회, `catalog_item_id` 누락 422,
+  없는 id 404, removed_object+catalog 혼합 목록에 `source` 구분. 기존 테스트는 기본
+  `source=removed_object` 로 그대로 통과. `pytest` **47개**, mock e2e 14/14
+  (기존 DB `placements` 에 `source`/`catalog_item_id` 자동 ALTER 확인).
+
+### 앱 연동 (사용자 1 몫 — 서버는 준비 완료)
+`FurnitureController` 는 **아직 placements API 를 호출하지 않는다**. 카탈로그 배치 확정 시
+`POST /scenes/{id}/placements` (`source="catalog"`, `catalog_item_id`) 를 부르도록,
++ `InteriorApiClient.createPlacement` 에 `source`/`catalogItemId` 파라미터 추가가 필요.
+구체 스펙(요청 body·sceneId 확보 방법·복원 흐름)은 `docs/handoffs/user1.md` 의
+"[TODO 사용자 1] 카탈로그 배치를 placements API 에 연동" 절에 남겼다.
+
 ## Completed
 
 PHASE 1 사용자 3 항목을 `experiments/shinym87/interior/server/` 에 구현했다.

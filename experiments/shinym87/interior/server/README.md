@@ -18,7 +18,7 @@
 | 사물 제거 + 복원 작업 | `POST /scenes/{id}/remove-object` → job, `GET /scenes/{id}/jobs/{job_id}`, `GET /scenes/{id}/results/{job_id}.jpg` |
 | 복원 결과 버전 목록 | `GET /scenes/{id}/results` — scene 의 모든 job 을 최신순으로 (정리된 버전은 `available:false`). `removed_object_image_url` = 제거된 사물 크롭 |
 | 제거된 사물 크롭 | `GET /scenes/{id}/results/{job}_object.jpg` — 원본 키프레임에서 bbox 만 잘라낸 것 (AI 없음, 이동 배치 재사용용) |
-| 재배치 상태 저장 | `POST /scenes/{id}/placements` (이동/회전/크기), `GET /scenes/{id}/placements`, `POST /scenes/{id}/placements/undo` |
+| 재배치 상태 저장 | `POST /scenes/{id}/placements` (`source`=removed_object\|catalog, 이동/회전/크기), `GET /scenes/{id}/placements`, `POST /scenes/{id}/placements/undo` |
 | 가구 데이터 API | `GET /catalog`, `GET /catalog/{id}` (`catalog/furniture.json`) |
 | 정적 파일 | `/assets/*` → `catalog/assets/` (가구 썸네일 `catalog/assets/furniture/<종류>.png`) |
 

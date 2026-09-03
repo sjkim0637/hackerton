@@ -33,8 +33,8 @@ PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
      소파·테이블·의자는 바닥에 우선 배치. 안내: "'<이름>' — 벽/바닥을 탭해 배치하세요".
    - 표시: 썸네일이 있으면 `ImageNode` quad, 없으면 **기존 그대로** 이름표 붙은 반투명 큐브
      (`FurnitureItem.imageNode` 가 null 이면 큐브, 있으면 큐브 숨기고 이미지).
-     ※ 서버가 아직 `/assets/*` 를 서빙하지 않아 현재 5종 모두 큐브 폴백 — 서버가 썸네일을
-     주면 코드 변경 없이 이미지로 바뀐다.
+     ✅ 사용자 2 가 `/assets/furniture/<종류>.png` 정적 서빙을 붙여, 이제 목록에서 고르면
+     이미지 quad 로 뜬다 (앱 코드 변경 없음).
 3. **조작 재사용 (중복 구현 없음)**
    - 카탈로그 가구도 **같은 `FurnitureItem` + 같은 제스처 로직**을 쓴다:
      드래그(`beginDrag/drag/endDrag`, `drag` 는 이제 종류에 맞는 평면을 우선 hitTest),
@@ -48,6 +48,36 @@ PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
 
 빌드: `:app:assembleDebug` 성공 (`app-debug.apk` ≈ 47MB). 실기기 확인 남음: 카탈로그
 로드/배치, 회전 버튼 방향, 벽/바닥 자동 선택.
+
+### [TODO 사용자 1] 카탈로그 배치를 placements API 에 연동 (서버는 준비됨)
+
+사용자 3 이 `placements` API 를 카탈로그 출처까지 확장해 뒀다 (`source="catalog"`,
+`catalog_item_id`). 지금 `FurnitureController` 는 **서버 호출이 전혀 없다** — 카탈로그
+가구를 놓아도 placements 에 저장 안 된다. `MovedObjectController` 가 PHASE 4 에서 한 것과
+같은 방식으로 붙이면 된다:
+
+1. **저장** — `placeCatalog()` 성공 시 + 그 가구를 드래그/회전/크기 조절한 뒤(제스처 완료,
+   500ms 디바운스 권장) `POST /scenes/{id}/placements` 호출:
+   ```json
+   { "source": "catalog", "catalog_item_id": "<CatalogItem.id>",
+     "object_type": "<category: tv|sofa|...>",
+     "pose": { "position": [x,y,z], "rotation": [x,y,z,w] },   // anchor.pose
+     "scale": <FurnitureItem.scaleFactor>, "rotation_deg": <FurnitureItem.rotationDeg>,
+     "plane": "wall" | "floor" }
+   ```
+   - `FurnitureController` 는 지금 `sceneId` 가 없다. 방법: (a) `RemovalController` 의
+     마지막 scene(`prefs "moved_last_scene"`) 재사용, (b) "가구 추가" 최초 시 `createScene()`
+     한 번. → **(b) 권장** (삭제 흐름과 독립).
+   - `CatalogController.onPick` 이 `CatalogItem` 전체(특히 `id`)를 `FurnitureController` 로
+     넘기도록 `beginCatalogPlacement` 시그니처에 `catalogItemId` 추가 필요.
+   - `InteriorApiClient.createPlacement(...)` 에 `source`/`catalogItemId` 파라미터 추가 필요
+     (지금은 removed_object 모양만 지원).
+2. **복원** — `GET /scenes/{id}/placements` → `source=="catalog"` 인 active 항목마다:
+   `catalog_item_id` 로 `GET /catalog/{id}` 조회해 크기/카테고리 얻고, 화면 중앙(또는
+   `plane` 방향)에서 `hitTestPreferring` → `FurnitureController` 로 재생성.
+   (removed_object 는 `source_region` 이 있지만 catalog 는 없으니 화면 기준으로만 재정합.)
+3. **실행 취소** — 기존 `POST /scenes/{id}/placements/undo` 그대로. 출처 구분 없이 최신
+   active 를 되짚는다. 화면에서도 해당 노드 제거.
 
 ## PHASE 4 — 재배치를 서버(placements API)와 연동 (2026-09-03)
 

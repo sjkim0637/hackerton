@@ -54,9 +54,11 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE TABLE IF NOT EXISTS placements (
     placement_id       TEXT PRIMARY KEY,
     scene_id           TEXT NOT NULL,
-    job_id             TEXT,
+    source             TEXT NOT NULL DEFAULT 'removed_object',  -- removed_object | catalog
     object_type        TEXT NOT NULL,
-    source_region_json TEXT,
+    job_id             TEXT,             -- removed_object 전용
+    source_region_json TEXT,             -- removed_object 전용 (재정합 기준)
+    catalog_item_id    TEXT,             -- catalog 전용 (GET /catalog 의 id)
     pose_json          TEXT NOT NULL,
     scale              REAL NOT NULL DEFAULT 1.0,
     rotation_deg       REAL NOT NULL DEFAULT 0.0,
@@ -81,6 +83,11 @@ _EXTRA_COLUMNS = {
     "jobs": {
         "removed_object_path": "TEXT",
         "removed_object_url": "TEXT",
+    },
+    # 기존 placements 행은 전부 "삭제 후 재배치"였으므로 그 기본값으로 채운다.
+    "placements": {
+        "source": "TEXT NOT NULL DEFAULT 'removed_object'",
+        "catalog_item_id": "TEXT",
     },
 }
 
@@ -313,9 +320,11 @@ class Store:
         placement_id: str,
         scene_id: str,
         *,
-        job_id: str | None,
+        source: str,
         object_type: str,
-        source_region: dict | None,
+        job_id: str | None = None,
+        source_region: dict | None = None,
+        catalog_item_id: str | None = None,
         pose: dict,
         scale: float,
         rotation_deg: float,
@@ -324,12 +333,15 @@ class Store:
         now = utcnow()
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO placements (placement_id, scene_id, job_id, object_type, "
-                "source_region_json, pose_json, scale, rotation_deg, plane, status, "
-                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+                "INSERT INTO placements (placement_id, scene_id, source, object_type, "
+                "job_id, source_region_json, catalog_item_id, pose_json, scale, rotation_deg, "
+                "plane, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
                 (
-                    placement_id, scene_id, job_id, object_type,
+                    placement_id, scene_id, source, object_type,
+                    job_id,
                     json.dumps(source_region) if source_region is not None else None,
+                    catalog_item_id,
                     json.dumps(pose), scale, rotation_deg, plane, now, now,
                 ),
             )

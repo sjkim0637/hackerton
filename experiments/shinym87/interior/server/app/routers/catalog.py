@@ -20,6 +20,11 @@ def _load_catalog() -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def catalog_has(catalog_id: str) -> bool:
+    """카탈로그에 이 id 의 항목이 있는지. (placements 라우터에서 참조 무결성 확인용)"""
+    return any(item.get("id") == catalog_id for item in _load_catalog())
+
+
 @router.get("/catalog", response_model=list[FurnitureData])
 def list_catalog(category: str | None = None) -> list[dict]:
     items = _load_catalog()

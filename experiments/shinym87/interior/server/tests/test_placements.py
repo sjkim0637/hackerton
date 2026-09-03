@@ -44,6 +44,20 @@ def _placement_body(**over) -> dict:
     return body
 
 
+def _catalog_body(**over) -> dict:
+    body = {
+        "object_type": "tv",
+        "pose": {"position": [0.0, 1.0, -1.2], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "source": "catalog",
+        "catalog_item_id": "cat_tv_wall-55",
+        "scale": 1.0,
+        "rotation_deg": 0.0,
+        "plane": "wall",
+    }
+    body.update(over)
+    return body
+
+
 def test_create_and_list_placement(client):
     scene_id, _ = _scene_with_kf(client)
     r = client.post(f"/scenes/{scene_id}/placements", json=_placement_body())
@@ -52,6 +66,8 @@ def test_create_and_list_placement(client):
     assert p["placement_id"].startswith("plc_")
     assert p["scene_id"] == scene_id
     assert p["object_type"] == "tv"
+    assert p["source"] == "removed_object"          # 기본 출처
+    assert p["catalog_item_id"] is None
     assert p["pose"]["position"] == [0.1, 0.2, -0.5]
     assert p["scale"] == 1.2 and p["rotation_deg"] == 15.0 and p["plane"] == "wall"
     assert p["source_region"]["rect"] == [0.3, 0.3, 0.2, 0.2]
@@ -59,6 +75,49 @@ def test_create_and_list_placement(client):
 
     rows = client.get(f"/scenes/{scene_id}/placements").json()
     assert [x["placement_id"] for x in rows] == [p["placement_id"]]
+
+
+# ------------------------------------------------ PHASE 5: 카탈로그 출처
+
+def test_catalog_placement_stores_source_and_item(client):
+    scene_id, _ = _scene_with_kf(client)
+    r = client.post(f"/scenes/{scene_id}/placements", json=_catalog_body(rotation_deg=30.0))
+    assert r.status_code == 201, r.text
+    p = r.json()
+    assert p["source"] == "catalog"
+    assert p["catalog_item_id"] == "cat_tv_wall-55"
+    assert p["job_id"] is None and p["source_region"] is None
+    assert p["rotation_deg"] == 30.0
+
+    rows = client.get(f"/scenes/{scene_id}/placements").json()
+    assert rows[0]["source"] == "catalog"
+    assert rows[0]["catalog_item_id"] == "cat_tv_wall-55"
+
+
+def test_catalog_placement_requires_item_id(client):
+    scene_id, _ = _scene_with_kf(client)
+    body = _catalog_body()
+    body.pop("catalog_item_id")
+    assert client.post(f"/scenes/{scene_id}/placements", json=body).status_code == 422
+
+
+def test_catalog_placement_unknown_item_404(client):
+    scene_id, _ = _scene_with_kf(client)
+    r = client.post(f"/scenes/{scene_id}/placements", json=_catalog_body(catalog_item_id="cat_nope"))
+    assert r.status_code == 404
+
+
+def test_mixed_sources_listed_with_source_field(client):
+    scene_id, _ = _scene_with_kf(client)
+    client.post(f"/scenes/{scene_id}/placements", json=_placement_body())       # removed_object
+    client.post(f"/scenes/{scene_id}/placements", json=_catalog_body())         # catalog
+    rows = client.get(f"/scenes/{scene_id}/placements").json()
+    assert [x["source"] for x in rows] == ["catalog", "removed_object"]   # 최신순
+    by_src = {x["source"]: x for x in rows}
+    assert by_src["removed_object"]["source_region"] is not None
+    assert by_src["removed_object"]["catalog_item_id"] is None
+    assert by_src["catalog"]["catalog_item_id"] == "cat_tv_wall-55"
+    assert by_src["catalog"]["source_region"] is None
 
 
 def test_placements_are_appended_newest_first(client):

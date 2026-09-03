@@ -105,6 +105,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   라인아트) → `catalog/assets/furniture/{종류}.png`, `app.mount("/assets", StaticFiles(...))`,
   `furniture.json` thumbnail 을 `/assets/furniture/<종류>.png` 로 갱신. 실서버·pytest 검증.
   이제 카탈로그 목록에서 고르면 이미지 quad 로 뜬다(앱 코드 변경 없음). `docs/handoffs/user2.md`.
+- [DONE] 사용자 3: placements 를 카탈로그 가구까지 확장. `source`(removed_object|catalog)
+  + `catalog_item_id` 컬럼(기존 행은 removed_object 로 ALTER 가드), `POST /placements` 분기
+  (catalog 면 catalog_item_id 필수·존재 검증), `GET /placements` 응답에 `source` 포함.
+  `pytest` 47개. 앱 연동은 사용자 1 TODO(`docs/handoffs/user1.md`). `docs/handoffs/user3.md`.
+- [TODO] 사용자 1: 카탈로그 배치 확정 시 `POST /placements`(source=catalog) 호출 +
+  `InteriorApiClient.createPlacement` 에 source/catalogItemId 파라미터. 복원 흐름.
 - [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)

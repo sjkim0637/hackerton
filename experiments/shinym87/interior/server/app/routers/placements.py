@@ -1,9 +1,13 @@
-"""PHASE 4: 삭제한 사물의 재배치(이동/회전/크기) 저장 + 간단한 실행 취소.
+"""씬 안의 가구 배치(이동/회전/크기) 저장 + 간단한 실행 취소.
 
-앱(사용자 1)은 이동 상태를 로컬(메모리)로만 들고 있어 앱을 끄면 사라진다.
-여기 저장해 두면 다른 기기/세션·웹 뷰어가 "무엇을 어디로 옮겼는지"를 다시 불러올 수 있다.
-`pose` 는 세션 로컬 월드 좌표라 그대로 재사용은 안 되지만, `source_region`(원래 제거 영역)
-기준으로 재정합하면 되고 scale/rotation/plane 은 세션과 무관하게 재사용된다.
+두 출처를 같은 테이블로 다룬다 (`source` 로 구분):
+- `removed_object` (PHASE 4): 삭제했던 사물을 다시 놓은 것. `job_id`/`source_region` 사용.
+- `catalog` (PHASE 5): 카탈로그에서 새로 추가한 가구. `catalog_item_id` 사용.
+
+앱은 배치 상태를 로컬(메모리)로만 들고 있어 앱을 끄면 사라진다. 여기 저장해 두면 다른
+기기/세션·웹 뷰어가 "무엇을 어디에 놨는지"를 다시 불러올 수 있다. `pose` 는 세션 로컬
+월드 좌표라 그대로는 못 쓰고, removed_object 는 `source_region`, catalog 는 화면 기준으로
+재 hitTest 해서 재정합한다. scale/rotation/plane 은 세션과 무관하게 재사용된다.
 """
 from __future__ import annotations
 
@@ -14,6 +18,7 @@ from fastapi import APIRouter, HTTPException
 from ..deps import get_store
 from ..ids import new_placement_id
 from ..schemas import PlacementCreate, PlacementOut
+from .catalog import catalog_has
 
 router = APIRouter(tags=["placements"])
 _log = logging.getLogger("interior.placements")
@@ -30,32 +35,52 @@ def _require_scene(scene_id: str) -> dict:
     "/scenes/{scene_id}/placements", response_model=PlacementOut, status_code=201
 )
 def create_placement(scene_id: str, body: PlacementCreate) -> dict:
-    """재배치 상태 하나를 append 로 저장한다. 같은 사물을 다시 옮기면 새 행이 쌓인다
+    """배치 상태 하나를 append 로 저장한다. 같은 가구를 다시 옮기면 새 행이 쌓인다
     (실행 취소가 이 순서를 되짚는다)."""
     _require_scene(scene_id)
     store = get_store()
 
-    if body.job_id:
-        job = store.get_job(body.job_id)
-        if job is None or job["scene_id"] != scene_id:
-            raise HTTPException(status_code=404, detail=f"작업 없음: {body.job_id}")
+    job_id: str | None = None
+    source_region: dict | None = None
+    catalog_item_id: str | None = None
+
+    if body.source == "removed_object":
+        job_id = body.job_id
+        source_region = body.source_region.model_dump() if body.source_region else None
+        if job_id:
+            job = store.get_job(job_id)
+            if job is None or job["scene_id"] != scene_id:
+                raise HTTPException(status_code=404, detail=f"작업 없음: {job_id}")
+    else:  # catalog
+        catalog_item_id = body.catalog_item_id
+        if not catalog_item_id:
+            raise HTTPException(
+                status_code=422, detail="source=catalog 이면 catalog_item_id 가 필요합니다"
+            )
+        if not catalog_has(catalog_item_id):
+            raise HTTPException(
+                status_code=404, detail=f"카탈로그 항목 없음: {catalog_item_id}"
+            )
 
     seq = store.next_seq(scene_id, "plc_seq")
     placement_id = new_placement_id(scene_id, seq)
     row = store.create_placement(
         placement_id,
         scene_id,
-        job_id=body.job_id,
+        source=body.source,
         object_type=body.object_type,
-        source_region=body.source_region.model_dump() if body.source_region else None,
+        job_id=job_id,
+        source_region=source_region,
+        catalog_item_id=catalog_item_id,
         pose={"position": body.pose.position, "rotation": body.pose.rotation},
         scale=body.scale,
         rotation_deg=body.rotation_deg,
         plane=body.plane,
     )
     _log.info(
-        "[scene %s] 배치 저장 %s type=%s scale=%.2f rot=%.0f plane=%s",
-        scene_id, placement_id, body.object_type, body.scale, body.rotation_deg, body.plane,
+        "[scene %s] 배치 저장 %s source=%s type=%s ref=%s scale=%.2f rot=%.0f plane=%s",
+        scene_id, placement_id, body.source, body.object_type,
+        catalog_item_id or job_id, body.scale, body.rotation_deg, body.plane,
     )
     return row
 

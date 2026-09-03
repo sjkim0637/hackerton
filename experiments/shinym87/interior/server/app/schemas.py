@@ -122,17 +122,29 @@ class JobOut(BaseModel):
     error: str | None = None
 
 
-class PlacementCreate(BaseModel):
-    """PHASE 4: 삭제한 사물을 새 위치로 재배치한 상태(이동/회전/크기).
+PlacementSource = Literal["removed_object", "catalog"]
 
-    `pose` 는 ARCore 월드 좌표(세션 로컬)라 다른 세션에서 그대로는 못 쓴다 — 다시 붙일 땐
-    `source_region`(원래 제거 영역) 기준으로 재정합해야 한다. 크기/회전/평면은 세션 무관.
+
+class PlacementCreate(BaseModel):
+    """씬 안에 가구를 놓은 상태(이동/회전/크기). 두 출처를 함께 다룬다.
+
+    - `removed_object` (PHASE 4): 삭제했던 사물을 다시 놓은 것. `pose` 는 ARCore 월드
+      좌표(세션 로컬)라 다른 세션에선 못 쓰고, `source_region`(원래 제거 영역) 기준으로
+      재정합한다. `job_id`/`source_region` 이 의미 있다.
+    - `catalog` (PHASE 5): 카탈로그(`GET /catalog`)에서 새로 추가한 가구. `catalog_item_id`
+      가 의미 있다 (`job_id`/`source_region` 은 안 씀). 재정합은 화면 중앙 등에서 다시 hitTest.
+
+    크기/회전/평면종류는 어느 쪽이든 세션과 무관하게 재사용된다.
     """
 
     object_type: str
     pose: Pose
+    source: PlacementSource = "removed_object"
+    # removed_object 전용
     job_id: str | None = None
     source_region: Region | None = None
+    # catalog 전용
+    catalog_item_id: str | None = None
     scale: float = Field(default=1.0, gt=0, le=20)
     rotation_deg: float = 0.0
     plane: Literal["wall", "floor"] | None = None
@@ -141,10 +153,12 @@ class PlacementCreate(BaseModel):
 class PlacementOut(BaseModel):
     placement_id: str
     scene_id: str
-    job_id: str | None = None
+    source: PlacementSource
     object_type: str
     pose: Pose
+    job_id: str | None = None
     source_region: dict | None = None
+    catalog_item_id: str | None = None
     scale: float
     rotation_deg: float
     plane: str | None = None
