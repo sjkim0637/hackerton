@@ -197,6 +197,76 @@
             android:text="" />
     </LinearLayout>
 
+    <!-- PHASE 4: 삭제한 사물을 다른 위치로 "이동" 하는 패널. 삭제 완료 시 나타난다.
+         "여기로 옮기기" → 새 지점 탭 → 원래 사물 이미지가 그 자리에 나타남. -->
+    <LinearLayout
+        android:id="@+id/movedObjectPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="112dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:background="#CC000000"
+        android:padding="10dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnMovedPlace"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="여기로 옮기기" />
+
+            <Button
+                android:id="@+id/btnMovedHome"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="원위치" />
+
+            <Button
+                android:id="@+id/btnMovedClear"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="치우기" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnMovedShrink"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="56dp"
+                android:text="－" />
+
+            <Button
+                android:id="@+id/btnMovedGrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="56dp"
+                android:text="＋" />
+
+            <Button
+                android:id="@+id/btnMovedRotate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="회전 ⟳" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!-- 가구를 선택하면 나타나는 조작 패널 (핀치로도 크기 조절 가능) -->
     <LinearLayout
         android:id="@+id/selectionPanel"

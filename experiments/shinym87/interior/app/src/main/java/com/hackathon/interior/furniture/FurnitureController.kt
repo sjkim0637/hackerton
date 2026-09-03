@@ -52,6 +52,9 @@ class FurnitureController(
     /** 선택/입력 중이 아니면 true. 안내 문구 자동 갱신 조건으로 쓰인다. */
     fun isIdle(): Boolean = selected == null && pendingAnchor == null
 
+    /** 지금 선택된 큐브가 있는지. (제스처를 큐브 vs 이동된 사물 중 누구에게 줄지 판단용) */
+    fun hasSelection(): Boolean = selected != null
+
     /** 이름표가 항상 카메라를 향하도록(빌보드) 매 프레임 갱신한다. */
     fun billboard() {
         val cameraQuaternion = sceneView.cameraNode.worldQuaternion

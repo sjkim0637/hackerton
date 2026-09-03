@@ -74,6 +74,19 @@ class ArSpaceController(
         sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
 
     /**
+     * 원하는 평면 종류를 우선해서 hitTest 한다.
+     * TV/선반은 벽(수직), 소파/테이블 등은 바닥(수평)에 붙이려고 쓴다.
+     * 원하는 종류가 없으면 아무 평면이나(그마저 없으면 null) 돌려준다.
+     */
+    fun hitTestPreferring(xPx: Float, yPx: Float, wantVertical: Boolean): HitResult? {
+        val preferred: Set<Plane.Type> =
+            if (wantVertical) setOf(Plane.Type.VERTICAL)
+            else setOf(Plane.Type.HORIZONTAL_UPWARD_FACING, Plane.Type.HORIZONTAL_DOWNWARD_FACING)
+        return sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = preferred)
+            ?: sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
+    }
+
+    /**
      * 평면 격자·특징점 시각화를 켜고 끈다.
      *
      * 키프레임 캡처 직전에 잠깐 꺼서, 서버(AI)로 보내는 이미지에 흰 점/격자가 찍히지 않게 한다.

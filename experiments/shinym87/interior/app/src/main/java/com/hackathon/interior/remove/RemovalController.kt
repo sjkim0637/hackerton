@@ -51,6 +51,10 @@ class RemovalController(
     private val binding: ActivityMainBinding,
     private val onBeforeCapture: () -> Unit = {},
     private val onAfterCapture: () -> Unit = {},
+    /** 삭제 완료 시: (종류, 캡처한 사물 이미지, 원래 위치, 폭 m, 높이 m) — PHASE 4 이동용. */
+    private val onRemovalApplied: (String, Bitmap?, Pose?, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    /** 선택 취소 등으로 삭제 결과를 물릴 때. 이동된 사물도 함께 정리하라는 신호. */
+    private val onRemovalCleared: () -> Unit = {},
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -67,6 +71,10 @@ class RemovalController(
     private var resultNode: AnchorNode? = null
     private var showingAfter = false
     private var busy = false
+
+    /** PHASE 4: 삭제 요청 시점의 "원래 사물" 스냅샷(이동 기능이 재사용). */
+    private var capturedObjectBitmap: Bitmap? = null
+    private var originalObjectPose: Pose? = null
 
     /** 결과 quad 위치의 이동 평균값(지터 완화). onFrame 에서 갱신. */
     private var smoothedPos: FloatArray? = null
@@ -147,6 +155,9 @@ class RemovalController(
         binding.btnClearSelection.visibility = View.GONE
         refreshRequestButton()
         clearResult()
+        capturedObjectBitmap = null
+        originalObjectPose = null
+        onRemovalCleared()   // 이동된 사물도 함께 정리
         if (announce) status("선택을 취소했습니다")
     }
 
@@ -269,6 +280,11 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
+            // PHASE 4: 삭제 전 사물 모습(키프레임의 bbox 크롭)과 원래 위치를 기억해 둔다.
+            capturedObjectBitmap = runCatching {
+                BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, bbox) }
+            }.getOrNull()
+            originalObjectPose = wallAnchor?.pose
             val meta = buildMetaJson(imageW, imageH, bbox, objectType)
             scope.launch {
                 try {
@@ -324,6 +340,11 @@ class RemovalController(
                 return
             }
         applyResult(bitmap, job.changedRect ?: bbox)
+
+        // PHASE 4: 이제 이 사물을 "다른 위치로 이동" 할 수 있게 이동 컨트롤러에 넘긴다.
+        onRemovalApplied(
+            objectType, capturedObjectBitmap, originalObjectPose, patchWidthM, patchHeightM,
+        )
     }
 
     /** 결과 이미지를 벽 평면 quad 로 붙인다. 벽 앵커가 없으면 전체화면으로 대체 표시. */

@@ -11,7 +11,47 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 ## Workstream
 
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
-PHASE 1 + PHASE 2 "사용자 1 (공간 / AR)".
+PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 "사용자 1 (공간 / AR)".
+
+## PHASE 4 — 삭제한 사물을 다른 위치로 "이동" (개념 증명) (2026-09-03)
+
+지금까지 "삭제"만 하던 걸, 삭제한 사물을 **새 위치로 옮겨** "지운 자리 + 새 자리"
+두 곳에서 흔적을 보게 했다. 완벽한 3D 재배치가 아니라 개념 증명 수준.
+
+**신규 `remove/MovedObjectController.kt`** — 큐브 배치 방식(탭 배치·드래그 이동·
+핀치/＋－ 크기·회전)을 그대로 쓰되 표시는 큐브 대신 **캡처한 사물 이미지 quad**.
+
+1. **원래 위치 저장** (`RemovalController`)
+   - "삭제 요청" 캡처 콜백에서 키프레임을 디코드해 `bbox` 로 크롭한
+     `capturedObjectBitmap`(= 삭제 전 사물 모습)과 `originalObjectPose`(= `wallAnchor.pose`,
+     선택 영역 중심의 벽/바닥 앵커 pose)를 기억.
+   - 삭제 완료(`runFlow` 끝)에서 `onRemovalApplied(type, bitmap, pose, wM, hM)` 콜백 →
+     `MainActivity` 가 `moved.arm(...)` 호출. "선택 취소" 시 `onRemovalCleared()` → `moved.disarm()`.
+2. **다른 위치로 이동**
+   - 삭제가 끝나면 하단에 이동 패널(`movedObjectPanel`) 등장: `여기로 옮기기` /
+     `원위치` / `치우기` + `－` `＋` `회전 ⟳`.
+   - `여기로 옮기기` → `placing=true`, 새 지점 탭 → `MovedObjectController.onTap()` 이
+     제스처를 가로채(`true` 반환 시 큐브로 안 넘어감) 그 자리에 `AnchorNode`+`ImageNode`
+     (캡처 이미지, `EdgeFade.feather` 로 경계 블렌딩, 512px 상한 다운스케일) 생성.
+   - `원위치` → 저장해 둔 `originalObjectPose` 에 다시 배치(지운 자리로 되돌리기).
+   - 드래그 이동: `onDragBegin/onDrag/onDragEnd` — 큐브 `finalizeDrag` 와 동일하게
+     드래그 중 `updateAnchorPose=false` + pose 직접, 끝나면 새 앵커로 재고정.
+   - 크기: 핀치(`onScale`) + `－`/`＋`(1.15×, 0.3~3.0 클램프). 회전: `회전 ⟳` 15° 스텝.
+   - 큐브가 선택돼 있으면(`furniture.hasSelection()`) 제스처는 큐브 몫 — 이동된 사물은
+     건드리지 않는다. `MainActivity` 제스처가 `moved.*` → 실패 시 `furniture.*` 순.
+3. **벽/바닥 자동 맞춤** (`ArSpaceController.hitTestPreferring(x, y, wantVertical)`)
+   - TV·선반 → 수직(벽) 우선, 그 외(소파/테이블/의자/기타) → 수평(바닥) 우선으로 hitTest.
+     원하는 평면이 없으면 아무 평면이나 붙이고 Toast 로 "원랜 벽/바닥이 어울린다" 안내.
+   - 벽에 붙으면 quad 를 `Rotation(-90°, 0, rot)` 로 세우고(결과 quad 와 동일), 바닥이면
+     `Rotation(0, rot, 0)` 로 세워 세운 사진처럼 표시. 라벨 "여기로 옮김 · <종류>".
+
+### 아직 실기기 확인 필요 / 한계
+- 빌드만 확인(`app-debug.apk` ≈ 47MB). 실기기에서 (a) 새 위치에 사물 이미지가 뜨는지,
+  (b) 벽/바닥 자동 선택이 맞는지, (c) 드래그/핀치/회전이 자연스러운지 확인해야 한다.
+- 이미지 quad 는 평면 사진이라 각도가 바뀌면 원근이 안 맞는다(개념 증명 한계).
+- 이동된 사물엔 `onFrame` EMA 스무딩을 안 걸었다(ARCore 앵커 추적에 맡김). 결과 quad 처럼
+  흔들리면 `RemovalController.onFrame` 방식을 이식하면 된다.
+- 큐브 시스템(`FurnitureController`)은 `hasSelection()` 추가 외 변경 없음.
 
 ## PHASE 3 — 공간 정합: 결과 quad 안정화 + 경계 블렌딩 + 지터 스무딩 (2026-09-03)
 
@@ -166,13 +206,15 @@ experiments/shinym87/interior/app/src/main/
 │                                              btnClearSelection / btnRequestRemove /
 │                                              btnToggleRemoval / removalStatusText
 └─ java/com/hackathon/interior/
-   ├─ MainActivity.kt                          RemovalController 배선 + 공유 before/afterCapture 람다
-   ├─ ar/ArSpaceController.kt                  latestFrame 노출, setPlaneVisualizationEnabled()
+   ├─ MainActivity.kt                          Removal/Moved 배선 + 공유 before/afterCapture 람다 + 제스처 라우팅
+   ├─ ar/ArSpaceController.kt                  latestFrame, setPlaneVisualizationEnabled(), hitTestPreferring()
+   ├─ furniture/FurnitureController.kt         큐브 배치 (hasSelection() 추가)
    ├─ keyframe/BackgroundKeyframe.kt           "배경 촬영" 캡처 (동일 오버레이 제거 적용)
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
       ├─ InteriorApiClient.kt                  HttpURLConnection + org.json, baseUrl 주입
-      └─ RemovalController.kt                  서버주소·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후
+      ├─ MovedObjectController.kt              PHASE 4: 삭제한 사물을 새 위치로 이동(탭/드래그/핀치/회전, 벽·바닥 자동)
+      └─ RemovalController.kt                  서버주소·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후·원래위치 저장
 ```
 
 ## Decisions

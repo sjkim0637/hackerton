@@ -9,6 +9,7 @@ import com.hackathon.interior.databinding.ActivityMainBinding
 import com.hackathon.interior.furniture.FurnitureController
 import com.hackathon.interior.furniture.FurnitureItem
 import com.hackathon.interior.keyframe.BackgroundKeyframe
+import com.hackathon.interior.remove.MovedObjectController
 import com.hackathon.interior.remove.RemovalController
 
 /**
@@ -29,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var furniture: FurnitureController
     private lateinit var keyframe: BackgroundKeyframe
     private lateinit var removal: RemovalController
+    private lateinit var moved: MovedObjectController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +69,15 @@ class MainActivity : AppCompatActivity() {
             afterCapture = afterCapture,
         )
 
+        moved = MovedObjectController(
+            activity = this,
+            sceneView = sceneView,
+            space = space,
+            binding = binding,
+            furnitureHasSelection = furniture::hasSelection,
+            status = { binding.removalStatusText.text = it },
+        )
+
         removal = RemovalController(
             activity = this,
             scope = lifecycleScope,
@@ -75,6 +86,8 @@ class MainActivity : AppCompatActivity() {
             binding = binding,
             onBeforeCapture = beforeCapture,
             onAfterCapture = afterCapture,
+            onRemovalApplied = { type, bmp, pose, w, h -> moved.arm(type, bmp, pose, w, h) },
+            onRemovalCleared = { moved.disarm(announce = false) },
         )
 
         space.onFrame = {
@@ -83,13 +96,16 @@ class MainActivity : AppCompatActivity() {
         }
         space.isIdle = { furniture.isIdle() }
 
+        // 이동된 사물이 제스처를 먼저 볼 기회를 준다(처리하면 true → 큐브로 안 넘어감).
         sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { motionEvent, node -> furniture.handleTap(motionEvent, node) },
+            onSingleTapConfirmed = { me, node -> if (!moved.onTap(me.x, me.y)) furniture.handleTap(me, node) },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
-            onMoveBegin = { _, _, node -> furniture.beginDrag(node) },
-            onMove = { _, motionEvent, _ -> furniture.drag(motionEvent) },
-            onMoveEnd = { _, _, _ -> furniture.endDrag() },
-            onScale = { detector, _, _ -> furniture.scaleSelectedBy(detector.scaleFactor) },
+            onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
+            onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },
+            onMoveEnd = { _, _, _ -> if (!moved.onDragEnd()) furniture.endDrag() },
+            onScale = { detector, _, _ ->
+                if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
+            },
         )
 
         binding.btnGrow.setOnClickListener { furniture.scaleSelectedBy(FurnitureItem.SCALE_STEP) }

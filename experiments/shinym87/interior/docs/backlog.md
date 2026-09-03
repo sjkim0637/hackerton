@@ -67,6 +67,16 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 - [TODO] 재투영 보정, 가림(occlusion) 처리, 회전 slerp. 정리된 job row TTL, 기간 정리 주기 실행.
 - [TODO] bbox → 정밀 세그멘테이션 (겹친 물체 자동 배제). 컵 사례처럼 소품엔 특히 필요.
 
+## PHASE 4 (진행 중)
+
+- [DONE] 사용자 1: 삭제한 사물을 다른 위치로 "이동" (개념 증명). `remove/MovedObjectController.kt`
+  — 원래 위치(`originalObjectPose`)·삭제 전 사물 이미지(`capturedObjectBitmap`) 저장,
+  "여기로 옮기기" → 새 지점 탭 배치, 드래그 이동 / 핀치·＋－ 크기 / 회전 버튼,
+  사물 종류별 벽(TV·선반)/바닥 자동 맞춤(`ArSpaceController.hitTestPreferring`),
+  "원위치" 되돌리기. 큐브 시스템은 `hasSelection()` 추가 외 무변경. 빌드만 확인, 실기기 남음.
+  `docs/handoffs/user1.md`.
+- [TODO] 이동된 사물 원근 보정(평면 사진 한계), `onFrame` EMA 스무딩 이식, undo/redo.
+
 ## PHASE 2 이후 (개요만)
 
 - PHASE 3 (진행 중, 사용자 1): 결과 quad 를 벽 앵커에 프레임마다 EMA 스무딩해서 고정
