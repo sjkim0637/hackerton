@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
+from ..ai.imageops import ensure_jpeg_size, image_size
 from ..config import get_settings
 from ..deps import get_provider, get_store
 from ..ids import new_job_id, new_keyframe_id, new_object_id, new_scene_id
@@ -154,20 +155,25 @@ def _run_job(
     store.update_job(job_id, status="running")
     try:
         provider = get_provider()
+        source_bytes = Path(image_path).read_bytes()
+        original_size = image_size(source_bytes)
         prompt = (
             f"Remove the {object_type} from the image and reconstruct the wall/floor "
             f"behind it so it looks like the {object_type} was never there."
         )
         result = provider.remove_object(
-            image_bytes=Path(image_path).read_bytes(),
+            image_bytes=source_bytes,
             region=region,
             object_type=object_type,
             prompt=prompt,
         )
+        # 공통 보정: 프로바이더가 무엇을 돌려주든 결과는 항상 원본과 같은 해상도의 JPEG.
+        final_bytes = ensure_jpeg_size(result.image_bytes, original_size)
+
         results_dir = get_settings().scenes_dir / scene_id / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
         out_path = results_dir / f"{job_id}.jpg"
-        out_path.write_bytes(result.image_bytes)
+        out_path.write_bytes(final_bytes)
 
         store.update_job(
             job_id,

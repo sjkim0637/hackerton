@@ -51,8 +51,19 @@ PHASE 1 "사용자 2 (영상 / AI)" — mock 을 실제 외부 AI 로 교체 (�
 - **테스트**: `tests/test_external.py` 8개 — `httpx.post` 를 가짜로 바꿔 키 없이
   요청 조립 / 200 성공(→ JPEG) / 429 / 403 / 네트워크 / 타임아웃 / 이미지 없음 /
   안전 차단을 검증. 전체 `pytest` 13개 통과.
-- E2E 스크립트에 `--ai-provider` / `--ai-api-key` 플래그 추가 (자동 기동하는 서버의
-  환경변수를 덮어씀).
+- **결과 해상도 강제**: `app/ai/imageops.ensure_jpeg_size(bytes, size)` 신설.
+  `_run_job` 이 프로바이더 결과를 **항상 원본 키프레임 해상도의 JPEG 로** 맞춰 저장한다
+  (mock/external 공통). external 은 그 전에도 한 번 맞춘다. Gemini 가 다른 해상도로
+  돌려줘도 이제 결과가 원본과 일치.
+- **임의 사진용 스크립트**: `scripts/e2e_check_custom.py` — `--image` 와
+  `--bbox "x,y,w,h"`(0~1) 를 받아 `e2e_check.py` 와 동일한 흐름을 돈다.
+  `e2e_check.py` 의 공용 로직(`run_flow`, `ensure_server`, `parse_bbox` …)을
+  그대로 import 해서 씀. `e2e_check.py` 에도 `--bbox` / `--ai-provider` /
+  `--ai-api-key` 추가.
+- **실결과 검증 완료 (2026-09-03)**: `real_living_room.jpg`(4032×3024,
+  `server/testdata/`) + `--bbox 0.34,0.39,0.30,0.28` + `gemini-2.5-flash-image`
+  → **TV·사운드바·전선이 깨끗이 제거되고 벽/걸레받이가 자연스럽게 복원됨**,
+  결과 해상도 4032×3024 유지, e2e 14/14 PASS. mock 회귀도 14/14.
 
 ## Important Files
 
@@ -65,8 +76,13 @@ experiments/shinym87/interior/server/
 │  ├─ mask.py                   bbox → 마스크 PNG, 위치 힌트, base64
 │  ├─ mock.py                   그대로 유지 (기본 provider)
 │  └─ __init__.py               build_provider() — 설정으로 mock/external 교체
+├─ app/ai/imageops.py          결과를 원본 해상도 JPEG 로 맞추는 공통 로직
+├─ app/routers/scenes.py       _run_job 이 ensure_jpeg_size() 로 결과 크기 보정
 ├─ tests/test_external.py       에러/응답 처리 단위 테스트
-└─ scripts/e2e_check.py         --ai-provider / --ai-api-key 플래그 추가
+├─ testdata/real_living_room.jpg  실사진 테스트 픽스처 (4032×3024)
+└─ scripts/
+   ├─ e2e_check.py             공용 로직 + --bbox / --ai-provider / --ai-api-key
+   └─ e2e_check_custom.py      --image / --bbox 로 임의 사진 검증
 ```
 
 ## Decisions
@@ -79,9 +95,10 @@ experiments/shinym87/interior/server/
 
 ## Constraints
 
-- **실제 Gemini 결과 이미지는 아직 검증 못 함** — 이 저장소/환경에 API 키가 없다.
-  키를 넣고 아래 "Next 1" 을 돌려야 "그럴듯한지" 확인된다. 코드 경로(요청 조립,
-  상태 코드별 에러, 응답 파싱)는 단위 테스트로 검증됨.
+- 실결과는 `INTERIOR_AI_MODEL=gemini-2.5-flash-image` 로 검증했다
+  (`gemini-3.1-flash-image` 는 해당 계정에서 사용 불가 → `.env` 에서 교체).
+- 키(`INTERIOR_AI_API_KEY`)는 `server/.env` 에 있고 `.gitignore` 로 커밋에서 제외된다.
+  `.env.example` 에는 형식만 있다.
 - `responseModalities` / `inline_data` 표기는 REST 문서 기준으로 맞췄으나, 모델
   버전에 따라 `400` 이 나면 `generationConfig` 를 조정해야 할 수 있다(에러 메시지에
   Gemini 원문이 포함됨).
@@ -98,15 +115,12 @@ experiments/shinym87/interior/server/
 
 ## Next
 
-1. Google AI Studio(https://aistudio.google.com/app/apikey)에서 Gemini API 키 발급 후:
-   ```bash
-   cd experiments/shinym87/interior/server
-   python scripts/e2e_check.py --port 8020 --ai-provider external --ai-api-key <KEY>
-   ```
-   → `scripts/_out/result_<job>.jpg` 확인. 모델 오류(404)면
-   `--ai-provider` 대신 `.env` 에 `INTERIOR_AI_MODEL=gemini-2.5-flash-image` 로 재시도.
-2. 프롬프트 튜닝 (그림자 제거, 경계 자연스럽게) — 설계서 PHASE 2 사용자 2 항목.
-3. 앱(P1-11): 서버 `--host 0.0.0.0`, 앱 `InteriorApiClient.DEFAULT_BASE_URL` 을 PC IP 로.
+1. 프롬프트/모델 튜닝 — 경계 이음매(하단 미세 seam), 그림자 처리, 다른 사물 종류
+   (소파/테이블). 설계서 PHASE 2 사용자 2 항목.
+2. `remove-object` 를 별도 워커/큐로 (지금은 `BackgroundTasks` 동기) — Gemini 호출이
+   길면 폴링이 그만큼 길어짐. 재시도 정책도.
+3. 앱(P1-11): 서버 `--host 0.0.0.0`, 앱 `InteriorApiClient.DEFAULT_BASE_URL` 을 PC IP 로,
+   앱에서 실제 bbox 지정 → Gemini 결과를 벽에 붙이는 흐름 실기기 확인.
 
 ## Relevant Commits
 

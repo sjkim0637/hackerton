@@ -12,13 +12,12 @@ mock provider 는 그대로 남아 있고, INTERIOR_AI_PROVIDER=mock 이면 이 
 from __future__ import annotations
 
 import base64
-import io
 import json
 
 import httpx
-from PIL import Image
 
 from .base import ProviderError, ProviderNotConfigured, RemoveObjectProvider, RemoveResult
+from .imageops import ensure_jpeg_size, image_size
 from .mask import data_url_b64, location_hint, region_bbox, region_to_mask_png
 
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -91,7 +90,11 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
         self._raise_for_status(resp)
 
         raw = self._extract_image(resp.json())
-        jpeg = self._to_jpeg(raw)
+        # Gemini 는 원본과 다른 해상도로 돌려줄 수 있어 원본 크기로 강제 리사이즈한다.
+        try:
+            jpeg = ensure_jpeg_size(raw, image_size(image_bytes))
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderError(f"Gemini 결과 이미지를 열 수 없습니다: {exc}") from exc
 
         x, y, w, h = region_bbox(region)
         return RemoveResult(
@@ -168,14 +171,3 @@ class ExternalRemoveObjectProvider(RemoveObjectProvider):
         raise ProviderError(
             f"Gemini 응답에 이미지가 없습니다 (finishReason={finish}){f': {hint}' if hint else ''}"
         )
-
-    @staticmethod
-    def _to_jpeg(raw: bytes) -> bytes:
-        try:
-            with Image.open(io.BytesIO(raw)) as im:
-                rgb = im.convert("RGB")
-                out = io.BytesIO()
-                rgb.save(out, format="JPEG", quality=90)
-                return out.getvalue()
-        except Exception as exc:  # noqa: BLE001
-            raise ProviderError(f"Gemini 결과 이미지를 열 수 없습니다: {exc}") from exc

@@ -16,8 +16,13 @@
 | P1-7 | 서버: `POST /remove-object` → job, `GET /jobs/{id}` 폴링 | 서버 | DONE |
 | P1-8 | 앱: job 폴링 → 결과 이미지를 벽 평면 quad(또는 전체화면 대체)로 적용 | 앱 | DONE |
 | P1-9 | 앱: "삭제 전/후" 전환 버튼 | 앱 | DONE |
-| P1-10 | `app/ai/external.py` 를 Google Gemini 이미지 편집 API 로 구현 (mock 유지, `INTERIOR_AI_PROVIDER=external` 로 전환). 에러 처리 + 단위 테스트 포함 | 서버 | DONE (키로 실결과 검증만 남음) |
+| P1-10 | `app/ai/external.py` 를 Google Gemini 이미지 편집 API 로 구현 + 실사진으로 실결과 검증 | 서버 | DONE |
 | P1-11 | 실기기에서 end-to-end 1회 성공 + 데모 녹화 (서버 `--host 0.0.0.0`, baseUrl 을 PC IP 로) | 공통 | TODO |
+
+P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_living_room.jpg
+--bbox 0.34,0.39,0.30,0.28` + `gemini-2.5-flash-image` → TV·사운드바·케이블 제거,
+벽 자연 복원, 결과 해상도 4032×3024 유지. 결과 이미지 크기 불일치 문제는 공통
+`app/ai/imageops.ensure_jpeg_size()` 를 `_run_job` 에 넣어 해결(mock/external 모두 적용).
 
 서버(P1-4~P1-7)는 `experiments/shinym87/interior/server/` 에 구현, `pytest` 5개 통과.
 추가로 `GET /scenes/{id}/objects`(사물 정보 저장 형식만), `GET /catalog`(가구 데이터 API),

@@ -124,13 +124,15 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
   → job 폴링 → 결과 이미지를 벽 quad(또는 전체화면 대체)로 적용 → "삭제 전/후" 토글.
   서버 주소는 `http://localhost:8000` 하드코딩. `assembleDebug` 는 JBR 25 로는 실패하고
   `JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` 로 성공. 인계: `docs/handoffs/user1.md`.
-- PHASE 1 영상/AI (P1-10): 완료(코드+테스트). `server/app/ai/external.py` 를
-  Google Gemini 이미지 편집 API 호출로 구현. bbox→마스크 PNG + 지시문 →
-  `:generateContent` → 응답 이미지 파싱 → JPEG. 429/인증/네트워크/타임아웃/
-  이미지없음/안전차단 에러 처리, `httpx.post` 를 가짜로 바꾼 단위 테스트 8개.
-  mock 은 그대로, `INTERIOR_AI_PROVIDER=external` + `INTERIOR_AI_API_KEY` 로 전환.
-  **실제 Gemini 결과 이미지는 키가 없어 아직 미검증** — 인계: `docs/handoffs/user2.md`.
-- 남은 것: 실기기 네트워크 검증(P1-11), Gemini 키로 실결과 확인, 결과 정합 다듬기.
+- PHASE 1 영상/AI (P1-10): 완료 + 실사진 검증. `server/app/ai/external.py` 가
+  Google Gemini(`:generateContent`) 로 bbox→마스크 PNG + 지시문을 보내 사물을 지운다.
+  429/인증/네트워크/타임아웃/이미지없음/안전차단 에러 처리, 단위 테스트 8개.
+  결과는 `app/ai/imageops.ensure_jpeg_size()` 로 항상 원본 해상도 JPEG(mock/external 공통).
+  `scripts/e2e_check_custom.py` (`--image` `--bbox`) 로 `real_living_room.jpg`(4032×3024) +
+  `gemini-2.5-flash-image` 검증 → TV·사운드바·전선 제거, 벽 자연 복원, 14/14 PASS.
+  mock 은 그대로, `INTERIOR_AI_PROVIDER=external` + `INTERIOR_AI_API_KEY`(`.env`, gitignore).
+  인계: `docs/handoffs/user2.md`.
+- 남은 것: 실기기 네트워크 검증(P1-11), 프롬프트/경계 튜닝(PHASE 2).
 
 ## Next
 

@@ -56,14 +56,17 @@ INTERIOR_AI_MODEL=gemini-3.1-flash-image
 실패는 `job.status="failed"` + `error` 메시지로 나온다 (429 한도 초과 / 401·403 인증 /
 400 잘못된 요청 / 404 모델 없음 / 5xx / 네트워크·타임아웃 / 이미지 없음 / 안전 차단).
 
-키를 넣은 뒤 실제 결과 확인:
+키를 넣은 뒤 실제 결과 확인 (실사진 권장):
 
 ```bash
 cd experiments/shinym87/interior/server
-python scripts/e2e_check.py --port 8020 --ai-provider external --ai-api-key <KEY>
-#  또는 .env 에 external 설정을 넣고:  python scripts/e2e_check.py --port 8020
+python scripts/e2e_check_custom.py --image testdata/real_living_room.jpg \
+  --bbox 0.34,0.39,0.30,0.28 --ai-provider external --ai-api-key <KEY>
 # → scripts/_out/result_<job>.jpg 에 실제 편집 결과가 저장된다
 ```
+
+검증됨 (2026-09-03): `real_living_room.jpg`(4032×3024) + 위 bbox + `gemini-2.5-flash-image`
+→ TV·사운드바·케이블이 깨끗이 지워지고 벽이 자연스럽게 복원됨, 결과 해상도 4032×3024 유지.
 
 ## 요청 흐름 예시
 
@@ -105,16 +108,27 @@ pytest
 서버가 안 떠 있으면 uvicorn 을 자동으로 띄웠다가 끝나면 내린다.
 
 ```bash
-# server/ 에서 (venv 활성화 상태)
-python scripts/e2e_check.py            # 13단계 PASS 후 exit 0
-python scripts/e2e_check.py --no-start # 이미 떠 있는 서버로만
-# Windows:
-.\scripts\run_e2e.ps1
+# server/ 에서 (venv 활성화 상태) — 합성 거실 이미지 + TV 위치
+python scripts/e2e_check.py                    # exit 0 이면 전체 흐름 OK
+python scripts/e2e_check.py --no-start         # 이미 떠 있는 서버로만
+python scripts/e2e_check.py --ai-provider mock # .env 와 무관하게 mock 강제
+.\scripts\run_e2e.ps1                          # Windows 래퍼
 ```
 
-- 테스트 이미지: `testdata/living_room.jpg` (없으면 `scripts/make_test_image.py` 로 생성).
-- 내려받은 결과 이미지: `scripts/_out/result_<job>.jpg` (git 무시).
-- 서버가 저장한 원본: `data/scenes/<scene>/results/<job>.jpg`.
+**임의 사진 + 임의 bbox** 로 돌리려면 `scripts/e2e_check_custom.py`:
+
+```bash
+python scripts/e2e_check_custom.py \
+  --image testdata/real_living_room.jpg \
+  --bbox 0.34,0.39,0.30,0.28 \
+  --ai-provider external --ai-api-key <GEMINI_KEY>   # 또는 .env 에 설정
+```
+
+- `--bbox` 는 `"x,y,width,height"` (각 0~1 비율). 이미지 대비 제거할 사물의 위치.
+- 두 스크립트 모두 서버가 없으면 uvicorn 을 자동으로 띄웠다가 끝나면 내린다.
+- 결과 이미지: `scripts/_out/result_<job>.jpg` (git 무시), 서버 저장본:
+  `data/scenes/<scene>/results/<job>.jpg`. **둘 다 항상 원본과 같은 해상도**
+  (`app/ai/imageops.ensure_jpeg_size()` 가 `_run_job` 에서 강제 리사이즈).
 
 ## 알려진 제약 / 다음
 

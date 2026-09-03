@@ -1,4 +1,4 @@
-"""서버 전체 흐름 E2E 검증.
+"""서버 전체 흐름 E2E 검증 (합성 거실 이미지 기본).
 
 세션 생성 → 키프레임 업로드(대표 이미지 저장) → 사물 정보 저장 확인 →
 remove-object 요청 → job 폴링 → 결과 이미지 다운로드/검증 → 서버 저장 파일 확인 →
@@ -7,9 +7,9 @@ remove-object 요청 → job 폴링 → 결과 이미지 다운로드/검증 →
 사용법 (server/ 에서, venv 활성화 상태):
     python scripts/e2e_check.py                     # 서버가 없으면 uvicorn 자동 기동
     python scripts/e2e_check.py --no-start          # 이미 떠 있는 서버로만 검증
-    python scripts/e2e_check.py --base-url http://127.0.0.1:8000
-    python scripts/e2e_check.py --keep-server       # 검증 후 자동 기동한 서버 유지
+    python scripts/e2e_check.py --ai-provider external --ai-api-key <KEY>
 
+임의 이미지 + bbox 로 돌리려면 scripts/e2e_check_custom.py 를 쓴다.
 성공 시 exit 0, 하나라도 실패하면 exit 1.
 """
 from __future__ import annotations
@@ -33,14 +33,35 @@ from make_test_image import TV_BBOX, build_living_room  # noqa: E402
 STEPS: list[tuple[str, bool, str]] = []
 
 
+# --------------------------------------------------------------------- 공용 헬퍼
+
 def record(name: str, ok: bool, detail: str = "") -> None:
     STEPS.append((name, ok, detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
 
 
-def keyframe_meta(width: int, height: int) -> dict:
+def parse_bbox(text: str) -> list[float]:
+    """"x,y,w,h" (0~1 비율) 문자열을 검증해 [x, y, w, h] 로."""
+    parts = [p.strip() for p in text.replace(" ", "").split(",")]
+    if len(parts) != 4:
+        raise argparse.ArgumentTypeError("bbox 는 'x,y,w,h' 4개 값이어야 합니다")
+    try:
+        x, y, w, h = (float(p) for p in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"bbox 숫자 파싱 실패: {exc}") from exc
+    for name, v in (("x", x), ("y", y), ("w", w), ("h", h)):
+        if not 0.0 <= v <= 1.0:
+            raise argparse.ArgumentTypeError(f"bbox {name}={v} 는 0~1 범위여야 합니다")
+    if w <= 0 or h <= 0:
+        raise argparse.ArgumentTypeError("bbox 의 w, h 는 0보다 커야 합니다")
+    if x + w > 1.0001 or y + h > 1.0001:
+        raise argparse.ArgumentTypeError("bbox 가 이미지 밖으로 나갑니다 (x+w>1 또는 y+h>1)")
+    return [x, y, w, h]
+
+
+def keyframe_meta(width: int, height: int, bbox: list[float], object_type: str = "tv") -> dict:
     return {
-        "capturedAt": "2026-09-02T12:00:00Z",
+        "capturedAt": "2026-09-03T00:00:00Z",
         "imageSize": {"width": width, "height": height},
         "cameraIntrinsics": {"fx": 1400.0, "fy": 1400.0, "cx": width / 2, "cy": height / 2},
         "worldToCamera": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -2.4, 0, 0, 0, 1],
@@ -49,7 +70,10 @@ def keyframe_meta(width: int, height: int) -> dict:
             "normal": [0.0, 0.0, 1.0],
             "extent": {"x": 3.4, "z": 2.5},
         },
-        "targetObject": {"objectType": "tv", "region": {"type": "bbox", "rect": TV_BBOX}},
+        "targetObject": {
+            "objectType": object_type,
+            "region": {"type": "bbox", "rect": bbox},
+        },
     }
 
 
@@ -65,8 +89,81 @@ def wait_for_health(base_url: str, timeout: float) -> bool:
     return False
 
 
-def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
-    client = httpx.Client(base_url=base_url, timeout=30.0)
+def add_server_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--base-url", default=None,
+                        help="이미 떠 있는 서버 주소. 생략하면 127.0.0.1:<port> 로 본다")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--no-start", action="store_true", help="서버 자동 기동 안 함")
+    parser.add_argument("--keep-server", action="store_true",
+                        help="검증 후 자동 기동한 서버를 끄지 않음")
+    parser.add_argument("--out-dir", default=str(Path(__file__).resolve().parent / "_out"))
+    parser.add_argument("--ai-provider", choices=["mock", "external"],
+                        help="자동 기동하는 서버의 INTERIOR_AI_PROVIDER 를 덮어쓴다")
+    parser.add_argument("--ai-api-key",
+                        help="자동 기동하는 서버의 INTERIOR_AI_API_KEY (Gemini 키). "
+                             "생략하면 .env / 환경변수를 그대로 쓴다")
+
+
+def ensure_server(args: argparse.Namespace) -> tuple[str, subprocess.Popen | None]:
+    """이미 서버가 떠 있으면 그 주소를, 없으면 uvicorn 을 띄워서 돌려준다."""
+    target = args.base_url or f"http://127.0.0.1:{args.port}"
+    if wait_for_health(target, timeout=1.5):
+        return target, None
+    if args.no_start:
+        raise SystemExit(f"서버에 연결할 수 없습니다: {target} (--no-start)")
+
+    base_url = f"http://127.0.0.1:{args.port}"
+    env = os.environ.copy()
+    if args.ai_provider:
+        env["INTERIOR_AI_PROVIDER"] = args.ai_provider
+    if args.ai_api_key:
+        env["INTERIOR_AI_API_KEY"] = args.ai_api_key
+    print(
+        f"서버가 없어 uvicorn 을 기동합니다 (port {args.port}, "
+        f"provider={env.get('INTERIOR_AI_PROVIDER', 'mock')}) …"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.main:app",
+         "--port", str(args.port), "--log-level", "warning"],
+        cwd=str(SERVER_ROOT),
+        env=env,
+    )
+    if not wait_for_health(base_url, timeout=30.0):
+        proc.terminate()
+        raise SystemExit("uvicorn 기동 실패")
+    return base_url, proc
+
+
+def stop_server(proc: subprocess.Popen | None, keep: bool) -> None:
+    if proc is None or keep:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def print_summary(ok: bool) -> int:
+    passed = sum(1 for _, o, _ in STEPS if o)
+    print("\n" + "=" * 60)
+    print(f"결과: {passed}/{len(STEPS)} 단계 통과 — "
+          f"{'전체 흐름 검증 성공' if ok else '검증 실패'}")
+    print("=" * 60)
+    return 0 if ok else 1
+
+
+# ------------------------------------------------------------------------- 본 흐름
+
+def run_flow(
+    base_url: str,
+    image_path: Path,
+    out_dir: Path,
+    bbox: list[float],
+    object_type: str = "tv",
+) -> bool:
+    STEPS.clear()
+    client = httpx.Client(base_url=base_url, timeout=180.0)
     try:
         health = client.get("/health").json()
         record("GET /health", health.get("status") == "ok",
@@ -75,6 +172,7 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
         with Image.open(image_path) as im:
             width, height = im.size
         image_bytes = image_path.read_bytes()
+        record("입력 이미지", True, f"{image_path.name} {width}x{height}, bbox={bbox}")
 
         r = client.post("/scenes", json={"device": "e2e-script"})
         scene_id = r.json().get("scene_id", "")
@@ -83,8 +181,8 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
 
         r = client.post(
             f"/scenes/{scene_id}/keyframes",
-            files={"image": ("living_room.jpg", image_bytes, "image/jpeg")},
-            data={"meta": json.dumps(keyframe_meta(width, height))},
+            files={"image": (image_path.name, image_bytes, "image/jpeg")},
+            data={"meta": json.dumps(keyframe_meta(width, height, bbox, object_type))},
         )
         keyframe_id = r.json().get("keyframe_id", "")
         record("POST /keyframes (이미지 업로드 + 대표 이미지 저장)",
@@ -93,24 +191,25 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
         r = client.get(f"/scenes/{scene_id}/objects")
         objs = r.json()
         record("GET /objects (사물 정보 저장 확인)",
-               r.status_code == 200 and len(objs) == 1 and objs[0]["object_type"] == "tv",
+               r.status_code == 200 and len(objs) == 1
+               and objs[0]["object_type"] == object_type,
                f"{len(objs)}건")
 
+        target = {"type": "bbox", "rect": bbox}
         r = client.post(
             f"/scenes/{scene_id}/remove-object",
-            json={"keyframe_id": keyframe_id, "object_type": "tv",
-                  "target": {"type": "bbox", "rect": TV_BBOX}},
+            json={"keyframe_id": keyframe_id, "object_type": object_type, "target": target},
         )
         job_id = r.json().get("job_id", "")
         record("POST /remove-object", r.status_code == 202 and job_id.startswith("job_"), job_id)
 
         status, job = "", {}
-        for _ in range(60):
+        for _ in range(120):  # 최대 120초 (외부 AI 는 느릴 수 있음)
             job = client.get(f"/scenes/{scene_id}/jobs/{job_id}").json()
             status = job.get("status", "")
             if status in ("done", "failed"):
                 break
-            time.sleep(0.5)
+            time.sleep(1.0)
         record("GET /jobs/{id} 폴링 → done", status == "done",
                f"status={status}" + (f", error={job.get('error')}" if status == "failed" else ""))
         if status != "done":
@@ -133,29 +232,27 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
                and len(r.content) > 1000,
                f"{len(r.content)} bytes → {saved}")
 
+        result_img = None
         try:
             result_img = Image.open(io.BytesIO(r.content))
             dims = result_img.size
             result_img.load()
             record("결과 이미지가 유효한 JPEG + 원본과 같은 해상도",
-                   dims == (width, height), f"{dims}")
+                   dims == (width, height), f"결과 {dims} vs 원본 ({width}, {height})")
         except Exception as exc:  # noqa: BLE001
-            result_img = None
             record("결과 이미지가 유효한 JPEG + 원본과 같은 해상도", False, repr(exc))
 
         if result_img is not None:
-            bx = (int(TV_BBOX[0] * width), int(TV_BBOX[1] * height),
-                  int((TV_BBOX[0] + TV_BBOX[2]) * width),
-                  int((TV_BBOX[1] + TV_BBOX[3]) * height))
+            bx = (int(bbox[0] * width), int(bbox[1] * height),
+                  int((bbox[0] + bbox[2]) * width), int((bbox[1] + bbox[3]) * height))
             with Image.open(image_path) as src:
                 before = ImageStat.Stat(src.crop(bx).convert("L")).mean[0]
             after = ImageStat.Stat(result_img.crop(bx).convert("L")).mean[0]
-            record("TV 영역이 실제로 바뀜 (어두운 TV → 밝은 벽)",
-                   after > before + 40, f"밝기 {before:.0f} → {after:.0f}")
+            record("대상 영역이 실제로 바뀜",
+                   abs(after - before) > 10,
+                   f"밝기 {before:.0f} → {after:.0f} (mock 은 벽 색, 실제 AI 는 복원 결과)")
 
-        server_file = (
-            SERVER_ROOT / "data" / "scenes" / scene_id / "results" / f"{job_id}.jpg"
-        )
+        server_file = SERVER_ROOT / "data" / "scenes" / scene_id / "results" / f"{job_id}.jpg"
         if server_file.exists():
             record("서버 저장 파일 확인 (data/scenes/.../results/*.jpg)",
                    server_file.stat().st_size == len(r.content),
@@ -166,8 +263,7 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
 
         r = client.post(
             f"/scenes/{scene_id}/remove-object",
-            json={"keyframe_id": keyframe_id, "object_type": "tv",
-                  "target": {"type": "bbox", "rect": TV_BBOX}},
+            json={"keyframe_id": keyframe_id, "object_type": object_type, "target": target},
         )
         record("동일 요청 재호출 → 같은 job (캐시)",
                r.json().get("job_id") == job_id, r.json().get("job_id", ""))
@@ -179,18 +275,10 @@ def run_flow(base_url: str, image_path: Path, out_dir: Path) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Interior AR 서버 E2E 검증")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--image", default=str(SERVER_ROOT / "testdata" / "living_room.jpg"))
-    parser.add_argument("--out-dir", default=str(Path(__file__).resolve().parent / "_out"))
-    parser.add_argument("--no-start", action="store_true", help="서버 자동 기동 안 함")
-    parser.add_argument("--keep-server", action="store_true",
-                        help="검증 후 자동 기동한 서버를 끄지 않음")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--ai-provider", choices=["mock", "external"],
-                        help="자동 기동하는 서버의 INTERIOR_AI_PROVIDER 를 덮어쓴다")
-    parser.add_argument("--ai-api-key",
-                        help="자동 기동하는 서버의 INTERIOR_AI_API_KEY (Gemini 키). "
-                             "생략하면 .env / 환경변수를 그대로 쓴다")
+    parser.add_argument("--bbox", type=parse_bbox, default=list(TV_BBOX),
+                        help="'x,y,w,h' (0~1). 생략하면 합성 이미지의 TV 위치")
+    add_server_args(parser)
     args = parser.parse_args()
 
     image_path = Path(args.image)
@@ -198,49 +286,12 @@ def main() -> int:
         build_living_room(image_path)
         print(f"테스트 이미지 생성: {image_path}")
 
-    proc: subprocess.Popen | None = None
-    base_url = args.base_url
-    if not wait_for_health(base_url, timeout=1.5):
-        if args.no_start:
-            print(f"서버에 연결할 수 없습니다: {base_url} (--no-start)")
-            return 2
-        base_url = f"http://127.0.0.1:{args.port}"
-        env = os.environ.copy()
-        if args.ai_provider:
-            env["INTERIOR_AI_PROVIDER"] = args.ai_provider
-        if args.ai_api_key:
-            env["INTERIOR_AI_API_KEY"] = args.ai_api_key
-        print(
-            f"서버가 없어 uvicorn 을 기동합니다 (port {args.port}, "
-            f"provider={env.get('INTERIOR_AI_PROVIDER', 'mock')}) …"
-        )
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app",
-             "--port", str(args.port), "--log-level", "warning"],
-            cwd=str(SERVER_ROOT),
-            env=env,
-        )
-        if not wait_for_health(base_url, timeout=30.0):
-            print("uvicorn 기동 실패")
-            proc.terminate()
-            return 2
-
+    base_url, proc = ensure_server(args)
     try:
-        ok = run_flow(base_url, image_path, Path(args.out_dir))
+        ok = run_flow(base_url, image_path, Path(args.out_dir), list(args.bbox))
     finally:
-        if proc is not None and not args.keep_server:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-
-    passed = sum(1 for _, o, _ in STEPS if o)
-    print("\n" + "=" * 60)
-    print(f"결과: {passed}/{len(STEPS)} 단계 통과 — "
-          f"{'전체 흐름 검증 성공' if ok else '검증 실패'}")
-    print("=" * 60)
-    return 0 if ok else 1
+        stop_server(proc, args.keep_server)
+    return print_summary(ok)
 
 
 if __name__ == "__main__":
