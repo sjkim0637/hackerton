@@ -205,8 +205,8 @@
             android:text="" />
     </LinearLayout>
 
-    <!-- PHASE 4: 삭제한 사물을 다른 위치로 "이동" 하는 패널. 삭제 완료 시 나타난다.
-         "여기로 옮기기" → 새 지점 탭 → 원래 사물 이미지가 그 자리에 나타남. -->
+    <!-- PHASE 4/5: 삭제한 사물을 이동하는 패널. 삭제 완료 시 나타나고, 마커가 바로 떠서
+         손가락으로 끌어 옮긴다("여기로 옮기기" 버튼 없음). -->
     <LinearLayout
         android:id="@+id/movedObjectPanel"
         android:layout_width="wrap_content"
@@ -225,16 +225,9 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/btnMovedPlace"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="여기로 옮기기" />
-
-            <Button
                 android:id="@+id/btnMovedHome"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:text="원위치" />
 
             <Button

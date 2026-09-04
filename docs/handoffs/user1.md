@@ -13,6 +13,33 @@ shinym87 (실기기 연결·검증 단계에서 이어서 진행)
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
 
+## PHASE 5 — "여기로 옮기기" 를 즉시 드래그로 개선 (2026-09-04)
+
+버튼 → 탭 → 배치 → 드래그(간접적)를, **삭제 완료 즉시 마커를 끌어 옮기는** 직접
+조작으로 바꿨다. `MovedObjectController`.
+
+1. **"여기로 옮기기" 버튼 제거 · 삭제 완료 시 자동으로 이동 가능 상태**
+   - `arm()` 이 곧바로 `placeMarkerNow()` 로 삭제된 자리에 마커를 띄운다:
+     `originalPose`(= 삭제 시점 벽/바닥 앵커 pose)가 있으면 그 자리, 없으면
+     `source_region` 중심을 화면에서 `hitTestPreferring` 한 자리.
+   - 삭제 직후 평면이 아직 없으면 `awaitingPlane=true` → `MainActivity.space.onFrame` 에
+     추가한 `moved.onFrame()` 이 평면 인식되는 즉시 마커를 띄운다.
+   - `placing` 모드 / `onTap()` 배치 경로 삭제. 탭은 그대로 큐브/카탈로그 몫
+     (`MainActivity` 의 `onSingleTapConfirmed` 에서 `moved.onTap` 제거).
+2. **손 떼는 순간 최종 배치** — 기존 `onDragBegin/onDrag/onDragEnd` 재사용.
+   `onDragEnd` 가 손 뗀 pose 로 새 앵커를 만들어 재고정(`updateAnchorPose=true`) +
+   500ms 디바운스 `POST /placements`. (큐브 `finalizeDrag` 와 동일 로직.)
+   `canManipulate()` 에서 `!placing` 조건 제거 → 마커가 뜬 직후 바로 드래그 가능.
+3. **마커를 터치하기 쉽게 조금 크게** — `applyChildTransforms()` 에서
+   `imageNode.scale = Scale(scaleF * MARKER_SCALE)` (`MARKER_SCALE = 1.35f`).
+   서버에 저장하는 `scale` 은 `scaleF`(마커 확대는 표시용, 저장 안 함). 라벨은
+   "<종류> · 끌어 옮기기".
+4. **"원위치" / "실행 취소" 유지** — `btnMovedHome`(원위치: 삭제된 자리로 되돌림),
+   `btnMovedUndo`(실행 취소). "치우기"·"서버 배치 복원" 도 그대로.
+
+빌드: `:app:assembleDebug` 성공. 실기기 확인 남음: 마커가 삭제 자리에 뜨는지,
+드래그 추적감, 마커 크기(터치 편의) — 필요하면 `MARKER_SCALE` 조정.
+
 ## PHASE 5 — 서버 카탈로그에서 새 가구 배치 (2026-09-03)
 
 지금까지 빈 평면을 탭하면 이름/크기를 직접 입력해 큐브를 만들었다. 이번엔 **서버
@@ -123,6 +150,9 @@ PHASE 1 + PHASE 2 + PHASE 3 + PHASE 4 + PHASE 5 "사용자 1 (공간 / AR)".
 ---
 
 ## PHASE 4 — 삭제한 사물을 다른 위치로 "이동" (개념 증명) (2026-09-03)
+
+> ⚠️ 아래 "여기로 옮기기" 버튼/`placing`/`onTap` 흐름은 **PHASE 5 (2026-09-04) 에서
+> "삭제 즉시 마커 드래그" 로 대체됨** — 위쪽 최신 섹션 참고. 이하는 초기 구현 기록.
 
 지금까지 "삭제"만 하던 걸, 삭제한 사물을 **새 위치로 옮겨** "지운 자리 + 새 자리"
 두 곳에서 흔적을 보게 했다. 완벽한 3D 재배치가 아니라 개념 증명 수준.
@@ -325,7 +355,7 @@ experiments/shinym87/interior/app/src/main/
    └─ remove/
       ├─ BboxSelectionView.kt                  드래그로 사각형 지정, clear() 로 지움
       ├─ InteriorApiClient.kt                  HttpURLConnection + org.json (createPlacement(source/catalogItemId)/listPlacements/getCatalog(Item)/undoPlacement)
-      ├─ MovedObjectController.kt              PHASE 4: 이동(탭/드래그/핀치/회전, 벽·바닥 자동) + placements 저장·복원·undo
+      ├─ MovedObjectController.kt              PHASE 4/5: 삭제 즉시 뜨는 마커를 끌어 이동(핀치/회전, 벽·바닥 자동) + placements 저장·복원·undo
       └─ RemovalController.kt                  서버주소(serverBaseUrl)·사물종류(필수)·선택취소·캡처·메타·플로우·결과 quad·전/후·원래위치+scene/job 전달
 ```
 

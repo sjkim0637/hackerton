@@ -9,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
@@ -28,17 +27,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * PHASE 4 사용자 1 — 삭제한 사물을 **다른 위치로 이동**, 그리고 그 상태를 **서버에 저장/복원**.
+ * PHASE 4/5 사용자 1 — 삭제한 사물을 **바로 드래그해서 다른 위치로 이동**, 서버에 저장/복원.
  *
- * 삭제가 끝나면 [arm] 으로 "이동할 사물"(scene/job, 원래 위치, 캡처 이미지, 종류)을 기억한다.
- * "여기로 옮기기" → 새 지점 탭 → 원래 사물을 그 자리에 다시 띄운다.
+ * 삭제가 끝나면 [arm] 이 곧바로 삭제된 자리 근처에 **사물 마커**(캡처 이미지 quad, 터치하기
+ * 쉽게 조금 크게)를 띄운다. 그 마커를 손가락으로 끌면 실시간 hitTest 로 따라오고, 떼는 순간
+ * ([onDragEnd]) 그 자리에 최종 배치된다("여기로 옮기기" 버튼/탭 단계 없음).
+ *
  * 배치/드래그/회전/크기 변경이 잦아들면(디바운스) `POST /scenes/{id}/placements` 로 저장한다.
- * "서버 배치 복원" 은 `GET .../placements` 의 마지막 active 를 받아, pose 대신
- * `source_region` + plane 을 기준으로 **현재 세션에서 다시 hitTest** 해 재배치한다.
- * "실행 취소" 는 `POST .../placements/undo` 후 화면에서도 그 배치를 없앤다.
- *
- * 큐브 배치와 같은 방식(탭 배치·드래그 이동·핀치/＋－ 크기·회전 버튼)을 재사용하되
- * 표시는 캡처한 사물 이미지 quad 다. 사물 종류로 벽(TV·선반)/바닥 자동 맞춤.
+ * "원위치" 는 삭제된 자리로 되돌리고, "서버 배치 복원" 은 `GET .../placements` 로,
+ * "실행 취소" 는 `POST .../placements/undo` 로 처리한다.
  */
 class MovedObjectController(
     private val activity: Activity,
@@ -60,8 +57,9 @@ class MovedObjectController(
     private val saveDebounce = Runnable { savePlacementNow() }
 
     private var armed = false
-    private var placing = false
     private var dragging = false
+    /** 마커를 아직 못 띄운 상태(평면 미인식). onFrame 에서 계속 재시도한다. */
+    private var awaitingPlane = false
 
     private var currentSceneId: String? = null
     private var currentJobId: String? = null
@@ -81,7 +79,6 @@ class MovedObjectController(
     private var onVertical = false
 
     init {
-        binding.btnMovedPlace.setOnClickListener { startPlacing() }
         binding.btnMovedHome.setOnClickListener { placeAtOriginal() }
         binding.btnMovedRestore.setOnClickListener { restoreFromServer() }
         binding.btnMovedUndo.setOnClickListener { undoOnServer() }
@@ -95,7 +92,7 @@ class MovedObjectController(
         currentJobId = prefs.getString(KEY_LAST_JOB, null)
         if (currentSceneId != null) {
             binding.movedObjectPanel.visibility = View.VISIBLE
-            enableButtons(place = false, home = false, adjust = false, restore = true, undo = true, clear = false)
+            enableButtons(home = false, adjust = false, restore = true, undo = true, clear = false)
             status("이전 세션 배치가 있습니다 · 평면 인식 후 '서버 배치 복원'을 누르세요")
         }
     }
@@ -105,7 +102,7 @@ class MovedObjectController(
 
     // ------------------------------------------------------------- arm / disarm
 
-    /** 삭제 완료 시점에 호출. 이동할 사물 정보를 기억하고 이동 패널을 연다. */
+    /** 삭제 완료 시점에 호출. 이동할 사물을 기억하고 **바로 드래그 가능한 마커**를 띄운다. */
     fun arm(
         sceneId: String,
         jobId: String?,
@@ -128,23 +125,29 @@ class MovedObjectController(
         this.scaleF = 1f
         this.rotDeg = 0f
         armed = true
+        awaitingPlane = false
         prefs.edit().putString(KEY_LAST_SCENE, sceneId).putString(KEY_LAST_JOB, jobId).apply()
         binding.movedObjectPanel.visibility = View.VISIBLE
         enableButtons(
-            place = true, home = originalPose != null, adjust = false,
+            home = originalPose != null, adjust = false,
             restore = true, undo = true, clear = true,
         )
         originalPose?.let {
             Log.d(TAG, "원래 위치 저장: t=(%.3f, %.3f, %.3f)".format(it.tx(), it.ty(), it.tz()))
         }
-        status("삭제 완료 · '여기로 옮기기'로 ${label()}을(를) 새 위치에 놓을 수 있어요")
+        if (placeMarkerNow()) {
+            status("삭제 완료 · ${label()} 마커를 손가락으로 끌어 옮기세요 (놓으면 그 자리에 배치)")
+        } else {
+            awaitingPlane = true
+            status("삭제 완료 · 평면이 인식되면 ${label()} 마커가 나타납니다 · 끌어서 옮기세요")
+        }
     }
 
     /** 전체 정리 (선택 취소 시). 서버 복원 정보까지 지운다. */
     fun disarm() {
         clearMovedNode()
         armed = false
-        placing = false
+        awaitingPlane = false
         currentSceneId = null
         currentJobId = null
         sourceRect = null
@@ -154,13 +157,35 @@ class MovedObjectController(
         binding.movedObjectPanel.visibility = View.GONE
     }
 
+    /** 매 프레임(MainActivity space.onFrame). 마커를 아직 못 띄웠으면 평면 인식되는 대로 띄운다. */
+    fun onFrame() {
+        if (!armed || node != null || !awaitingPlane) return
+        if (placeMarkerNow()) {
+            awaitingPlane = false
+            status("${label()} 마커를 손가락으로 끌어 옮기세요")
+        }
+    }
+
     // ------------------------------------------------------------------- 배치
 
-    private fun startPlacing() {
-        if (currentSceneId == null) return
-        armed = true
-        placing = true
-        status("옮길 위치를 탭하세요 · ${label()}은(는) ${if (wantsWall()) "벽" else "바닥"}에 맞춰 붙습니다")
+    /** 삭제된 자리(원래 pose, 없으면 source_region 중심 hitTest)에 마커를 띄운다. */
+    private fun placeMarkerNow(): Boolean {
+        val pose = originalPose
+        if (pose != null) {
+            val anchor = runCatching { sceneView.session?.createAnchor(pose) }.getOrNull() ?: return false
+            setNode(anchor, onVertical = wantsWall())
+            return true
+        }
+        val src = sourceRect ?: return false
+        if (sceneView.width == 0 || sceneView.height == 0) return false
+        val cx = (src[0] + src[2] / 2f) * sceneView.width
+        val cy = (src[1] + src[3] / 2f) * sceneView.height
+        val hit = space.hitTestPreferring(cx, cy, wantsWall()) ?: return false
+        val anchor = hit.createAnchorOrNull()
+            ?: runCatching { sceneView.session?.createAnchor(hit.hitPose) }.getOrNull()
+            ?: return false
+        setNode(anchor, (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL)
+        return true
     }
 
     private fun placeAtOriginal() {
@@ -170,44 +195,12 @@ class MovedObjectController(
             status("원위치 앵커를 만들지 못했습니다")
             return
         }
-        placing = false
         setNode(anchor, onVertical = wantsWall())
         scheduleSave()
-        status("${label()}을(를) 원래 위치에 되돌렸습니다")
+        status("${label()}을(를) 삭제된 자리로 되돌렸습니다")
     }
 
-    /** MainActivity 탭 제스처에서 먼저 호출. 처리했으면 true (큐브 쪽으로 안 넘어감). */
-    fun onTap(xPx: Float, yPx: Float): Boolean {
-        if (!armed || !placing) return false
-        val wantWall = wantsWall()
-        val hit = space.hitTestPreferring(xPx, yPx, wantWall)
-        if (hit == null) {
-            status("여기선 평면을 못 찾았어요 · 격자가 보이는 ${if (wantWall) "벽" else "바닥"}을 탭하세요")
-            return true
-        }
-        val hitVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
-        val anchor = hit.createAnchorOrNull()
-            ?: runCatching { sceneView.session?.createAnchor(hit.hitPose) }.getOrNull()
-        if (anchor == null) {
-            status("앵커 생성 실패 · 다른 지점을 탭하세요")
-            return true
-        }
-        placing = false
-        setNode(anchor, hitVertical)
-        scheduleSave()
-        if (hitVertical != wantWall) {
-            Toast.makeText(
-                activity,
-                "${label()}은(는) ${if (wantWall) "벽" else "바닥"}이 어울리지만 지금은 " +
-                    "${if (hitVertical) "벽" else "바닥"}에 붙였어요",
-                Toast.LENGTH_SHORT,
-            ).show()
-        }
-        status("${label()} 이동 완료 · ＋－ 크기 · 회전 · 드래그로 조정 (변경은 서버에 저장됩니다)")
-        return true
-    }
-
-    // ------------------------------------------------- 드래그 이동 (큐브와 동일 방식)
+    // --------------------------------------------- 드래그 이동 (큐브와 동일 방식)
 
     fun onDragBegin(xPx: Float, yPx: Float): Boolean {
         if (!canManipulate()) return false
@@ -230,6 +223,7 @@ class MovedObjectController(
         if (!dragging) return false
         dragging = false
         val n = node ?: return true
+        // 손을 뗀 위치에 최종 고정: 새 앵커로 재고정 (큐브 finalizeDrag 와 동일).
         val fresh = runCatching { sceneView.session?.createAnchor(n.pose) }.getOrNull()
         if (fresh != null) {
             runCatching { n.anchor.detach() }
@@ -249,7 +243,7 @@ class MovedObjectController(
     }
 
     private fun canManipulate(): Boolean =
-        armed && node != null && !placing && !furnitureHasSelection()
+        armed && node != null && !furnitureHasSelection()
 
     private fun bump(factor: Float) {
         if (node == null) return
@@ -338,8 +332,9 @@ class MovedObjectController(
             currentJobId = jid
             objectBitmap = (bmp ?: placeholderBitmap()).let { EdgeFade.feather(downscale(it)) }
             armed = true
+            awaitingPlane = false
             binding.movedObjectPanel.visibility = View.VISIBLE
-            enableButtons(place = true, home = false, adjust = false, restore = true, undo = true, clear = true)
+            enableButtons(home = false, adjust = false, restore = true, undo = true, clear = true)
 
             // pose 는 세션 로컬이라 못 쓴다 → source_region 중심을 현재 화면에서 다시 hitTest.
             val src = plc.sourceRect
@@ -363,7 +358,7 @@ class MovedObjectController(
                 return@launch
             }
             setNode(anchor, hitVertical)   // 복원은 다시 저장하지 않는다
-            status("서버 배치 복원 완료 · 드래그/회전/크기로 조정하면 다시 저장됩니다")
+            status("서버 배치 복원 완료 · 마커를 끌어서 위치를 다듬으면 다시 저장됩니다")
         }
     }
 
@@ -376,7 +371,6 @@ class MovedObjectController(
                 if (ok) {
                     handler.removeCallbacks(saveDebounce)   // 취소 직전 예약된 저장은 버린다
                     clearMovedNode()
-                    placing = false
                     status("실행 취소됨 · 서버 배치 1건 취소")
                 } else {
                     status("취소할 배치가 없습니다")
@@ -401,7 +395,7 @@ class MovedObjectController(
 
         val lbl = ImageNode(
             materialLoader = sceneView.materialLoader,
-            bitmap = LabelRenderer.make("여기로 옮김 · ${label()}"),
+            bitmap = LabelRenderer.make("${label()} · 끌어 옮기기"),
             size = Size(LABEL_W, LABEL_W * 0.34f),
         ).apply { isTouchable = false }
 
@@ -416,16 +410,18 @@ class MovedObjectController(
         node = n
         imageNode = img
         labelNode = lbl
-        enableButtons(place = true, home = originalPose != null, adjust = true, restore = true, undo = true, clear = true)
+        awaitingPlane = false
+        enableButtons(home = originalPose != null, adjust = true, restore = true, undo = true, clear = true)
         applyChildTransforms()
-        Log.d(TAG, "이동 배치: type=$objectType vertical=$onVertical pose=${anchor.pose}")
+        Log.d(TAG, "이동 마커: type=$objectType vertical=$onVertical pose=${anchor.pose}")
     }
 
-    /** 자식(이미지/라벨)의 회전·배율·오프셋을 평면 종류에 맞춰 다시 잡는다. */
+    /** 자식(이미지/라벨)의 회전·배율·오프셋을 잡는다. 마커는 터치하기 쉽게 조금 크게 보인다. */
     private fun applyChildTransforms() {
-        val h = baseH * scaleF
+        val disp = scaleF * MARKER_SCALE
+        val h = baseH * disp
         imageNode?.let {
-            it.scale = Scale(scaleF)
+            it.scale = Scale(disp)
             it.rotation = if (onVertical) Rotation(-90f, 0f, rotDeg) else Rotation(0f, rotDeg, 0f)
         }
         labelNode?.let {
@@ -446,17 +442,12 @@ class MovedObjectController(
         labelNode = null
         dragging = false
         val hasScene = currentSceneId != null
-        enableButtons(
-            place = hasScene, home = false, adjust = false,
-            restore = hasScene, undo = hasScene, clear = false,
-        )
+        enableButtons(home = false, adjust = false, restore = hasScene, undo = hasScene, clear = false)
     }
 
     private fun enableButtons(
-        place: Boolean, home: Boolean, adjust: Boolean,
-        restore: Boolean, undo: Boolean, clear: Boolean,
+        home: Boolean, adjust: Boolean, restore: Boolean, undo: Boolean, clear: Boolean,
     ) {
-        binding.btnMovedPlace.isEnabled = place
         binding.btnMovedHome.isEnabled = home
         binding.btnMovedRestore.isEnabled = restore
         binding.btnMovedUndo.isEnabled = undo
@@ -490,6 +481,8 @@ class MovedObjectController(
         const val LABEL_W = 0.12f
         const val LABEL_GAP = 0.06f
         const val SAVE_DEBOUNCE_MS = 500L
+        /** 마커를 실제 크기보다 이만큼 크게 그려 손가락으로 잡기 쉽게 한다. */
+        const val MARKER_SCALE = 1.35f
         const val KEY_LAST_SCENE = "moved_last_scene"
         const val KEY_LAST_JOB = "moved_last_job"
         val OBJECT_LABELS = mapOf(

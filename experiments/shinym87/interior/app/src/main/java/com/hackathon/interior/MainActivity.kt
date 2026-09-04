@@ -125,12 +125,13 @@ class MainActivity : AppCompatActivity() {
         space.onFrame = {
             furniture.billboard()
             removal.onFrame()   // 결과 quad 를 벽 앵커에 스무딩해서 고정
+            moved.onFrame()     // 평면 인식되면 이동 마커를 띄운다
         }
         space.isIdle = { furniture.isIdle() }
 
-        // 이동된 사물이 제스처를 먼저 볼 기회를 준다(처리하면 true → 큐브로 안 넘어감).
+        // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
         sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { me, node -> if (!moved.onTap(me.x, me.y)) furniture.handleTap(me, node) },
+            onSingleTapConfirmed = { me, node -> furniture.handleTap(me, node) },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
             onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
             onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },

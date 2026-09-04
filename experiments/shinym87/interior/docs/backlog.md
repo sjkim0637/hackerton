@@ -109,6 +109,10 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   + `catalog_item_id` 컬럼(기존 행은 removed_object 로 ALTER 가드), `POST /placements` 분기
   (catalog 면 catalog_item_id 필수·존재 검증), `GET /placements` 응답에 `source` 포함.
   `pytest` 47개. 앱 연동은 사용자 1 TODO(`docs/handoffs/user1.md`). `docs/handoffs/user3.md`.
+- [DONE] 사용자 1: "여기로 옮기기" 를 즉시 드래그로 개선 — 버튼/`placing`/`onTap` 제거,
+  `arm()` 이 삭제 자리에 마커를 바로 띄우고(`placeMarkerNow`, 평면 없으면 `onFrame` 재시도)
+  손가락으로 끌어 옮김. 손 떼면 `onDragEnd` 로 최종 배치(+ 500ms 디바운스 저장). 마커는
+  `MARKER_SCALE=1.35` 로 조금 크게. "원위치"/"실행 취소" 유지. `docs/handoffs/user1.md`.
 - [DONE] 사용자 1: 카탈로그 배치를 placements API 에 연동. `FurnitureController.ensureCatalogScene`
   ("가구 추가" 최초 createScene), 배치/드래그/회전/크기 후 500ms 디바운스 `POST /placements`
   (`source="catalog"`, `catalog_item_id`), `restoreCatalogFromServer`(catalog_item_id 별 최신
