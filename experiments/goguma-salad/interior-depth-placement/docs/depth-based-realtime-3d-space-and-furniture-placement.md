@@ -10,7 +10,9 @@
 
 ### 2.1 RGB 영상에 거리 정보를 더한다
 
-일반 카메라의 RGB 영상은 물체의 색과 모양은 보여주지만, 카메라에서 물체까지의 실제 거리는 직접 알려주지 않는다. Depth image는 RGB 영상과 대응하는 각 pixel에 거리값을 기록한다. 예를 들어 한 pixel의 값이 `650mm`라면 그 방향의 표면이 카메라에서 약 `0.65m` 떨어져 있다는 뜻이다.
+일반 카메라의 RGB 영상은 물체의 색과 모양은 보여주지만, 카메라에서 물체까지의 깊이는 직접 알려주지 않는다. **Depth 이미지의 각 pixel에는 카메라 영상면에서 해당 지점까지 광축 방향으로 투영한 실제 깊이 `Z`가 millimeter 단위로 들어 있다.** 예를 들어 한 pixel의 값이 `650mm`라면 그 지점의 `Z` 깊이는 `0.65m`이다.
+
+여기서 `Z`는 카메라 중심과 3D 지점을 잇는 대각선 직선거리 `sqrt(X² + Y² + Z²)`가 아니다. 화면 중심에서는 두 값이 거의 같지만 가장자리로 갈수록 직선거리가 더 길어진다. ARCore도 Depth pixel 값을 관측점까지의 vector를 camera principal axis에 투영한 길이로 정의한다. 자세한 정의는 [ARCore Depth 개발자 가이드](https://developers.google.com/ar/develop/java/depth/developer-guide)를 따른다.
 
 따라서 RGB와 Depth를 겹치면 “무엇이 보이는가”와 “얼마나 떨어져 있는가”를 한 화면에서 함께 판단할 수 있다.
 
@@ -66,7 +68,7 @@ flowchart LR
 
 | 입력 | 단위·형식 | 용도 |
 |---|---|---|
-| `depthMillimeters` | Depth16, mm | 각 pixel에서 카메라까지의 거리 |
+| `depthMillimeters` | Depth16, mm | 각 pixel 지점의 camera principal axis 기준 `Z` 깊이 |
 | `confidence` | `0.0..1.0`, 선택 | 신뢰도가 낮은 Depth 제거 |
 | `CameraIntrinsics` | `fx`, `fy`, `cx`, `cy` | 2D Depth pixel을 camera-space 3D로 변환 |
 | `CameraPose` | 4×4 transform | camera-space를 ARCore world-space로 변환 |
@@ -76,7 +78,7 @@ ARCore에서는 가능한 경우 주변 pixel과 motion 정보를 보완한 `AUT
 
 ## 5. Depth pixel의 3D 좌표 변환
 
-Depth pixel `(u, v)`와 거리 `z`를 meter로 바꾼 뒤 pinhole camera model을 적용한다.
+Depth pixel `(u, v)`의 광축 기준 깊이 `z`를 meter로 바꾼 뒤 pinhole camera model을 적용한다.
 
 ```text
 z = depthMillimeters / 1000
