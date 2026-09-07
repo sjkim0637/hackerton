@@ -16,7 +16,7 @@ data class Vec3(val x: Float, val y: Float, val z: Float) {
     companion object { val UP = Vec3(0f, 1f, 0f) }
 }
 
-internal data class PointSample(val position: Vec3, val u: Int, val v: Int, val confidence: Float)
+internal data class PointSample(val position: Vec3, val u: Int, val v: Int, val confidence: Float, val depthMeters: Float = position.length())
 internal data class PlaneFit(val center: Vec3, val normal: Vec3, val meanError: Float)
 
 internal object LocalSurfaceEstimator {

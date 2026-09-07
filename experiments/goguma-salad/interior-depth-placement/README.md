@@ -83,12 +83,12 @@ if (result.isValid) {
 ## Test App
 
 - Main: sensor/stream, resolution, FPS, point count, intrinsics, timestamp 차이, rolling 5초 처리시간
-- Point Cloud Test: 실시간 dense 3D point cloud, 높이별 파랑→초록→노랑→빨강 색상, drag orbit, pinch zoom, reset, freeze, 객체 preset, placement 결과
-- Point Cloud Test 하단: Point Cloud와 같은 AR frame에서 얻은 실제 카메라 미리보기
+- Point Cloud Test: 실제 카메라 전체 화면 위에 같은 frame의 Depth sample을 가까움(빨강)→멀리(파랑) 색점으로 직접 투영
+- RGB 윤곽과 Depth 점의 정합을 즉시 비교하며 `Freeze`, `Points ON/OFF`, 객체 preset과 placement 결과를 확인
 - Settings: 첫 화면은 `안정 / 균형 / 디테일` preset만 제공하며 전문 threshold는 접힌 `세부 설정`에서 조절
 - 설정은 `SharedPreferences`에 로컬 저장되며 `Reset to Default`로 복원된다.
 
-정상 동작이면 Point Cloud 화면 상단에 벽·바닥·가구의 깊이 차이가 색점 윤곽으로 보이고, 하단 카메라 화면과 움직임 방향이 일치한다. `Points`가 계속 0이면 Depth 미지원 또는 AR tracking 준비 중이며, `Depth FPS`가 증가하지만 형태가 거칠면 Settings에서 `디테일`을 선택한다.
+정상 동작이면 실제 카메라 속 벽·바닥·가구의 모서리 위에 Depth 색점이 겹친다. RGB 모서리와 점의 위치가 어긋나면 좌표 정합 문제이고, 점은 맞지만 듬성듬성하면 sampling 문제이므로 Settings에서 `디테일`을 선택한다. `Points`가 계속 0이면 Depth 미지원 또는 AR tracking 준비 중이다.
 
 앱 Manifest에는 `INTERNET` 권한이 없다. 핵심 동작은 Wi-Fi와 Mobile Data 없이 실행된다.
 

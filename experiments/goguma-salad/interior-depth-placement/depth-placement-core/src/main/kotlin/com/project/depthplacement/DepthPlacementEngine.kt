@@ -50,13 +50,18 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         val started = System.nanoTime()
         val points = generatePoints(frame, cfg)
         val packed = FloatArray(points.size * 4)
+        val imagePoints = FloatArray(points.size * 4)
         points.forEachIndexed { i, point ->
             packed[i * 4] = point.position.x
             packed[i * 4 + 1] = point.position.y
             packed[i * 4 + 2] = point.position.z
             packed[i * 4 + 3] = point.confidence
+            imagePoints[i * 4] = point.u.toFloat()
+            imagePoints[i * 4 + 1] = point.v.toFloat()
+            imagePoints[i * 4 + 2] = point.depthMeters
+            imagePoints[i * 4 + 3] = point.confidence
         }
-        val snapshot = PointCloudSnapshot(packed, points.size, frame.timestampNanos, sourceWidth = frame.width, sourceHeight = frame.height)
+        val snapshot = PointCloudSnapshot(packed, imagePoints, points.size, frame.timestampNanos, sourceWidth = frame.width, sourceHeight = frame.height)
         latest.set(FrameState(frame, points, snapshot))
         lastProcessedNanos = frame.timestampNanos
         metricWindow.addFrame(frame.timestampNanos, (System.nanoTime() - started) / 1e6, points.size, points.size.toDouble() / (frame.width * frame.height))
@@ -86,7 +91,7 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
                 val cameraX = (u - frame.intrinsics.cx) * depth / frame.intrinsics.fx
                 val cameraY = (frame.intrinsics.cy - v) * depth / frame.intrinsics.fy
                 val world = frame.cameraPose.transform(cameraX, cameraY, -depth)
-                result += PointSample(world, u, v, confidence)
+                result += PointSample(world, u, v, confidence, depth)
             }
         }
         previousDepth = smoothed

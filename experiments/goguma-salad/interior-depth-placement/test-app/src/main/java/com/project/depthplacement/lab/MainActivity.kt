@@ -15,7 +15,6 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -37,6 +36,7 @@ import com.project.depthplacement.SensitivityPreset
 import com.project.depthplacement.applyTo
 import com.project.depthplacement.arcore.ArCoreDepthAdapter
 import com.project.depthplacement.debug.DebugRenderConfig
+import com.project.depthplacement.debug.DepthProjectionView
 import com.project.depthplacement.debug.PointCloudView
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -46,7 +46,6 @@ private enum class EasyPreset { STABLE, BALANCED, DETAIL }
 class MainActivity : AppCompatActivity() {
     private lateinit var root: LinearLayout
     private lateinit var content: FrameLayout
-    private lateinit var viewer: PointCloudView
     private lateinit var depthSurface: PointCloudView
     private lateinit var store: ConfigStore
     private lateinit var engine: DepthPlacementEngine
@@ -62,7 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var wantsDepth = false
     private var installRequested = false
     private var lastResult: PlacementResult? = null
-    @Volatile private var cameraPreviewView: ImageView? = null
+    @Volatile private var projectionView: DepthProjectionView? = null
     private var lastPreviewTimestampNanos = 0L
     private var lastDiagnosticTimestampNanos = 0L
     private var displayGeometryKey = ""
@@ -98,7 +97,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMain() {
-        cameraPreviewView = null
+        projectionView = null
         val page = verticalScroll()
         page.addView(title("Depth Placement Lab"))
         page.addView(text("온디바이스 ARCore Depth → Point Cloud → Placement"))
@@ -132,20 +131,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun showPointCloud() {
         val frame = FrameLayout(this)
-        viewer = PointCloudView(this).apply {
-            updateRenderConfig(renderConfig)
-            onPlacementTap = { x, y ->
-                engine.getLatestPointCloud()?.let { snapshot ->
-                    lastResult = engine.evaluatePlacement(x * snapshot.sourceWidth, y * snapshot.sourceHeight, objectSize)
-                    submitPlacement(lastResult, objectSize)
-                }
+        val projected = DepthProjectionView(this).apply {
+            setPointSize(renderConfig.pointSize)
+            onDepthTap = { u, v ->
+                lastResult = engine.evaluatePlacement(u, v, objectSize)
             }
         }
-        frame.addView(viewer, FrameLayout.LayoutParams(-1, -1))
+        projectionView = projected
+        frame.addView(projected, FrameLayout.LayoutParams(-1, -1))
         val hud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12); setBackgroundColor(0x990B1020.toInt()) }
         val metricsText = text("Waiting for depth…")
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
-        hud.addView(metricsText); hud.addView(text("높이 색상  낮음 ■ 파랑 → 초록 → 노랑 → 빨강 ■ 높음")); hud.addView(resultText)
+        hud.addView(metricsText); hud.addView(text("RGB 실화면 + Depth 직접 투영  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(resultText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -157,31 +154,17 @@ class MainActivity : AppCompatActivity() {
             } }
         }
         hud.addView(preset)
-        hud.addView(buttonRow(button("Reset View") { viewer.resetView() }, button("Freeze") { viewer.setFrozen(!viewer.isFrozen()) }))
+        hud.addView(buttonRow(
+            button("Freeze") { projected.setFrozen(!projected.isFrozen()) },
+            button("Points ON/OFF") { projected.setOverlayEnabled(!projected.isOverlayEnabled()) },
+        ))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
-        val preview = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.BLACK)
-            contentDescription = "실시간 카메라 미리보기"
-        }
-        cameraPreviewView = preview
-        val previewPanel = FrameLayout(this).apply {
-            setPadding(dp(2), dp(2), dp(2), dp(2))
-            setBackgroundColor(Color.rgb(73, 214, 255))
-            addView(preview, FrameLayout.LayoutParams(-1, -1))
-            addView(text("LIVE CAMERA · Point Cloud와 같은 시점").apply {
-                setBackgroundColor(0xAA000000.toInt()); setPadding(dp(8), dp(4), dp(8), dp(4))
-            }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
-        }
-        frame.addView(previewPanel, FrameLayout.LayoutParams(-1, dp(190), Gravity.BOTTOM).apply {
-            leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(10)
-        })
         content.removeAllViews(); content.addView(frame)
         if (!streamRunning) startDepth()
         fun refresh() {
             if (!frame.isAttachedToWindow) return
-            val metrics = engine.getMetrics(); viewer.submit(engine.getLatestPointCloud())
-            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  Render FPS ${f(viewer.renderFps)}  ·  Points ${metrics.pointCount}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
+            val metrics = engine.getMetrics(); projected.submit(engine.getLatestPointCloud())
+            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  Points ${metrics.pointCount}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
             resultText.text = lastResult?.let { "${if (it.isValid) "VALID" else "NO: ${it.failureReason}"}  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}" } ?: "화면을 탭하면 배치를 평가합니다."
             handler.postDelayed(::refresh, 100)
         }
@@ -189,7 +172,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
-        cameraPreviewView = null
+        projectionView = null
         val page = verticalScroll()
         page.addView(title("쉬운 설정"))
         page.addView(text("아래 3개 중 하나만 고르면 됩니다. 처음에는 ‘균형’을 권장합니다."))
@@ -219,7 +202,7 @@ class MainActivity : AppCompatActivity() {
         advanced.addView(slider("Surface Confidence (%)", 0, 100, (config.minimumSurfaceConfidence * 100).toInt()) { applyConfig(config.copy(minimumSurfaceConfidence = it / 100f)) })
         advanced.addView(slider("Obstacle Threshold (cm)", 1, 30, (config.obstacleHeightThresholdMeters * 100).toInt()) { applyConfig(config.copy(obstacleHeightThresholdMeters = it / 100f)) })
         advanced.addView(slider("Processing FPS", 5, 60, config.processingFpsLimit) { applyConfig(config.copy(processingFpsLimit = it)) })
-        advanced.addView(slider("Point Size", 1, 15, renderConfig.pointSize.toInt()) { renderConfig = renderConfig.copy(pointSize = it.toFloat()); if (::viewer.isInitialized) viewer.updateRenderConfig(renderConfig) })
+        advanced.addView(slider("Point Size", 1, 15, renderConfig.pointSize.toInt()) { renderConfig = renderConfig.copy(pointSize = it.toFloat()); projectionView?.setPointSize(it.toFloat()) })
         advanced.addView(settingBlock("Temporal Smoothing", Switch(this).apply { isChecked = config.enableTemporalSmoothing; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableTemporalSmoothing = value)) } }))
         val advancedButton = button("세부 설정 펼치기") { }
         advancedButton.setOnClickListener {
@@ -247,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                 renderConfig = renderConfig.copy(pointSize = 4f)
             }
         }
-        if (::viewer.isInitialized) viewer.updateRenderConfig(renderConfig)
+        projectionView?.setPointSize(renderConfig.pointSize)
     }
 
     private fun showCustomObjectDialog() {
@@ -324,12 +307,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            if (cameraPreviewView != null && frame.timestamp - lastPreviewTimestampNanos >= 200_000_000L) {
+            if (projectionView != null && frame.timestamp - lastPreviewTimestampNanos >= 100_000_000L) {
                 ArCoreDepthAdapter.acquireCameraPreview(frame)?.let { preview ->
                     lastPreviewTimestampNanos = frame.timestamp
                     val bitmap = Bitmap.createBitmap(preview.argb, preview.width, preview.height, Bitmap.Config.ARGB_8888)
-                    val target = cameraPreviewView
-                    runOnUiThread { if (cameraPreviewView === target) target?.setImageBitmap(bitmap) }
+                    val target = projectionView
+                    runOnUiThread { if (projectionView === target) target?.submitCamera(bitmap) }
                 }
             }
         } catch (_: Exception) { /* Tracking/depth availability is transient. */ }
@@ -341,11 +324,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         depthSurface.onResume()
-        if (::viewer.isInitialized) viewer.onResume()
         session?.runCatching { resume() }
         if (wantsDepth && !streamRunning) handler.post { startDepth() }
     }
-    override fun onPause() { session?.pause(); depthSurface.onPause(); if (::viewer.isInitialized) viewer.onPause(); super.onPause() }
+    override fun onPause() { session?.pause(); depthSurface.onPause(); super.onPause() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); processingExecutor.shutdownNow(); engine.release(); session?.close(); super.onDestroy() }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

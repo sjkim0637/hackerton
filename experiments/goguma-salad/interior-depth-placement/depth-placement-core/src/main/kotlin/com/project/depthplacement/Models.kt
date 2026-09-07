@@ -87,6 +87,7 @@ data class PlacementResult(
 /** XYZ points followed by confidence: [x, y, z, confidence, ...]. */
 class PointCloudSnapshot(
     points: FloatArray,
+    imagePoints: FloatArray = FloatArray(0),
     val pointCount: Int,
     val timestampNanos: Long,
     val coordinateSystem: CoordinateSystem = CoordinateSystem.ARCORE_WORLD_METERS,
@@ -94,7 +95,10 @@ class PointCloudSnapshot(
     val sourceHeight: Int,
 ) {
     private val immutablePoints = points.copyOf()
+    /** Depth-image samples: [uPx, vPx, depthMeters, confidence, ...]. */
+    private val immutableImagePoints = imagePoints.copyOf()
     fun copyPoints(): FloatArray = immutablePoints.copyOf()
+    fun copyImagePoints(): FloatArray = immutableImagePoints.copyOf()
 }
 
 data class ProcessingMetrics(
