@@ -35,12 +35,14 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
     data class CatalogItem(
         val id: String,
         val name: String,
-        val category: String,        // tv | sofa | table | chair | shelf
+        val category: String,        // tv | sofa | table | chair | shelf | vase | lamp | plant | bed
         val widthM: Float,
         val heightM: Float,
         val depthM: Float,
         val thumbnailUrl: String?,   // 예: /assets/xxx.png (서버가 아직 안 줄 수도 있음)
         val anchorHint: String,      // "wall" | "floor"
+        /** D7: 실제 3D 모델(.glb) 경로. 없거나 로드 실패하면 큐브/썸네일 이미지로 대체한다. */
+        val modelUrl: String?,
     )
 
     /** PHASE 4/5: 서버에 저장된 배치(이동/회전/크기) 한 건. */
@@ -77,6 +79,7 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
 
     private fun parseCatalogItem(o: JSONObject): CatalogItem {
         val s = o.optJSONObject("size_m") ?: JSONObject()
+        val model = o.optJSONObject("model")
         return CatalogItem(
             id = o.optString("id"),
             name = o.optString("name", o.optString("id")),
@@ -86,6 +89,7 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
             depthM = s.optDouble("d", 0.5).toFloat(),
             thumbnailUrl = o.optString("thumbnail").ifEmpty { null },
             anchorHint = o.optString("anchor_hint", "floor"),
+            modelUrl = model?.optString("url")?.ifEmpty { null },
         )
     }
 
@@ -130,16 +134,37 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         keyframeId: String,
         bbox: FloatArray,      // [x, y, w, h] 정규화
         objectType: String,
+    ): String = requestRemoveObjectWithTarget(
+        sceneId, keyframeId, objectType,
+        JSONObject().put("type", "bbox").put("rect", JSONArray(bbox.map { it.toDouble() })),
+    )
+
+    /**
+     * D5(MobileSAM): 사각형 대신 점 하나로 사물을 지정한다. 서버가 point 를 실제 마스크로
+     * 바꿔서 처리한다(app/routers/scenes.py::_resolve_point_region).
+     */
+    suspend fun requestRemoveObjectAtPoint(
+        sceneId: String,
+        keyframeId: String,
+        xNorm: Float,
+        yNorm: Float,
+        objectType: String,
+    ): String = requestRemoveObjectWithTarget(
+        sceneId, keyframeId, objectType,
+        JSONObject().put("type", "point")
+            .put("point", JSONArray(listOf(xNorm.toDouble(), yNorm.toDouble()))),
+    )
+
+    private suspend fun requestRemoveObjectWithTarget(
+        sceneId: String,
+        keyframeId: String,
+        objectType: String,
+        target: JSONObject,
     ): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("keyframe_id", keyframeId)
             .put("object_type", objectType)
-            .put(
-                "target",
-                JSONObject()
-                    .put("type", "bbox")
-                    .put("rect", JSONArray(bbox.map { it.toDouble() })),
-            )
+            .put("target", target)
         val conn = open("/scenes/$sceneId/remove-object", "POST")
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")

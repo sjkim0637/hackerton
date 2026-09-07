@@ -25,7 +25,11 @@ class CatalogController(
     private val serverBaseUrl: () -> String,
     /** 패널을 열 때 호출 (서버 scene 확보 + 이전 세션 카탈로그 배치 복원). */
     private val onOpen: () -> Unit = {},
+    /** 패널을 닫을 때 호출. [onOpen]과 함께 평면 격자를 "가구 추가" 중에만 보이게 하는 데 쓴다. */
+    private val onClose: () -> Unit = {},
     private val onPick: (InteriorApiClient.CatalogItem, Bitmap?) -> Unit,
+    /** 목록 맨 끝의 "직접 만들기(테스트 블록)" 항목을 골랐을 때. */
+    private val onCreateTestBlock: () -> Unit = {},
 ) {
 
     init {
@@ -45,6 +49,7 @@ class CatalogController(
 
     private fun hide() {
         binding.catalogPanel.visibility = View.GONE
+        onClose()
     }
 
     private fun fetchAndRender() {
@@ -55,14 +60,22 @@ class CatalogController(
                 InteriorApiClient(base).getCatalog()
             } catch (e: Exception) {
                 setRows(infoRow("카탈로그 불러오기 실패: ${e.message ?: e.javaClass.simpleName}"))
-                return@launch
-            }
-            if (items.isEmpty()) {
-                setRows(infoRow("카탈로그가 비어 있습니다"))
+                binding.catalogList.addView(testBlockRow())
                 return@launch
             }
             binding.catalogList.removeAllViews()
             items.forEach { binding.catalogList.addView(itemRow(it)) }
+            binding.catalogList.addView(testBlockRow())
+        }
+    }
+
+    /** 실제 3D 모델이 아직 없거나 빠르게 테스트만 해보고 싶을 때 쓰는 반투명 큐브 생성 항목. */
+    private fun testBlockRow(): View = Button(activity).apply {
+        isAllCaps = false
+        text = "직접 만들기 (테스트 블록)"
+        setOnClickListener {
+            hide()
+            onCreateTestBlock()
         }
     }
 

@@ -6,12 +6,14 @@ import io.github.sceneview.math.Size
 import io.github.sceneview.math.colorOf
 import io.github.sceneview.node.CubeNode
 import io.github.sceneview.node.ImageNode
+import io.github.sceneview.node.ModelNode
 
 /**
  * 화면에 배치된 가구 하나에 딸린 노드/상태 묶음.
  *
- * 현재 3D 모델(glTF) 대신 반투명 큐브로 부피만 표현한다. "아직 실재하지 않는,
- * 제안된 배치"라는 의미를 살리기 위한 임시 표현이며, 이후 실제 가구 모델로 교체한다.
+ * D7: 서버 카탈로그 가구는 실제 3D 모델(.glb, [modelNode])을 비동기로 받아와 큐브 대신
+ * 보여준다. 모델이 없거나(테스트 블록) 아직 로딩 중이거나 실패하면 반투명 큐브로
+ * 대체한다 — "아직 실재하지 않는, 제안된 배치" 느낌도 겸한다.
  */
 class FurnitureItem(
     val anchorNode: AnchorNode,
@@ -29,6 +31,8 @@ class FurnitureItem(
      * (없으면 null → 기존처럼 이름표 붙은 반투명 큐브.)
      */
     var imageNode: ImageNode? = null,
+    /** D7: 실제 3D 모델 로딩이 끝나면 채워진다(비동기). 있으면 큐브/이미지 대신 이걸 보여준다. */
+    var modelNode: ModelNode? = null,
     /** 회전 버튼으로 누적되는 평면 내 회전각(도). 큐브·이미지에 함께 적용. */
     var rotationDeg: Float = 0f,
     /** PHASE 5: 카탈로그에서 온 가구면 그 항목 id (`GET /catalog` 의 id). 서버 저장/복원 키. */
