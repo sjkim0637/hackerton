@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private var installRequested = false
     private var lastResult: PlacementResult? = null
     @Volatile private var projectionView: DepthProjectionView? = null
+    private var interactivePointCloudView: PointCloudView? = null
     private var lastPreviewTimestampNanos = 0L
     private var lastDiagnosticTimestampNanos = 0L
     private var displayGeometryKey = ""
@@ -97,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMain() {
-        projectionView = null
+        closeInteractiveViewer()
         val page = verticalScroll()
         page.addView(title("Depth Placement Lab"))
         page.addView(text("온디바이스 ARCore Depth → Point Cloud → Placement"))
@@ -130,6 +131,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPointCloud() {
+        closeInteractiveViewer()
         val frame = FrameLayout(this)
         val projected = DepthProjectionView(this).apply {
             setPointSize(renderConfig.pointSize)
@@ -137,13 +139,20 @@ class MainActivity : AppCompatActivity() {
                 lastResult = engine.evaluatePlacement(u, v, objectSize)
             }
         }
+        val cloud = PointCloudView(this).apply {
+            visibility = View.GONE
+            updateRenderConfig(renderConfig)
+        }
+        interactivePointCloudView = cloud
         projectionView = projected
         frame.addView(projected, FrameLayout.LayoutParams(-1, -1))
+        frame.addView(cloud, FrameLayout.LayoutParams(-1, -1))
         val hud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12); setBackgroundColor(0x990B1020.toInt()) }
         val metricsText = text("Waiting for depth…")
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
         val rangeText = text("상대 깊이 범위를 계산하는 중…")
-        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText)
+        val modeText = text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")
+        hud.addView(metricsText); hud.addView(modeText); hud.addView(rangeText); hud.addView(resultText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -155,18 +164,45 @@ class MainActivity : AppCompatActivity() {
             } }
         }
         hud.addView(preset)
-        hud.addView(buttonRow(
-            button("Freeze") { projected.setFrozen(!projected.isFrozen()) },
-            button("Points ON/OFF") { projected.setOverlayEnabled(!projected.isOverlayEnabled()) },
-        ))
+        var showing3d = false
+        var frozen = false
+        val modeButton = button("3D VIEW") { }
+        val actionButton = button("POINTS ON/OFF") { }
+        val freezeButton = button("FREEZE") { }
+        modeButton.setOnClickListener {
+            showing3d = !showing3d
+            projected.visibility = if (showing3d) View.GONE else View.VISIBLE
+            cloud.visibility = if (showing3d) View.VISIBLE else View.GONE
+            projectionView = if (showing3d) null else projected
+            modeButton.text = if (showing3d) "RGB 투영" else "3D VIEW"
+            actionButton.text = if (showing3d) "RESET VIEW" else "POINTS ON/OFF"
+            modeText.text = if (showing3d) "3D Point Cloud · Drag 회전 · Pinch 확대/축소" else "RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리"
+            rangeText.text = if (showing3d) "한 손가락 Drag: Orbit · 두 손가락 Pinch: Zoom" else "상대 깊이 범위를 계산하는 중…"
+        }
+        actionButton.setOnClickListener {
+            if (showing3d) cloud.resetView() else projected.setOverlayEnabled(!projected.isOverlayEnabled())
+        }
+        freezeButton.setOnClickListener {
+            frozen = !frozen
+            projected.setFrozen(frozen)
+            cloud.setFrozen(frozen)
+            freezeButton.text = if (frozen) "RESUME" else "FREEZE"
+        }
+        hud.addView(buttonRow(modeButton, freezeButton, actionButton))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         content.removeAllViews(); content.addView(frame)
         if (!streamRunning) startDepth()
         fun refresh() {
             if (!frame.isAttachedToWindow) return
-            val metrics = engine.getMetrics(); val snapshot = engine.getLatestPointCloud(); projected.submit(snapshot)
-            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
-            rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
+            val metrics = engine.getMetrics(); val snapshot = engine.getLatestPointCloud()
+            if (showing3d) {
+                cloud.submit(snapshot)
+                cloud.submitPlacement(lastResult, objectSize)
+            } else {
+                projected.submit(snapshot)
+            }
+            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  ${if (showing3d) "Render ${f(cloud.renderFps)} FPS" else "Placement ${f(metrics.placementEvaluationMillis)} ms"}"
+            if (!showing3d) rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
             resultText.text = lastResult?.let { "${if (it.isValid) "VALID" else "NO: ${it.failureReason}"}  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}" } ?: "화면을 탭하면 배치를 평가합니다."
             handler.postDelayed(::refresh, 100)
         }
@@ -174,7 +210,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
-        projectionView = null
+        closeInteractiveViewer()
         val page = verticalScroll()
         page.addView(title("쉬운 설정"))
         page.addView(text("아래 3개 중 하나만 고르면 됩니다. 처음에는 ‘균형’을 권장합니다."))
@@ -322,14 +358,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopDepth() { wantsDepth = false; streamRunning = false; engine.stop() }
     private fun applyConfig(value: PlacementConfig) { config = value; store.save(value); engine.updateConfig(value) }
+    private fun closeInteractiveViewer() {
+        projectionView = null
+        interactivePointCloudView?.onPause()
+        interactivePointCloudView = null
+    }
 
     override fun onResume() {
         super.onResume()
         depthSurface.onResume()
+        interactivePointCloudView?.onResume()
         session?.runCatching { resume() }
         if (wantsDepth && !streamRunning) handler.post { startDepth() }
     }
-    override fun onPause() { session?.pause(); depthSurface.onPause(); super.onPause() }
+    override fun onPause() { session?.pause(); interactivePointCloudView?.onPause(); depthSurface.onPause(); super.onPause() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); processingExecutor.shutdownNow(); engine.release(); session?.close(); super.onDestroy() }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

@@ -88,6 +88,7 @@ if (result.isValid) {
 - Point Cloud Test: 실제 카메라 전체 화면 위에 같은 frame의 Depth sample을 가까움(빨강)→멀리(파랑) 색점으로 직접 투영
 - 색상은 화면 내 유효 Depth의 5~95 percentile을 inverse-depth 상대 척도로 펼쳐 근거리 물체의 작은 깊이 차이를 강조
 - 화면 투영점은 분석용 3D point보다 최대 4배 촘촘하게 생성하며, 분석용 point 수와 투영점 수를 HUD에 별도로 표시
+- 한 화면 안에서 `RGB 투영 ↔ 3D Point Cloud`를 전환하며 3D 모드에서는 Drag Orbit, Pinch Zoom, Reset View, Freeze를 지원
 - RGB 윤곽과 Depth 점의 정합을 즉시 비교하며 `Freeze`, `Points ON/OFF`, 객체 preset과 placement 결과를 확인
 - Settings: 첫 화면은 `안정 / 균형 / 디테일` preset만 제공하며 전문 threshold는 접힌 `세부 설정`에서 조절
 - 설정은 `SharedPreferences`에 로컬 저장되며 `Reset to Default`로 복원된다.
