@@ -18,16 +18,23 @@ data class ArCoreDepthFrame(
     val timestampDeltaNanos: Long get() = input.timestampNanos - cameraTimestampNanos
 }
 
+data class CameraPreviewFrame(
+    val width: Int,
+    val height: Int,
+    val argb: IntArray,
+    val timestampNanos: Long,
+)
+
 object ArCoreDepthAdapter {
     fun isDepthSupported(session: Session): Boolean =
         session.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) ||
             session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
 
-    /** Prefers raw depth so confidence can be consumed by the core filters. */
+    /** Uses dense, motion-completed depth when available so room contours remain recognizable. */
     fun configure(session: Session, config: Config = session.config): Config {
         config.depthMode = when {
-            session.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) -> Config.DepthMode.RAW_DEPTH_ONLY
             session.isDepthModeSupported(Config.DepthMode.AUTOMATIC) -> Config.DepthMode.AUTOMATIC
+            session.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) -> Config.DepthMode.RAW_DEPTH_ONLY
             else -> Config.DepthMode.DISABLED
         }
         session.configure(config)
@@ -36,11 +43,13 @@ object ArCoreDepthAdapter {
 
     fun convert(frame: Frame): ArCoreDepthFrame? {
         val pair = try {
-            val depth = frame.acquireRawDepthImage16Bits()
-            val confidence = runCatching { frame.acquireRawDepthConfidenceImage() }.getOrNull()
-            depth to confidence
+            frame.acquireDepthImage16Bits() to null
         } catch (_: NotYetAvailableException) {
-            try { frame.acquireDepthImage16Bits() to null } catch (_: NotYetAvailableException) { return null }
+            try {
+                val depth = frame.acquireRawDepthImage16Bits()
+                val confidence = runCatching { frame.acquireRawDepthConfidenceImage() }.getOrNull()
+                depth to confidence
+            } catch (_: NotYetAvailableException) { return null }
         }
         val depthImage = pair.first
         val confidenceImage = pair.second
@@ -70,6 +79,48 @@ object ArCoreDepthAdapter {
         } finally {
             depthImage.close()
             confidenceImage?.close()
+        }
+    }
+
+    /**
+     * Copies a small portrait preview from ARCore's YUV camera image.
+     * It is intentionally capped and throttled by the caller; this is a visual diagnostic, not a recorder.
+     */
+    fun acquireCameraPreview(frame: Frame, maxLongEdge: Int = 480): CameraPreviewFrame? {
+        val image = try { frame.acquireCameraImage() } catch (_: NotYetAvailableException) { return null }
+        try {
+            val sourceWidth = image.width
+            val sourceHeight = image.height
+            val step = maxOf(1, maxOf(sourceWidth, sourceHeight) / maxLongEdge)
+            // ARCore CPU camera images are sensor-landscape on the supported portrait lab flow.
+            val outputWidth = sourceHeight / step
+            val outputHeight = sourceWidth / step
+            val argb = IntArray(outputWidth * outputHeight)
+            val yPlane = image.planes[0]
+            val uPlane = image.planes[1]
+            val vPlane = image.planes[2]
+            val yBuffer = yPlane.buffer.duplicate()
+            val uBuffer = uPlane.buffer.duplicate()
+            val vBuffer = vPlane.buffer.duplicate()
+            for (outY in 0 until outputHeight) {
+                for (outX in 0 until outputWidth) {
+                    // Rotate the sensor image 90 degrees clockwise for the portrait-only test app.
+                    val sourceX = (outY * step).coerceAtMost(sourceWidth - 1)
+                    val sourceY = (sourceHeight - 1 - outX * step).coerceAtLeast(0)
+                    val y = yBuffer.get(sourceY * yPlane.rowStride + sourceX * yPlane.pixelStride).toInt() and 0xff
+                    val chromaX = sourceX / 2
+                    val chromaY = sourceY / 2
+                    val u = (uBuffer.get(chromaY * uPlane.rowStride + chromaX * uPlane.pixelStride).toInt() and 0xff) - 128
+                    val v = (vBuffer.get(chromaY * vPlane.rowStride + chromaX * vPlane.pixelStride).toInt() and 0xff) - 128
+                    val r = (y + 1.402f * v).toInt().coerceIn(0, 255)
+                    val g = (y - 0.344136f * u - 0.714136f * v).toInt().coerceIn(0, 255)
+                    val b = (y + 1.772f * u).toInt().coerceIn(0, 255)
+                    argb[outY * outputWidth + outX] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
+                }
+            }
+            return CameraPreviewFrame(outputWidth, outputHeight, argb, image.timestamp)
+        } finally {
+            image.close()
         }
     }
 

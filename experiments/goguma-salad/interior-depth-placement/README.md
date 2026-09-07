@@ -38,7 +38,7 @@ Repository root를 VS Code로 연 뒤 `Terminal > Run Task...`에서 다음 task
 - `Depth: Build Release AARs`: ARCore/debug module release AAR 생성
 - `Depth: Build Debug APK`: 테스트 앱 debug APK 생성
 - `Depth: Install Debug APK`: 연결된 Android 기기에 APK build 및 설치
-- `Depth: Run Test App`: 설치 후 `Depth Placement Lab` 실행
+- `Depth: Run Test App`: 설치 후 바로 `Point Cloud Test` 화면 실행
 - `Depth: Clean`: 실험 프로젝트 build 산출물 정리
 
 Task는 현재 검증된 `C:\Program Files\Java\jdk-21.0.12`를 `JAVA_HOME`으로 사용한다. 설치·실행 task에는 `ANDROID_HOME`과 USB debugging이 설정된 Android 기기가 필요하다.
@@ -83,9 +83,12 @@ if (result.isValid) {
 ## Test App
 
 - Main: sensor/stream, resolution, FPS, point count, intrinsics, timestamp 차이, rolling 5초 처리시간
-- Point Cloud Test: 실시간 3D point cloud, drag orbit, pinch zoom, reset, freeze, 객체 preset, placement 결과
-- Settings: sensitivity, point count, stride, depth range, confidence, ROI, slope, obstacle threshold, smoothing, processing FPS, point size
+- Point Cloud Test: 실시간 dense 3D point cloud, 높이별 파랑→초록→노랑→빨강 색상, drag orbit, pinch zoom, reset, freeze, 객체 preset, placement 결과
+- Point Cloud Test 하단: Point Cloud와 같은 AR frame에서 얻은 실제 카메라 미리보기
+- Settings: 첫 화면은 `안정 / 균형 / 디테일` preset만 제공하며 전문 threshold는 접힌 `세부 설정`에서 조절
 - 설정은 `SharedPreferences`에 로컬 저장되며 `Reset to Default`로 복원된다.
+
+정상 동작이면 Point Cloud 화면 상단에 벽·바닥·가구의 깊이 차이가 색점 윤곽으로 보이고, 하단 카메라 화면과 움직임 방향이 일치한다. `Points`가 계속 0이면 Depth 미지원 또는 AR tracking 준비 중이며, `Depth FPS`가 증가하지만 형태가 거칠면 Settings에서 `디테일`을 선택한다.
 
 앱 Manifest에는 `INTERNET` 권한이 없다. 핵심 동작은 Wi-Fi와 Mobile Data 없이 실행된다.
 

@@ -55,6 +55,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `test-app` debug APK build 성공
 - `test-app:lintDebug` Android Lint 성공(오류 0건)
 - 앱 Manifest에 `INTERNET` permission이 없음을 확인
+- `SM-S908N` 설치 및 ARCore camera/IMU/VIO tracking 초기화 로그 확인. 잠금 화면 상태여서 시각 결과 측정은 대기 중.
 
 ## Next
 

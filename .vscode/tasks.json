@@ -113,7 +113,10 @@
         "am",
         "start",
         "-n",
-        "com.project.depthplacement.lab/.MainActivity"
+        "com.project.depthplacement.lab/.MainActivity",
+        "--ez",
+        "open_point_cloud",
+        "true"
       ],
       "dependsOn": "Depth: Install Debug APK",
       "problemMatcher": []

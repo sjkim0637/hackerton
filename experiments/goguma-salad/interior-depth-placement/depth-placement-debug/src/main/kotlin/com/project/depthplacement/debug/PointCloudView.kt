@@ -21,7 +21,7 @@ import kotlin.math.sin
 enum class PointDisplayMode { RAW, FILTERED, PLACEMENT_ROI, SURFACE, OBSTACLE }
 
 data class DebugRenderConfig(
-    val pointSize: Float = 5f,
+    val pointSize: Float = 6f,
     val nearPlane: Float = 0.05f,
     val farPlane: Float = 20f,
     val showNormal: Boolean = true,
@@ -95,6 +95,8 @@ private class CloudRenderer : GLSurfaceView.Renderer {
     private var pointBuffer: FloatBuffer? = null
     private var pointCount = 0
     private val center = FloatArray(3)
+    private var minHeight = -1f
+    private var maxHeight = 1f
     private var frames = 0
     private var fpsStart = System.nanoTime()
 
@@ -131,7 +133,9 @@ private class CloudRenderer : GLSurfaceView.Renderer {
         GLES30.glUseProgram(program)
         GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(program, "uMvp"), 1, false, vp, 0)
         GLES30.glUniform1f(GLES30.glGetUniformLocation(program, "uPointSize"), config.pointSize)
-        GLES30.glUniform4f(GLES30.glGetUniformLocation(program, "uColor"), 0.15f, 0.82f, 1f, 1f)
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(program, "uMinHeight"), minHeight)
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(program, "uMaxHeight"), maxHeight)
+        GLES30.glUniform1i(GLES30.glGetUniformLocation(program, "uUseHeightColor"), 1)
         GLES30.glEnableVertexAttribArray(0)
         buffer.position(0); GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 4 * 4, buffer)
         GLES30.glDrawArrays(GLES30.GL_POINTS, 0, pointCount)
@@ -168,7 +172,8 @@ private class CloudRenderer : GLSurfaceView.Renderer {
         if (vertices.isEmpty()) return
         val buffer = ByteBuffer.allocateDirect(vertices.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply { vertices.forEach(::put); position(0) }
         GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(program, "uMvp"), 1, false, vp, 0)
-        GLES30.glUniform4f(GLES30.glGetUniformLocation(program, "uColor"), if (result.isValid) 0.2f else 1f, if (result.isValid) 1f else 0.2f, 0.25f, 1f)
+        GLES30.glUniform1i(GLES30.glGetUniformLocation(program, "uUseHeightColor"), 0)
+        GLES30.glUniform4f(GLES30.glGetUniformLocation(program, "uSolidColor"), if (result.isValid) 0.2f else 1f, if (result.isValid) 1f else 0.2f, 0.25f, 1f)
         GLES30.glEnableVertexAttribArray(0)
         GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 0, buffer)
         GLES30.glLineWidth(4f)
@@ -182,8 +187,15 @@ private class CloudRenderer : GLSurfaceView.Renderer {
         pointBuffer = ByteBuffer.allocateDirect(points.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(points); position(0) }
         if (pointCount > 0) {
             center.fill(0f)
-            for (i in 0 until pointCount) { center[0] += points[i * 4]; center[1] += points[i * 4 + 1]; center[2] += points[i * 4 + 2] }
+            minHeight = Float.POSITIVE_INFINITY
+            maxHeight = Float.NEGATIVE_INFINITY
+            for (i in 0 until pointCount) {
+                center[0] += points[i * 4]; center[1] += points[i * 4 + 1]; center[2] += points[i * 4 + 2]
+                minHeight = minOf(minHeight, points[i * 4 + 1])
+                maxHeight = maxOf(maxHeight, points[i * 4 + 1])
+            }
             center[0] /= pointCount; center[1] /= pointCount; center[2] /= pointCount
+            if (maxHeight - minHeight < 0.1f) maxHeight = minHeight + 0.1f
         }
     }
 
@@ -201,13 +213,19 @@ private class CloudRenderer : GLSurfaceView.Renderer {
     companion object {
         private const val VERTEX = """#version 300 es
             layout(location=0) in vec3 aPosition;
-            uniform mat4 uMvp; uniform float uPointSize;
-            out float vDepth;
-            void main(){ gl_Position=uMvp*vec4(aPosition,1.0); gl_PointSize=uPointSize; vDepth=clamp((-gl_Position.z)/8.0,0.0,1.0); }
+            uniform mat4 uMvp; uniform float uPointSize; uniform float uMinHeight; uniform float uMaxHeight;
+            out float vHeight;
+            void main(){ gl_Position=uMvp*vec4(aPosition,1.0); gl_PointSize=uPointSize; vHeight=clamp((aPosition.y-uMinHeight)/max(uMaxHeight-uMinHeight,.001),0.0,1.0); }
         """
         private const val FRAGMENT = """#version 300 es
-            precision mediump float; in float vDepth; uniform vec4 uColor; out vec4 outColor;
-            void main(){ vec2 p=gl_PointCoord-vec2(.5); if(dot(p,p)>.25) discard; outColor=vec4(mix(uColor.rgb,vec3(1.0,.25,.15),vDepth),uColor.a); }
+            precision mediump float; in float vHeight; uniform bool uUseHeightColor; uniform vec4 uSolidColor; out vec4 outColor;
+            vec3 heightColor(float t) {
+                if (t < .25) return mix(vec3(.02,.18,1.0), vec3(.0,1.0,1.0), t*4.0);
+                if (t < .50) return mix(vec3(.0,1.0,1.0), vec3(.05,1.0,.15), (t-.25)*4.0);
+                if (t < .75) return mix(vec3(.05,1.0,.15), vec3(1.0,1.0,.0), (t-.50)*4.0);
+                return mix(vec3(1.0,1.0,.0), vec3(1.0,.12,.02), (t-.75)*4.0);
+            }
+            void main(){ vec2 p=gl_PointCoord-vec2(.5); if(dot(p,p)>.25) discard; outColor=uUseHeightColor?vec4(heightColor(vHeight),1.0):uSolidColor; }
         """
     }
 }

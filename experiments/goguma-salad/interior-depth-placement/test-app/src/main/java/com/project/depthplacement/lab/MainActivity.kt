@@ -2,10 +2,12 @@ package com.project.depthplacement.lab
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +15,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -38,6 +41,8 @@ import com.project.depthplacement.debug.PointCloudView
 import java.util.Locale
 import java.util.concurrent.Executors
 
+private enum class EasyPreset { STABLE, BALANCED, DETAIL }
+
 class MainActivity : AppCompatActivity() {
     private lateinit var root: LinearLayout
     private lateinit var content: FrameLayout
@@ -54,8 +59,13 @@ class MainActivity : AppCompatActivity() {
     private var textureConfiguredForSession = false
     private var depthSupported = false
     private var streamRunning = false
+    private var wantsDepth = false
     private var installRequested = false
     private var lastResult: PlacementResult? = null
+    @Volatile private var cameraPreviewView: ImageView? = null
+    private var lastPreviewTimestampNanos = 0L
+    private var lastDiagnosticTimestampNanos = 0L
+    private var displayGeometryKey = ""
     private var objectSize = PlacementObjectSize(0.6f, 0.6f, 1f)
     private val handler = Handler(Looper.getMainLooper())
     private val processingExecutor = Executors.newSingleThreadExecutor()
@@ -66,7 +76,7 @@ class MainActivity : AppCompatActivity() {
         config = store.load()
         engine = DepthPlacementEngineFactory.create(config)
         buildShell()
-        showMain()
+        if (intent.getBooleanExtra("open_point_cloud", false)) showPointCloud() else showMain()
     }
 
     private fun buildShell() {
@@ -88,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMain() {
+        cameraPreviewView = null
         val page = verticalScroll()
         page.addView(title("Depth Placement Lab"))
         page.addView(text("온디바이스 ARCore Depth → Point Cloud → Placement"))
@@ -122,6 +133,7 @@ class MainActivity : AppCompatActivity() {
     private fun showPointCloud() {
         val frame = FrameLayout(this)
         viewer = PointCloudView(this).apply {
+            updateRenderConfig(renderConfig)
             onPlacementTap = { x, y ->
                 engine.getLatestPointCloud()?.let { snapshot ->
                     lastResult = engine.evaluatePlacement(x * snapshot.sourceWidth, y * snapshot.sourceHeight, objectSize)
@@ -133,7 +145,7 @@ class MainActivity : AppCompatActivity() {
         val hud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12); setBackgroundColor(0x990B1020.toInt()) }
         val metricsText = text("Waiting for depth…")
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
-        hud.addView(metricsText); hud.addView(resultText)
+        hud.addView(metricsText); hud.addView(text("높이 색상  낮음 ■ 파랑 → 초록 → 노랑 → 빨강 ■ 높음")); hud.addView(resultText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -147,7 +159,25 @@ class MainActivity : AppCompatActivity() {
         hud.addView(preset)
         hud.addView(buttonRow(button("Reset View") { viewer.resetView() }, button("Freeze") { viewer.setFrozen(!viewer.isFrozen()) }))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.BLACK)
+            contentDescription = "실시간 카메라 미리보기"
+        }
+        cameraPreviewView = preview
+        val previewPanel = FrameLayout(this).apply {
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            setBackgroundColor(Color.rgb(73, 214, 255))
+            addView(preview, FrameLayout.LayoutParams(-1, -1))
+            addView(text("LIVE CAMERA · Point Cloud와 같은 시점").apply {
+                setBackgroundColor(0xAA000000.toInt()); setPadding(dp(8), dp(4), dp(8), dp(4))
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
+        }
+        frame.addView(previewPanel, FrameLayout.LayoutParams(-1, dp(190), Gravity.BOTTOM).apply {
+            leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(10)
+        })
         content.removeAllViews(); content.addView(frame)
+        if (!streamRunning) startDepth()
         fun refresh() {
             if (!frame.isAttachedToWindow) return
             val metrics = engine.getMetrics(); viewer.submit(engine.getLatestPointCloud())
@@ -159,34 +189,65 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
-        val page = verticalScroll(); page.addView(title("Settings")); page.addView(text("변경값은 즉시 Engine에 적용되고 기기에만 저장됩니다."))
-        val sensitivity = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Choose preset…", "Low", "Normal", "High"))
-            onItemSelectedListener = SimpleItemSelected { position -> when (position) {
-                1 -> applyConfig(SensitivityPreset.LOW.applyTo(config))
-                2 -> applyConfig(SensitivityPreset.NORMAL.applyTo(config))
-                3 -> applyConfig(SensitivityPreset.HIGH.applyTo(config))
-            } }
+        cameraPreviewView = null
+        val page = verticalScroll()
+        page.addView(title("쉬운 설정"))
+        page.addView(text("아래 3개 중 하나만 고르면 됩니다. 처음에는 ‘균형’을 권장합니다."))
+        page.addView(buttonRow(
+            button("안정") { applyEasyPreset(EasyPreset.STABLE); showSettings() },
+            button("균형") { applyEasyPreset(EasyPreset.BALANCED); showSettings() },
+            button("디테일") { applyEasyPreset(EasyPreset.DETAIL); showSettings() },
+        ))
+        page.addView(card("현재 표시 품질", text(
+            "간격 ${config.globalStride} · 최대 ${config.maxPointCount} points · ${config.processingFpsLimit} FPS\n" +
+                "점 크기 ${renderConfig.pointSize.toInt()} · ${if (config.enableTemporalSmoothing) "흔들림 완화 ON" else "흔들림 완화 OFF"}"
+        )))
+        page.addView(text("안정: 느리거나 노이즈가 많은 기기\n균형: 일반적인 확인용\n디테일: 윤곽을 더 촘촘히 표시(성능 사용량 증가)").apply { setPadding(0, dp(12), 0, dp(12)) })
+
+        val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        advanced.addView(slider("Sampling Stride", 1, 8, config.globalStride) { applyConfig(config.copy(globalStride = it)) })
+        advanced.addView(slider("Max Point Count", 2_000, 20_000, config.maxPointCount, 1_000) { applyConfig(config.copy(maxPointCount = it)) })
+        advanced.addView(slider("Minimum Depth (cm)", 10, 100, (config.minDepthMeters * 100).toInt()) { if (it / 100f < config.maxDepthMeters) applyConfig(config.copy(minDepthMeters = it / 100f)) })
+        advanced.addView(slider("Maximum Depth (cm)", 100, 800, (config.maxDepthMeters * 100).toInt(), 10) { if (it / 100f > config.minDepthMeters) applyConfig(config.copy(maxDepthMeters = it / 100f)) })
+        advanced.addView(slider("Confidence (%)", 0, 100, (config.depthConfidenceThreshold * 100).toInt()) { applyConfig(config.copy(depthConfidenceThreshold = it / 100f)) })
+        advanced.addView(slider("Temporal Smoothing (%)", 0, 100, (config.temporalSmoothingAlpha * 100).toInt()) { applyConfig(config.copy(temporalSmoothingAlpha = it / 100f)) })
+        advanced.addView(slider("ROI Size (px)", 5, 61, config.roiSizePixels, 2) { applyConfig(config.copy(roiSizePixels = it)) })
+        advanced.addView(slider("ROI Stride", 1, 4, config.roiStride) { applyConfig(config.copy(roiStride = it)) })
+        advanced.addView(slider("Minimum Surface Points", 3, 100, config.minValidPointCount) { applyConfig(config.copy(minValidPointCount = it)) })
+        advanced.addView(slider("Maximum Slope (°)", 1, 45, config.maxSurfaceSlopeDegrees.toInt()) { applyConfig(config.copy(maxSurfaceSlopeDegrees = it.toFloat())) })
+        advanced.addView(slider("Plane Distance (mm)", 5, 80, (config.planeDistanceThresholdMeters * 1000).toInt()) { applyConfig(config.copy(planeDistanceThresholdMeters = it / 1000f)) })
+        advanced.addView(slider("Surface Confidence (%)", 0, 100, (config.minimumSurfaceConfidence * 100).toInt()) { applyConfig(config.copy(minimumSurfaceConfidence = it / 100f)) })
+        advanced.addView(slider("Obstacle Threshold (cm)", 1, 30, (config.obstacleHeightThresholdMeters * 100).toInt()) { applyConfig(config.copy(obstacleHeightThresholdMeters = it / 100f)) })
+        advanced.addView(slider("Processing FPS", 5, 60, config.processingFpsLimit) { applyConfig(config.copy(processingFpsLimit = it)) })
+        advanced.addView(slider("Point Size", 1, 15, renderConfig.pointSize.toInt()) { renderConfig = renderConfig.copy(pointSize = it.toFloat()); if (::viewer.isInitialized) viewer.updateRenderConfig(renderConfig) })
+        advanced.addView(settingBlock("Temporal Smoothing", Switch(this).apply { isChecked = config.enableTemporalSmoothing; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableTemporalSmoothing = value)) } }))
+        val advancedButton = button("세부 설정 펼치기") { }
+        advancedButton.setOnClickListener {
+            advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            advancedButton.text = if (advanced.visibility == View.VISIBLE) "세부 설정 접기" else "세부 설정 펼치기"
         }
-        page.addView(settingBlock("Sensitivity", sensitivity))
-        page.addView(slider("Sampling Stride", 1, 8, config.globalStride) { applyConfig(config.copy(globalStride = it)) })
-        page.addView(slider("Max Point Count", 2_000, 20_000, config.maxPointCount, 1_000) { applyConfig(config.copy(maxPointCount = it)) })
-        page.addView(slider("Minimum Depth (cm)", 10, 100, (config.minDepthMeters * 100).toInt()) { if (it / 100f < config.maxDepthMeters) applyConfig(config.copy(minDepthMeters = it / 100f)) })
-        page.addView(slider("Maximum Depth (cm)", 100, 800, (config.maxDepthMeters * 100).toInt(), 10) { if (it / 100f > config.minDepthMeters) applyConfig(config.copy(maxDepthMeters = it / 100f)) })
-        page.addView(slider("Confidence (%)", 0, 100, (config.depthConfidenceThreshold * 100).toInt()) { applyConfig(config.copy(depthConfidenceThreshold = it / 100f)) })
-        page.addView(slider("Temporal Smoothing (%)", 0, 100, (config.temporalSmoothingAlpha * 100).toInt()) { applyConfig(config.copy(temporalSmoothingAlpha = it / 100f)) })
-        page.addView(slider("ROI Size (px)", 5, 61, config.roiSizePixels, 2) { applyConfig(config.copy(roiSizePixels = it)) })
-        page.addView(slider("ROI Stride", 1, 4, config.roiStride) { applyConfig(config.copy(roiStride = it)) })
-        page.addView(slider("Minimum Surface Points", 3, 100, config.minValidPointCount) { applyConfig(config.copy(minValidPointCount = it)) })
-        page.addView(slider("Maximum Slope (°)", 1, 45, config.maxSurfaceSlopeDegrees.toInt()) { applyConfig(config.copy(maxSurfaceSlopeDegrees = it.toFloat())) })
-        page.addView(slider("Plane Distance (mm)", 5, 80, (config.planeDistanceThresholdMeters * 1000).toInt()) { applyConfig(config.copy(planeDistanceThresholdMeters = it / 1000f)) })
-        page.addView(slider("Surface Confidence (%)", 0, 100, (config.minimumSurfaceConfidence * 100).toInt()) { applyConfig(config.copy(minimumSurfaceConfidence = it / 100f)) })
-        page.addView(slider("Obstacle Threshold (cm)", 1, 30, (config.obstacleHeightThresholdMeters * 100).toInt()) { applyConfig(config.copy(obstacleHeightThresholdMeters = it / 100f)) })
-        page.addView(slider("Processing FPS", 5, 60, config.processingFpsLimit) { applyConfig(config.copy(processingFpsLimit = it)) })
-        page.addView(slider("Point Size", 1, 15, renderConfig.pointSize.toInt()) { renderConfig = renderConfig.copy(pointSize = it.toFloat()); if (::viewer.isInitialized) viewer.updateRenderConfig(renderConfig) })
-        page.addView(settingBlock("Temporal Smoothing", Switch(this).apply { isChecked = config.enableTemporalSmoothing; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableTemporalSmoothing = value)) } }))
-        page.addView(button("Reset to Default") { applyConfig(store.reset()); showSettings() })
+        page.addView(advancedButton)
+        page.addView(advanced)
+        page.addView(button("기본값으로 되돌리기") { applyConfig(store.reset()); renderConfig = DebugRenderConfig(); showSettings() })
         content.removeAllViews(); content.addView(ScrollView(this).apply { addView(page) })
+    }
+
+    private fun applyEasyPreset(preset: EasyPreset) {
+        when (preset) {
+            EasyPreset.STABLE -> {
+                applyConfig(SensitivityPreset.LOW.applyTo(config).copy(globalStride = 6, maxPointCount = 5_000, processingFpsLimit = 20))
+                renderConfig = renderConfig.copy(pointSize = 8f)
+            }
+            EasyPreset.BALANCED -> {
+                applyConfig(PlacementConfig.default().copy(maxPointCount = 10_000, processingFpsLimit = 24))
+                renderConfig = DebugRenderConfig(pointSize = 6f)
+            }
+            EasyPreset.DETAIL -> {
+                applyConfig(SensitivityPreset.HIGH.applyTo(config).copy(globalStride = 2, maxPointCount = 20_000, processingFpsLimit = 30))
+                renderConfig = renderConfig.copy(pointSize = 4f)
+            }
+        }
+        if (::viewer.isInitialized) viewer.updateRenderConfig(renderConfig)
     }
 
     private fun showCustomObjectDialog() {
@@ -207,6 +268,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDepth() {
+        wantsDepth = true
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST); return
         }
@@ -225,6 +287,7 @@ class MainActivity : AppCompatActivity() {
                 depthSupported = ArCoreDepthAdapter.isDepthSupported(arSession)
                 if (depthSupported) ArCoreDepthAdapter.configure(arSession, Config(arSession))
                 textureConfiguredForSession = false
+                displayGeometryKey = ""
                 arSession.resume()
             }
         } catch (error: Exception) {
@@ -241,18 +304,47 @@ class MainActivity : AppCompatActivity() {
                 arSession.setCameraTextureName(id)
                 textureConfiguredForSession = true
             }
+            val displayWidth = content.width
+            val displayHeight = content.height
+            @Suppress("DEPRECATION") val rotation = windowManager.defaultDisplay.rotation
+            val geometryKey = "$rotation:$displayWidth:$displayHeight"
+            if (displayWidth > 0 && displayHeight > 0 && geometryKey != displayGeometryKey) {
+                arSession.setDisplayGeometry(rotation, displayWidth, displayHeight)
+                displayGeometryKey = geometryKey
+            }
             val frame = arSession.update(); latestFrame = frame
             ArCoreDepthAdapter.convert(frame)?.let { converted ->
                 lastDepthFrame = converted
-                processingExecutor.execute { engine.updateDepthFrame(converted.input) }
+                processingExecutor.execute {
+                    engine.updateDepthFrame(converted.input)
+                    if (converted.input.timestampNanos - lastDiagnosticTimestampNanos >= 1_000_000_000L) {
+                        lastDiagnosticTimestampNanos = converted.input.timestampNanos
+                        val metrics = engine.getMetrics()
+                        Log.i(TAG, "depth=${converted.input.width}x${converted.input.height} points=${metrics.pointCount} depthFps=${f(metrics.depthFps)} pcMs=${f(metrics.pointGenerationMillis)}")
+                    }
+                }
+            }
+            if (cameraPreviewView != null && frame.timestamp - lastPreviewTimestampNanos >= 200_000_000L) {
+                ArCoreDepthAdapter.acquireCameraPreview(frame)?.let { preview ->
+                    lastPreviewTimestampNanos = frame.timestamp
+                    val bitmap = Bitmap.createBitmap(preview.argb, preview.width, preview.height, Bitmap.Config.ARGB_8888)
+                    val target = cameraPreviewView
+                    runOnUiThread { if (cameraPreviewView === target) target?.setImageBitmap(bitmap) }
+                }
             }
         } catch (_: Exception) { /* Tracking/depth availability is transient. */ }
     }
 
-    private fun stopDepth() { streamRunning = false; engine.stop() }
+    private fun stopDepth() { wantsDepth = false; streamRunning = false; engine.stop() }
     private fun applyConfig(value: PlacementConfig) { config = value; store.save(value); engine.updateConfig(value) }
 
-    override fun onResume() { super.onResume(); depthSurface.onResume(); if (::viewer.isInitialized) viewer.onResume(); session?.runCatching { resume() } }
+    override fun onResume() {
+        super.onResume()
+        depthSurface.onResume()
+        if (::viewer.isInitialized) viewer.onResume()
+        session?.runCatching { resume() }
+        if (wantsDepth && !streamRunning) handler.post { startDepth() }
+    }
     override fun onPause() { session?.pause(); depthSurface.onPause(); if (::viewer.isInitialized) viewer.onPause(); super.onPause() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); processingExecutor.shutdownNow(); engine.release(); session?.close(); super.onDestroy() }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -283,5 +375,8 @@ class MainActivity : AppCompatActivity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun f(value: Double) = String.format(Locale.US, "%.1f", value)
 
-    companion object { private const val CAMERA_REQUEST = 41 }
+    companion object {
+        private const val CAMERA_REQUEST = 41
+        private const val TAG = "DepthPlacementLab"
+    }
 }
