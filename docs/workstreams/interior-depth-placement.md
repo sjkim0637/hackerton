@@ -79,6 +79,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `3af7f70` — RGB·Depth에서 3D 표면과 가구 배치를 계산하는 기본 원리 설명 추가
 - `ed61618` — Depth pixel 값을 camera principal axis 기준 Z 깊이로 명확화
 - `5f2cac3` — 두 Depth 지점의 world 좌표를 이용한 실제 길이 측정 API와 UI 추가
+- `cba005b` — 앵그리버드식 투척 UX와 IR Point Cloud 국소 평면 반동 Geometry Probe 추가
 
 ## Updated
 
