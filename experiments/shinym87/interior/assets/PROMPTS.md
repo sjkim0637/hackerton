@@ -15,6 +15,40 @@ Color palette: primary electric blue #1660FF, deep navy #0B1736, spatial cyan #3
 Constraints: no text, no letters, no gradients unless extremely subtle, no mockup device, no border, no watermark, no resemblance to existing brand logos
 ```
 
+## 내부 AR 화면 Asset
+
+아래 5종은 기존 `ar-interior-card.png`를 시각 Reference로 포함해 생성했다.
+
+### `internal-scan-guide.png`
+
+```text
+Create a polished square mobile-app UI illustration asset for an AR interior app, matching the visual language of the provided reference: bright warm-white modern room, cobalt blue accents, subtle cyan AR graphics, premium soft 3D realism, clean and approachable. Depict the scanning state: a smartphone camera perspective facing a simple empty living-room corner, with elegant cyan plane-detection grid points flowing across the floor and one wall, plus a centered circular scan reticle. Keep the composition simple and readable at small size, with generous pale neutral negative space around the subject. No people, no hands, no phone frame, no logos, no letters, no numbers, no text, no watermark. Solid warm-white background, no transparency or checkerboard.
+```
+
+### `internal-object-selection-guide.png`
+
+```text
+Create a polished square mobile-app UI illustration asset for an AR interior app, matching the visual language of the provided reference: bright warm-white modern room, cobalt blue accents, subtle cyan AR graphics, premium soft 3D realism, clean and approachable. Depict object-region selection: a cobalt blue lounge chair against a light neutral wall, surrounded by a crisp cyan rectangular selection box with four clear corner handles and a subtle measurement line, as if the user dragged a bounding box around the chair. Keep the scene uncluttered and highly legible at small size. No people, no hands, no phone frame, no logos, no letters, no numbers, no text, no watermark. Solid warm-white background, no transparency or checkerboard.
+```
+
+### `internal-removal-result.png`
+
+```text
+Create a polished square mobile-app UI illustration asset for an AR interior app, matching the visual language of the provided reference: bright warm-white modern room, cobalt blue accents, subtle cyan AR graphics, premium soft 3D realism, clean and approachable. Depict an object-removal before-and-after result without any labels: one continuous room scene divided softly down the middle; on the left a small cobalt blue side cabinet stands against the wall, on the right the same wall and floor are seamlessly clean and empty. Add a restrained cyan transition sparkle at the center divider. Make the difference immediately understandable at small size. No people, no hands, no phone frame, no logos, no letters, no numbers, no text, no watermark. Solid warm-white background, no transparency or checkerboard.
+```
+
+### `internal-placement-guide.png`
+
+```text
+Create a polished square mobile-app UI illustration asset for an AR interior app, matching the visual language of the provided reference: bright warm-white modern room, cobalt blue accents, subtle cyan AR graphics, premium soft 3D realism, clean and approachable. Depict interactive furniture placement: a cobalt blue armchair hovering just above a cyan circular AR floor target in a bright empty room, with three minimal visual control cues around it—curved rotation arrow, diagonal scale handles, and a short drag-motion trail—drawn only as clean cyan symbols. Keep controls spacious and readable, with no interface panel. No people, no hands, no phone frame, no logos, no letters, no numbers, no text, no watermark. Solid warm-white background, no transparency or checkerboard.
+```
+
+### `internal-catalog-empty.png`
+
+```text
+Create a polished square mobile-app UI empty-state illustration for an AR interior furniture catalog, matching the visual language of the provided reference: bright warm-white, cobalt blue accents, subtle cyan AR graphics, premium soft 3D realism, clean and approachable. Depict a neat open catalog tray or shelving unit containing three simple furniture miniatures—a cobalt blue chair, a pale wood side table, and a small green plant—with a subtle cyan placement target beside them. Centered compact composition suitable for a bottom-sheet empty or loading state, generous negative space. No people, no hands, no phone frame, no shopping symbols, no logos, no letters, no numbers, no text, no watermark. Solid warm-white background, no transparency or checkerboard.
+```
+
 ## `home-hero.png`
 
 ```text

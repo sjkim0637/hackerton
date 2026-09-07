@@ -1,5 +1,22 @@
 # Interior AR Design Assets
 
+## 내부 AR 화면용 Asset
+
+현재 `activity_main.xml`과 내부 Controller의 실제 상태 전환을 기준으로 만든 안내용 원본이다. 모든 파일은
+`1254×1254` RGB PNG이며 이미지 안에 문구나 버튼을 넣지 않았다. Android UI에서 제목과 설명을 별도로
+표시하고, 필요하면 중앙 피사체를 유지한 채 4:3 또는 얕은 Banner 비율로 Crop한다.
+
+| 파일 | 연결되는 내부 UI | 권장 사용 |
+|---|---|---|
+| `internal-scan-guide.png` | ARCore 평면 탐색 및 초기 안내 | 카메라 진입 안내 Card, `centerCrop` |
+| `internal-object-selection-guide.png` | `영역 선택 모드`, `bboxSelectionView` | 영역 선택 전 도움말 또는 빈 선택 상태 |
+| `internal-removal-result.png` | `삭제 요청`, `삭제 전/후`, `resultOverlay` | 삭제 기능 설명과 처리 완료 상태 |
+| `internal-placement-guide.png` | 가구 이동·크기·회전 및 바닥 배치 | 선택 가구 조작 도움말 Bottom Sheet |
+| `internal-catalog-empty.png` | `가구 카탈로그 (서버)` | 카탈로그 Loading·Empty State |
+
+카메라 위에 직접 크게 덮기보다 짙은 반투명 안내 Panel 안에서 폭 `120–180dp` 정도로 표시하는 구성이
+적합하다. `internal-removal-result.png`만 전후 비교가 핵심이므로 가로 폭을 충분히 확보한다.
+
 현재 Android 구현을 바탕으로 메인 분기 화면과 브랜드 표현에 사용할 원본 이미지 Asset을 보관한다.
 이 폴더의 이미지는 UI 버튼이나 문구를 포함하지 않는다. 화면 제목, 설명, 접근성 Label은 Android
 Resource에서 별도로 렌더링한다.

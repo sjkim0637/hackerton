@@ -85,14 +85,21 @@ YES
 
 ## Next
 
-1. 생성 후보 5종 디자인 검토
+1. 메인 화면 5종과 내부 UI 5종 디자인 검토
 2. 승인된 앱 아이콘의 Adaptive Icon Resource 변환
 3. Android Resource 변환과 화면 분기는 후속 Workstream에서 진행
 
 ## Relevant Commits
 
-- 작업 완료 후 기록
+- `60f3b88` — Asset Workstream 등록과 메인 화면용 Asset 5종 추가
+- 내부 UI용 Asset 5종은 현재 Branch 최신 Commit에 포함
 
 ## Updated
 
 2026-09-07
+
+## Internal UI Asset Update
+
+- `activity_main.xml`, `RemovalController`, `MovedObjectController`, `CatalogController`의 내부 UI 흐름을 확인했다.
+- 평면 탐색, 영역 선택, 삭제 전후, 가구 조작, 서버 카탈로그 상태에 대응하는 Asset 5종을 추가했다.
+- 연결된 휴대폰 화면은 잠금 화면 때문에 직접 비교 Capture하지 못했으며, 다음 UI 적용 단계에서 실기기 Crop을 검증한다.
