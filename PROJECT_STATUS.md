@@ -6,11 +6,13 @@ Phase 1 - Planning & Exploration
 
 ## 전체 상태
 
-협업 Harness 구축을 마치고 독립적인 제품·기술 방향을 탐색하는 단계이다. 기존에 진행하던 Geo-Time AR Platform Core Prototype을 공식 Workstream으로 이전하고 있다.
+협업 Harness 구축을 마치고 독립적인 제품·기술 방향을 탐색하는 단계이다. Geo-Time AR Platform Core와 실내 공간 편집 Prototype을 진행하고 있으며, 온디바이스 IR Depth Point Cloud 배치 모듈은 코드·빌드 검증을 마치고 실기기 검토를 기다리고 있다.
 
 ## 진행 중인 Workstream
 
 - Geo-Time AR Platform Core: 기존 Prototype 이력 이전 및 실기기 검증 준비
+- 카메라 기반 공간 편집 / AR 가구 재배치: Android 앱·서버·외부 AI 수직 슬라이스 검증
+- IR Depth Point Cloud 배치 모듈: 독립 Gradle 모듈과 serverless 테스트 앱 구현 완료, 실기기 검토 대기
 
 최신 목록은 `TEAM_WORKBOARD.md`를 참고한다.
 
@@ -28,8 +30,8 @@ Phase 1 - Planning & Exploration
 
 ## 다음 이정표
 
-Geo-Time AR Platform Core의 기존 이력을 작업 Branch로 이전하고, ARCore 지원 실기기에서 현재 Prototype을 검증한다.
+ARCore Depth 지원 실기기에서 Point Cloud 해상도·FPS·배치 품질을 측정하고, 기존 메인 AR 앱에 독립 모듈 import를 검증한다.
 
 ## 마지막 갱신
 
-2026-08-24
+2026-09-07
