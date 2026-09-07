@@ -61,6 +61,41 @@ internal object LocalSurfaceEstimator {
     }
 }
 
+/** Deterministic RANSAC followed by PCA refinement on the best inlier set. */
+internal object RobustSurfaceEstimator {
+    fun fit(points: List<PointSample>, thresholdMeters: Float, iterations: Int = 48): PlaneFit? {
+        if (points.size < 3) return null
+        var seed = 0x13579BDF
+        fun nextIndex(): Int {
+            seed = seed * 1103515245 + 12345
+            return (seed ushr 1) % points.size
+        }
+
+        var bestInliers: List<PointSample> = emptyList()
+        var bestError = Float.POSITIVE_INFINITY
+        repeat(iterations) {
+            val ia = nextIndex()
+            var ib = nextIndex()
+            var ic = nextIndex()
+            if (ib == ia) ib = (ib + 1) % points.size
+            if (ic == ia || ic == ib) ic = (ic + 1 + (if (ic == ia || ic == ib) 1 else 0)) % points.size
+            if (ic == ia || ic == ib) return@repeat
+            val a = points[ia].position
+            val candidate = (points[ib].position - a).cross(points[ic].position - a)
+            if (candidate.length() < 1e-5f) return@repeat
+            val normal = candidate.normalized()
+            val inliers = points.filter { abs((it.position - a).dot(normal)) <= thresholdMeters }
+            if (inliers.size < 3) return@repeat
+            val error = inliers.sumOf { abs((it.position - a).dot(normal)).toDouble() }.toFloat() / inliers.size
+            if (inliers.size > bestInliers.size || (inliers.size == bestInliers.size && error < bestError)) {
+                bestInliers = inliers
+                bestError = error
+            }
+        }
+        return LocalSurfaceEstimator.fit(bestInliers.takeIf { it.size >= 3 } ?: points)
+    }
+}
+
 internal fun slopeDegrees(normal: Vec3): Float = Math.toDegrees(acos(abs(normal.normalized().dot(Vec3.UP)).coerceIn(-1f, 1f)).toDouble()).toFloat()
 
 internal fun rotationFromUp(normal: Vec3): FloatArray {

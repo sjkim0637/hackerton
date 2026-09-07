@@ -19,9 +19,14 @@ class ConfigStore(context: Context) {
         maxSurfaceSlopeDegrees = preferences.getFloat("slope", 15f),
         obstacleHeightThresholdMeters = preferences.getFloat("obstacle", 0.05f),
         planeDistanceThresholdMeters = preferences.getFloat("planeDistance", 0.025f),
+        placementDepthContinuityMeters = preferences.getFloat("depthContinuity", 0.12f),
         minimumSurfaceConfidence = preferences.getFloat("surfaceConfidence", 0.55f),
         processingFpsLimit = preferences.getInt("fps", 30),
+        enableInvalidDepthFilter = preferences.getBoolean("invalidDepthFilter", true),
+        enableDepthJumpFilter = preferences.getBoolean("depthJumpFilter", true),
         enableTemporalSmoothing = preferences.getBoolean("smoothingEnabled", true),
+        enablePlaneFitting = preferences.getBoolean("planeFitting", true),
+        enableRansac = preferences.getBoolean("ransac", true),
     )
 
     fun save(value: PlacementConfig) {
@@ -38,9 +43,14 @@ class ConfigStore(context: Context) {
             .putFloat("slope", value.maxSurfaceSlopeDegrees)
             .putFloat("obstacle", value.obstacleHeightThresholdMeters)
             .putFloat("planeDistance", value.planeDistanceThresholdMeters)
+            .putFloat("depthContinuity", value.placementDepthContinuityMeters)
             .putFloat("surfaceConfidence", value.minimumSurfaceConfidence)
             .putInt("fps", value.processingFpsLimit)
+            .putBoolean("invalidDepthFilter", value.enableInvalidDepthFilter)
+            .putBoolean("depthJumpFilter", value.enableDepthJumpFilter)
             .putBoolean("smoothingEnabled", value.enableTemporalSmoothing)
+            .putBoolean("planeFitting", value.enablePlaneFitting)
+            .putBoolean("ransac", value.enableRansac)
             .apply()
     }
 

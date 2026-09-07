@@ -76,6 +76,32 @@ class DepthPlacementEngineTest {
         assertEquals(PlacementFailureReason.WRONG_SURFACE, floor.failureReason)
     }
 
+    @Test fun `stable preset placement uses dense ROI independent of sparse display cloud`() {
+        val stable = DepthPlacementEngineFactory.create(
+            SensitivityPreset.LOW.applyTo(config).copy(globalStride = 6, maxPointCount = 5_000),
+        )
+        try {
+            stable.start()
+            stable.updateDepthFrame(floorFrame())
+            assertTrue(stable.getLatestPointCloud()!!.pointCount < 100)
+            val result = stable.evaluatePlacement(20f, 20f, PlacementObjectSize(0.2f, 0.2f, 0.5f))
+            assertTrue(result.isValid, result.toString())
+            assertTrue(result.validPointCount >= 35)
+        } finally {
+            stable.release()
+        }
+    }
+
+    @Test fun `placement near depth edge fits tapped surface and keeps anchor at tap`() {
+        val depth = ShortArray(40 * 40) { index -> if (index % 40 < 20) 1000.toShort() else 2000.toShort() }
+        engine.start()
+        engine.updateDepthFrame(wallFrame(depth))
+        val result = engine.evaluatePlacement(18f, 20f, PlacementObjectSize(0.2f, 0.2f, 0.05f), PlacementTarget.WALL)
+        assertTrue(result.isValid, result.toString())
+        assertEquals(1f, result.depthMeters, 0.03f)
+        assertEquals(-0.02f, result.pose!!.position.x, 0.015f)
+    }
+
     private fun floorFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(
         width = 40,
         height = 40,
@@ -90,10 +116,10 @@ class DepthPlacementEngineTest {
         timestampNanos = 1_000_000_000L,
     )
 
-    private fun wallFrame() = DepthFrameInput(
+    private fun wallFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(
         width = 40,
         height = 40,
-        depthMillimeters = ShortArray(40 * 40) { 1000.toShort() },
+        depthMillimeters = depth,
         intrinsics = CameraIntrinsics(100f, 100f, 20f, 20f),
         cameraPose = CameraPose.identity(),
         timestampNanos = 1_000_000_000L,

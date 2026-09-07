@@ -13,13 +13,14 @@ data class PlacementConfig(
     val maxSurfaceSlopeDegrees: Float = 15f,
     val obstacleHeightThresholdMeters: Float = 0.05f,
     val planeDistanceThresholdMeters: Float = 0.025f,
+    val placementDepthContinuityMeters: Float = 0.12f,
     val minimumSurfaceConfidence: Float = 0.55f,
     val enableInvalidDepthFilter: Boolean = true,
     val enableDepthJumpFilter: Boolean = true,
     val depthJumpThresholdMeters: Float = 0.15f,
     val enableTemporalSmoothing: Boolean = true,
     val enablePlaneFitting: Boolean = true,
-    val enableRansac: Boolean = false,
+    val enableRansac: Boolean = true,
     val processingFpsLimit: Int = 30,
 ) {
     init {
@@ -28,6 +29,7 @@ data class PlacementConfig(
         require(depthConfidenceThreshold in 0f..1f)
         require(temporalSmoothingAlpha in 0f..1f)
         require(maxPointCount > 0 && roiSizePixels >= 3 && minValidPointCount >= 3)
+        require(placementDepthContinuityMeters > 0f)
         require(maxSurfaceSlopeDegrees in 0f..90f)
         require(processingFpsLimit >= 1)
     }
@@ -42,7 +44,9 @@ fun SensitivityPreset.applyTo(base: PlacementConfig): PlacementConfig = when (th
         depthConfidenceThreshold = 0.7f,
         minValidPointCount = 35,
         maxSurfaceSlopeDegrees = 10f,
+        placementDepthContinuityMeters = 0.08f,
         minimumSurfaceConfidence = 0.72f,
+        enableRansac = true,
     )
     SensitivityPreset.NORMAL -> PlacementConfig.default().copy(
         maxPointCount = base.maxPointCount,
@@ -52,7 +56,9 @@ fun SensitivityPreset.applyTo(base: PlacementConfig): PlacementConfig = when (th
         depthConfidenceThreshold = 0.25f,
         minValidPointCount = 10,
         maxSurfaceSlopeDegrees = 22f,
+        placementDepthContinuityMeters = 0.18f,
         minimumSurfaceConfidence = 0.35f,
+        enableRansac = false,
     )
     SensitivityPreset.CUSTOM -> base
 }

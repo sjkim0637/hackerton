@@ -161,6 +161,7 @@ class MainActivity : AppCompatActivity() {
         hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText); hud.addView(measurementText); hud.addView(throwText)
         var selectedKind = DemoPlacementKind.FLOOR_CHAIR
         var placedObject: PlacedDemoObject? = null
+        var placementPending = false
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, DemoPlacementKind.entries.map { it.displayName })
             setSelection(0)
@@ -196,12 +197,20 @@ class MainActivity : AppCompatActivity() {
         }
         projected.onDepthTap = { u, v ->
             if (!measuring) {
-                lastResult = engine.evaluatePlacement(u, v, selectedKind.size, selectedKind.target)
-                val result = lastResult
-                val pose = result?.pose
+                val requestedKind = selectedKind
                 val cameraPose = lastDepthFrame?.input?.cameraPose
-                if (result?.isValid == true && pose != null && cameraPose != null) {
-                    placedObject = buildPlacedDemoObject(selectedKind, pose, cameraPose)
+                placementPending = true
+                resultText.text = "배치 표면을 분석하는 중…"
+                engine.evaluatePlacementAsync(u, v, requestedKind.size, requestedKind.target) { result ->
+                    runOnUiThread {
+                        if (!frame.isAttachedToWindow) return@runOnUiThread
+                        placementPending = false
+                        lastResult = result
+                        val pose = result.pose
+                        if (result.isValid && pose != null && cameraPose != null) {
+                            placedObject = buildPlacedDemoObject(requestedKind, pose, cameraPose)
+                        }
+                    }
                 }
             } else {
                 val start = measurementStart
@@ -305,7 +314,7 @@ class MainActivity : AppCompatActivity() {
             }
             metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
             rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
-            resultText.text = lastResult?.let {
+            resultText.text = if (placementPending) "배치 표면을 분석하는 중…" else lastResult?.let {
                 val status = when {
                     it.isValid -> if (selectedKind.wallMounted) "PLACED · 벽 액자" else "PLACED · 바닥 의자"
                     it.failureReason == com.project.depthplacement.PlacementFailureReason.WRONG_SURFACE -> if (selectedKind.wallMounted) "NO · 벽면을 선택하세요" else "NO · 바닥을 선택하세요"
@@ -423,11 +432,16 @@ class MainActivity : AppCompatActivity() {
         advanced.addView(slider("Minimum Surface Points", 3, 100, config.minValidPointCount) { applyConfig(config.copy(minValidPointCount = it)) })
         advanced.addView(slider("Maximum Slope (°)", 1, 45, config.maxSurfaceSlopeDegrees.toInt()) { applyConfig(config.copy(maxSurfaceSlopeDegrees = it.toFloat())) })
         advanced.addView(slider("Plane Distance (mm)", 5, 80, (config.planeDistanceThresholdMeters * 1000).toInt()) { applyConfig(config.copy(planeDistanceThresholdMeters = it / 1000f)) })
+        advanced.addView(slider("Surface Depth Continuity (cm)", 3, 30, (config.placementDepthContinuityMeters * 100).toInt()) { applyConfig(config.copy(placementDepthContinuityMeters = it / 100f)) })
         advanced.addView(slider("Surface Confidence (%)", 0, 100, (config.minimumSurfaceConfidence * 100).toInt()) { applyConfig(config.copy(minimumSurfaceConfidence = it / 100f)) })
         advanced.addView(slider("Obstacle Threshold (cm)", 1, 30, (config.obstacleHeightThresholdMeters * 100).toInt()) { applyConfig(config.copy(obstacleHeightThresholdMeters = it / 100f)) })
         advanced.addView(slider("Processing FPS", 5, 60, config.processingFpsLimit) { applyConfig(config.copy(processingFpsLimit = it)) })
         advanced.addView(slider("Point Size", 1, 15, renderConfig.pointSize.toInt()) { renderConfig = renderConfig.copy(pointSize = it.toFloat()); projectionView?.setPointSize(it.toFloat()) })
+        advanced.addView(settingBlock("Invalid Depth Filter", Switch(this).apply { isChecked = config.enableInvalidDepthFilter; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableInvalidDepthFilter = value)) } }))
+        advanced.addView(settingBlock("Depth Jump Filter", Switch(this).apply { isChecked = config.enableDepthJumpFilter; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableDepthJumpFilter = value)) } }))
         advanced.addView(settingBlock("Temporal Smoothing", Switch(this).apply { isChecked = config.enableTemporalSmoothing; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableTemporalSmoothing = value)) } }))
+        advanced.addView(settingBlock("Plane Fitting", Switch(this).apply { isChecked = config.enablePlaneFitting; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enablePlaneFitting = value)) } }))
+        advanced.addView(settingBlock("RANSAC Outlier Filter", Switch(this).apply { isChecked = config.enableRansac; setOnCheckedChangeListener { _, value -> applyConfig(config.copy(enableRansac = value)) } }))
         val advancedButton = button("세부 설정 펼치기") { }
         advancedButton.setOnClickListener {
             advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE

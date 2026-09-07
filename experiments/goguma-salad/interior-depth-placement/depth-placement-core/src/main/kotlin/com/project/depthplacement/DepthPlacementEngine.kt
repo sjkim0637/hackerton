@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 
 interface DepthPlacementEngine {
@@ -138,9 +139,28 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         }
         val cfg = config.get()
         val radius = cfg.roiSizePixels / 2
-        val roi = state.points.filter { abs(it.u - screenX) <= radius && abs(it.v - screenY) <= radius && (it.u % cfg.roiStride == 0) && (it.v % cfg.roiStride == 0) }
+        val reference = measurementPoint(state.input, screenX, screenY, cfg)
+            ?: return failed(PlacementFailureReason.INSUFFICIENT_POINTS, started)
+        val roi = sampleRegion(
+            frame = state.input,
+            centerU = screenX.toInt(),
+            centerV = screenY.toInt(),
+            radiusPixels = radius,
+            stride = cfg.roiStride,
+            cfg = cfg,
+            referenceDepthMeters = reference.depthMeters,
+        )
         if (roi.size < cfg.minValidPointCount) return failed(PlacementFailureReason.INSUFFICIENT_POINTS, started, points = roi.size)
-        val fit = LocalSurfaceEstimator.fit(roi) ?: return failed(PlacementFailureReason.INSUFFICIENT_POINTS, started, points = roi.size)
+        if (!cfg.enablePlaneFitting) return failed(PlacementFailureReason.INSUFFICIENT_SURFACE, started, points = roi.size)
+        val rawFit = if (cfg.enableRansac) {
+            RobustSurfaceEstimator.fit(roi, cfg.planeDistanceThresholdMeters)
+        } else {
+            LocalSurfaceEstimator.fit(roi)
+        } ?: return failed(PlacementFailureReason.INSUFFICIENT_POINTS, started, points = roi.size)
+        var normal = rawFit.normal
+        if (target == PlacementTarget.WALL && normal.dot(state.input.cameraPose.position() - rawFit.center) < 0f) normal = normal * -1f
+        val anchor = reference.position - normal * (reference.position - rawFit.center).dot(normal)
+        val fit = rawFit.copy(center = anchor, normal = normal)
         val slope = slopeDegrees(fit.normal)
         val surface = when {
             slope <= 8f && fit.center.y < 0.35f -> SurfaceType.FLOOR
@@ -157,12 +177,25 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
             return failed(PlacementFailureReason.SURFACE_TOO_STEEP, started, fit, surface, roi.size, slope)
         }
 
-        val axisU = Vec3(1f, 0f, 0f).let { (it - fit.normal * it.dot(fit.normal)).normalized() }
+        val referenceAxis = if (abs(fit.normal.x) < 0.9f) Vec3(1f, 0f, 0f) else Vec3(0f, 0f, 1f)
+        val axisU = (referenceAxis - fit.normal * referenceAxis.dot(fit.normal)).normalized()
         val axisV = fit.normal.cross(axisU).normalized()
+        val halfExtentMeters = max(objectSize.widthMeters, objectSize.depthMeters) / 2f
+        val footprintRadiusPixels = (
+            ceil(max(state.input.intrinsics.fx, state.input.intrinsics.fy) * halfExtentMeters / reference.depthMeters).toInt() + 4
+            ).coerceAtLeast(radius)
+        val placementPoints = sampleRegion(
+            frame = state.input,
+            centerU = screenX.toInt(),
+            centerV = screenY.toInt(),
+            radiusPixels = footprintRadiusPixels,
+            stride = cfg.roiStride,
+            cfg = cfg,
+        )
         var surfacePoints = 0
         var obstacles = 0
         var confidenceSum = 0f
-        for (point in state.points) {
+        for (point in placementPoints) {
             val d = point.position - fit.center
             val x = abs(d.dot(axisU)); val z = abs(d.dot(axisV)); val height = d.dot(fit.normal)
             if (x <= objectSize.widthMeters / 2f && z <= objectSize.depthMeters / 2f) {
@@ -224,6 +257,43 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
     private fun inside(frame: DepthFrameInput, x: Float, y: Float): Boolean =
         x >= 0f && x < frame.width && y >= 0f && y < frame.height
 
+    private fun sampleRegion(
+        frame: DepthFrameInput,
+        centerU: Int,
+        centerV: Int,
+        radiusPixels: Int,
+        stride: Int,
+        cfg: PlacementConfig,
+        referenceDepthMeters: Float? = null,
+    ): List<PointSample> {
+        val minU = (centerU - radiusPixels).coerceAtLeast(0)
+        val maxU = (centerU + radiusPixels).coerceAtMost(frame.width - 1)
+        val minV = (centerV - radiusPixels).coerceAtLeast(0)
+        val maxV = (centerV + radiusPixels).coerceAtMost(frame.height - 1)
+        val points = ArrayList<PointSample>()
+        for (v in minV..maxV step stride) for (u in minU..maxU step stride) {
+            val point = framePoint(frame, u, v, cfg) ?: continue
+            if (referenceDepthMeters != null && abs(point.depthMeters - referenceDepthMeters) > cfg.placementDepthContinuityMeters) continue
+            points += point
+        }
+        return points
+    }
+
+    private fun framePoint(frame: DepthFrameInput, u: Int, v: Int, cfg: PlacementConfig): PointSample? {
+        val index = v * frame.width + u
+        val depth = (frame.depthMillimeters[index].toInt() and 0xffff) / 1000f
+        val confidence = frame.confidence?.get(index) ?: if (depth > 0f) 1f else 0f
+        if (depth <= 0f || depth !in cfg.minDepthMeters..cfg.maxDepthMeters) return null
+        if (cfg.enableInvalidDepthFilter && confidence < cfg.depthConfidenceThreshold) return null
+        if (cfg.enableDepthJumpFilter && u > 0) {
+            val neighbor = (frame.depthMillimeters[index - 1].toInt() and 0xffff) / 1000f
+            if (neighbor > 0f && abs(depth - neighbor) > cfg.depthJumpThresholdMeters) return null
+        }
+        val cameraX = (u - frame.intrinsics.cx) * depth / frame.intrinsics.fx
+        val cameraY = (frame.intrinsics.cy - v) * depth / frame.intrinsics.fy
+        return PointSample(frame.cameraPose.transform(cameraX, cameraY, -depth), u, v, confidence, depth)
+    }
+
     /** Uses the nearest valid sample in a 5x5 neighborhood to tolerate sparse Depth holes. */
     private fun measurementPoint(frame: DepthFrameInput, x: Float, y: Float, cfg: PlacementConfig): PointSample? {
         val centerU = x.toInt().coerceIn(0, frame.width - 1)
@@ -233,17 +303,12 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         var bestConfidence = -1f
         for (v in (centerV - 2).coerceAtLeast(0)..(centerV + 2).coerceAtMost(frame.height - 1)) {
             for (u in (centerU - 2).coerceAtLeast(0)..(centerU + 2).coerceAtMost(frame.width - 1)) {
-                val index = v * frame.width + u
-                val depth = (frame.depthMillimeters[index].toInt() and 0xffff) / 1000f
-                val confidence = frame.confidence?.get(index) ?: if (depth > 0f) 1f else 0f
-                if (depth <= 0f || depth !in cfg.minDepthMeters..cfg.maxDepthMeters || confidence < cfg.depthConfidenceThreshold) continue
+                val point = framePoint(frame, u, v, cfg) ?: continue
                 val pixelDistance = (u - centerU) * (u - centerU) + (v - centerV) * (v - centerV)
-                if (pixelDistance > bestDistance || (pixelDistance == bestDistance && confidence <= bestConfidence)) continue
-                val cameraX = (u - frame.intrinsics.cx) * depth / frame.intrinsics.fx
-                val cameraY = (frame.intrinsics.cy - v) * depth / frame.intrinsics.fy
-                best = PointSample(frame.cameraPose.transform(cameraX, cameraY, -depth), u, v, confidence, depth)
+                if (pixelDistance > bestDistance || (pixelDistance == bestDistance && point.confidence <= bestConfidence)) continue
+                best = point
                 bestDistance = pixelDistance
-                bestConfidence = confidence
+                bestConfidence = point.confidence
             }
         }
         return best

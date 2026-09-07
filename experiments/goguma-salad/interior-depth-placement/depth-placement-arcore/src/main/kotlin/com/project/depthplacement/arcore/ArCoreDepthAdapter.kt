@@ -32,12 +32,18 @@ object ArCoreDepthAdapter {
 
     /** Uses dense, motion-completed depth when available so room contours remain recognizable. */
     fun configure(session: Session, config: Config = session.config): Config {
+        prepareConfig(session, config)
+        session.configure(config)
+        return config
+    }
+
+    /** Applies the supported Depth mode when the host framework configures the Session itself. */
+    fun prepareConfig(session: Session, config: Config): Config {
         config.depthMode = when {
             session.isDepthModeSupported(Config.DepthMode.AUTOMATIC) -> Config.DepthMode.AUTOMATIC
             session.isDepthModeSupported(Config.DepthMode.RAW_DEPTH_ONLY) -> Config.DepthMode.RAW_DEPTH_ONLY
             else -> Config.DepthMode.DISABLED
         }
-        session.configure(config)
         return config
     }
 
