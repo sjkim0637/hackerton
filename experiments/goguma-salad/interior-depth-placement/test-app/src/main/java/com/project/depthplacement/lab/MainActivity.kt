@@ -33,8 +33,11 @@ import com.project.depthplacement.DepthProjectileSimulator
 import com.project.depthplacement.MeasuredDepthPoint
 import com.project.depthplacement.PlacementConfig
 import com.project.depthplacement.PlacementObjectSize
+import com.project.depthplacement.PlacementPose
 import com.project.depthplacement.PlacementResult
+import com.project.depthplacement.PlacementTarget
 import com.project.depthplacement.SensitivityPreset
+import com.project.depthplacement.Vec3
 import com.project.depthplacement.applyTo
 import com.project.depthplacement.arcore.ArCoreDepthAdapter
 import com.project.depthplacement.debug.DebugRenderConfig
@@ -44,6 +47,17 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 private enum class EasyPreset { STABLE, BALANCED, DETAIL }
+private enum class DemoPlacementKind(
+    val displayName: String,
+    val target: PlacementTarget,
+    val size: PlacementObjectSize,
+    val wallMounted: Boolean,
+) {
+    FLOOR_CHAIR("바닥 · Chair 0.48×0.48×0.90m", PlacementTarget.HORIZONTAL, PlacementObjectSize(0.48f, 0.48f, 0.90f), false),
+    WALL_FRAME("벽 · Picture Frame 0.55×0.38m", PlacementTarget.WALL, PlacementObjectSize(0.55f, 0.38f, 0.05f), true),
+}
+private data class WorldSegment(val start: Vec3, val end: Vec3)
+private data class PlacedDemoObject(val kind: DemoPlacementKind, val labelPoint: Vec3, val segments: List<WorldSegment>)
 
 class MainActivity : AppCompatActivity() {
     private lateinit var root: LinearLayout
@@ -145,15 +159,16 @@ class MainActivity : AppCompatActivity() {
         val measurementText = text("길이 측정: 대기")
         val throwText = text("공 테스트: 대기")
         hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText); hud.addView(measurementText); hud.addView(throwText)
+        var selectedKind = DemoPlacementKind.FLOOR_CHAIR
+        var placedObject: PlacedDemoObject? = null
         val preset = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, DemoPlacementKind.entries.map { it.displayName })
             setSelection(0)
-            onItemSelectedListener = SimpleItemSelected { position -> objectSize = when (position) {
-                1 -> PlacementObjectSize(0.2f, 0.2f, 0.2f)
-                2 -> PlacementObjectSize(0.4f, 0.4f, 0.7f)
-                3 -> { showCustomObjectDialog(); objectSize }
-                else -> PlacementObjectSize(0.6f, 0.6f, 1f)
-            } }
+            onItemSelectedListener = SimpleItemSelected { position ->
+                selectedKind = DemoPlacementKind.entries[position]
+                objectSize = selectedKind.size
+                resultText.text = if (selectedKind.wallMounted) "벽면을 탭하면 액자를 놓습니다." else "바닥을 탭하면 의자를 놓습니다."
+            }
         }
         hud.addView(preset)
         var measuring = false
@@ -162,6 +177,12 @@ class MainActivity : AppCompatActivity() {
         val projectileSimulator = DepthProjectileSimulator()
         val measureButton = button("길이 측정") { }
         val throwButton = button("공 던지기") { }
+        val clearPlacementButton = button("배치 제거") {
+            placedObject = null
+            lastResult = null
+            projected.clearPlacedObject()
+            resultText.text = if (selectedKind.wallMounted) "벽면을 탭하면 액자를 놓습니다." else "바닥을 탭하면 의자를 놓습니다."
+        }
         projected.onSlingshotRelease = { yawOffset, pitchOffset, power ->
             val depthFrame = lastDepthFrame?.input
             if (depthFrame == null) {
@@ -175,7 +196,13 @@ class MainActivity : AppCompatActivity() {
         }
         projected.onDepthTap = { u, v ->
             if (!measuring) {
-                lastResult = engine.evaluatePlacement(u, v, objectSize)
+                lastResult = engine.evaluatePlacement(u, v, selectedKind.size, selectedKind.target)
+                val result = lastResult
+                val pose = result?.pose
+                val cameraPose = lastDepthFrame?.input?.cameraPose
+                if (result?.isValid == true && pose != null && cameraPose != null) {
+                    placedObject = buildPlacedDemoObject(selectedKind, pose, cameraPose)
+                }
             } else {
                 val start = measurementStart
                 if (start == null) {
@@ -238,7 +265,7 @@ class MainActivity : AppCompatActivity() {
             button("Points ON/OFF") { projected.setOverlayEnabled(!projected.isOverlayEnabled()) },
             measureButton,
         ))
-        hud.addView(throwButton, LinearLayout.LayoutParams(-1, dp(48)))
+        hud.addView(buttonRow(throwButton, clearPlacementButton))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         content.removeAllViews(); content.addView(frame)
         if (!streamRunning) startDepth()
@@ -250,9 +277,10 @@ class MainActivity : AppCompatActivity() {
                 projected.submit(snapshot)
                 lastProjectionSubmitNanos = snapshot.timestampNanos
             }
+            val depthFrame = lastDepthFrame?.input
+            placedObject?.let { renderPlacedDemoObject(projected, it, depthFrame) }
             projectileSimulator.updateGeometry(snapshot)
             projectileSimulator.step()?.let { projectile ->
-                val depthFrame = lastDepthFrame?.input
                 val ball = depthFrame?.projectWorldPoint(projectile.position)
                 val hit = projectile.lastCollisionPoint?.let { depthFrame?.projectWorldPoint(it) }
                 val visible = ball ?: hit
@@ -277,10 +305,94 @@ class MainActivity : AppCompatActivity() {
             }
             metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
             rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
-            resultText.text = lastResult?.let { "${if (it.isValid) "VALID" else "NO: ${it.failureReason}"}  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}" } ?: "화면을 탭하면 배치를 평가합니다."
+            resultText.text = lastResult?.let {
+                val status = when {
+                    it.isValid -> if (selectedKind.wallMounted) "PLACED · 벽 액자" else "PLACED · 바닥 의자"
+                    it.failureReason == com.project.depthplacement.PlacementFailureReason.WRONG_SURFACE -> if (selectedKind.wallMounted) "NO · 벽면을 선택하세요" else "NO · 바닥을 선택하세요"
+                    else -> "NO · ${it.failureReason}"
+                }
+                "$status  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}"
+            } ?: if (selectedKind.wallMounted) "벽면을 탭하면 액자를 놓습니다." else "바닥을 탭하면 의자를 놓습니다."
             handler.postDelayed(::refresh, if (projectileSimulator.currentState()?.active == true) 33 else 100)
         }
         refresh()
+    }
+
+    private fun buildPlacedDemoObject(kind: DemoPlacementKind, pose: PlacementPose, cameraPose: com.project.depthplacement.CameraPose): PlacedDemoObject {
+        val segments = ArrayList<WorldSegment>()
+        fun segment(start: Vec3, end: Vec3) { segments += WorldSegment(start, end) }
+        return if (!kind.wallMounted) {
+            val up = pose.surfaceNormal.let { if (it.y < 0f) it * -1f else it }.normalized()
+            val towardCamera = cameraPose.position() - pose.position
+            val planarForward = towardCamera - up * towardCamera.dot(up)
+            val forward = if (planarForward.length() > 0.001f) planarForward.normalized() else Vec3(0f, 0f, 1f)
+            val right = forward.cross(up).normalized()
+            val halfWidth = kind.size.widthMeters / 2f
+            val halfDepth = kind.size.depthMeters / 2f
+            val seatHeight = 0.44f
+            fun point(x: Float, z: Float, height: Float) = pose.position + right * x + forward * z + up * height
+            val feet = listOf(
+                point(-halfWidth, -halfDepth, 0.01f), point(halfWidth, -halfDepth, 0.01f),
+                point(halfWidth, halfDepth, 0.01f), point(-halfWidth, halfDepth, 0.01f),
+            )
+            val seat = listOf(
+                point(-halfWidth, -halfDepth, seatHeight), point(halfWidth, -halfDepth, seatHeight),
+                point(halfWidth, halfDepth, seatHeight), point(-halfWidth, halfDepth, seatHeight),
+            )
+            for (index in 0..3) {
+                segment(feet[index], seat[index])
+                segment(seat[index], seat[(index + 1) % 4])
+            }
+            val backLeft = seat[0] + up * 0.46f
+            val backRight = seat[1] + up * 0.46f
+            segment(seat[0], backLeft)
+            segment(seat[1], backRight)
+            segment(backLeft, backRight)
+            segment(seat[0] + up * 0.23f, seat[1] + up * 0.23f)
+            PlacedDemoObject(kind, (backLeft + backRight) * 0.5f + up * 0.06f, segments)
+        } else {
+            var normal = pose.surfaceNormal.normalized()
+            val towardCamera = cameraPose.position() - pose.position
+            if (normal.dot(towardCamera) < 0f) normal = normal * -1f
+            val projectedUp = Vec3.UP - normal * Vec3.UP.dot(normal)
+            val up = if (projectedUp.length() > 0.001f) projectedUp.normalized() else cameraPose.up()
+            val right = up.cross(normal).normalized()
+            val center = pose.position + normal * 0.025f
+            val halfWidth = kind.size.widthMeters / 2f
+            val halfHeight = kind.size.depthMeters / 2f
+            fun point(x: Float, y: Float) = center + right * x + up * y
+            val corners = listOf(
+                point(-halfWidth, -halfHeight), point(halfWidth, -halfHeight),
+                point(halfWidth, halfHeight), point(-halfWidth, halfHeight),
+            )
+            for (index in 0..3) segment(corners[index], corners[(index + 1) % 4])
+            segment(corners[0], corners[2])
+            segment(corners[1], corners[3])
+            PlacedDemoObject(kind, point(0f, halfHeight + 0.07f), segments)
+        }
+    }
+
+    private fun renderPlacedDemoObject(view: DepthProjectionView, placed: PlacedDemoObject, frame: com.project.depthplacement.DepthFrameInput?) {
+        if (frame == null) return
+        val projectedSegments = ArrayList<Float>(placed.segments.size * 4)
+        for (segment in placed.segments) {
+            val start = frame.projectWorldPoint(segment.start) ?: continue
+            val end = frame.projectWorldPoint(segment.end) ?: continue
+            projectedSegments += start.x; projectedSegments += start.y
+            projectedSegments += end.x; projectedSegments += end.y
+        }
+        val label = frame.projectWorldPoint(placed.labelPoint)
+        if (projectedSegments.isEmpty() || label == null) {
+            view.clearPlacedObject()
+            return
+        }
+        view.showPlacedObject(
+            segments = projectedSegments.toFloatArray(),
+            labelU = label.x,
+            labelV = label.y,
+            label = if (placed.kind.wallMounted) "FRAME · WALL" else "CHAIR · FLOOR",
+            wallMounted = placed.kind.wallMounted,
+        )
     }
 
     private fun showSettings() {

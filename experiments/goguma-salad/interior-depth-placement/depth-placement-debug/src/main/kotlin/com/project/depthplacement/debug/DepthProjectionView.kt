@@ -36,6 +36,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     private val projectileHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(226, 232, 238); style = Paint.Style.FILL }
     private val projectileOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(22, 26, 31); strokeWidth = 2.5f * resources.displayMetrics.density; style = Paint.Style.STROKE }
     private val slingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(120, 72, 38); strokeWidth = 5f * resources.displayMetrics.density; style = Paint.Style.STROKE }
+    private val placedShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB0000000.toInt(); strokeWidth = 8f * resources.displayMetrics.density; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val placedObjectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 4f * resources.displayMetrics.density; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 18f * resources.displayMetrics.density * resources.configuration.fontScale }
     @Volatile private var cameraBitmap: Bitmap? = null
     @Volatile private var projection: Projection? = null
@@ -47,6 +49,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     private var smoothedNearDepth = Float.NaN
     private var smoothedFarDepth = Float.NaN
     private var measurementPoints: FloatArray? = null
+    private data class PlacedObjectOverlay(val segments: FloatArray, val labelU: Float, val labelV: Float, val label: String, val wallMounted: Boolean)
+    private var placedObject: PlacedObjectOverlay? = null
     private data class ProjectileOverlay(val u: Float, val v: Float, val radiusDepthPx: Float, val ballLabel: String, val hitU: Float?, val hitV: Float?, val hitLabel: String)
     private var projectile: ProjectileOverlay? = null
     private var slingshotEnabled = false
@@ -86,6 +90,11 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         invalidate()
     }
     fun clearMeasurement() { measurementPoints = null; invalidate() }
+    fun showPlacedObject(segments: FloatArray, labelU: Float, labelV: Float, label: String, wallMounted: Boolean) {
+        placedObject = PlacedObjectOverlay(segments.copyOf(), labelU, labelV, label, wallMounted)
+        postInvalidateOnAnimation()
+    }
+    fun clearPlacedObject() { placedObject = null; invalidate() }
     fun setSlingshotEnabled(value: Boolean) { slingshotEnabled = value; slingDragging = false; invalidate() }
     fun showProjectile(u: Float, v: Float, radiusDepthPx: Float, ballLabel: String = "", hitU: Float? = null, hitV: Float? = null, hitLabel: String = "HIT") {
         projectile = ProjectileOverlay(u, v, radiusDepthPx, ballLabel, hitU, hitV, hitLabel)
@@ -129,6 +138,7 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
                 canvas.drawCircle(x, y, pointRadiusPx, pointPaint)
             }
         }
+        drawPlacedObject(canvas, data, bitmapWidth, bitmapHeight, scale, left, top)
         drawMeasurement(canvas, data, bitmapWidth, bitmapHeight, scale, left, top)
         drawProjectile(canvas, data, bitmapWidth, bitmapHeight, scale, left, top)
         drawSlingshot(canvas)
@@ -224,6 +234,20 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         canvas.drawCircle(center.x - radius * 0.38f, center.y - radius * 0.38f, radius * 0.17f, projectileHighlightPaint)
         canvas.drawCircle(center.x, center.y, radius, projectileOutlinePaint)
         if (ball.ballLabel.isNotEmpty()) canvas.drawText(ball.ballLabel, center.x + radius + 8f * resources.displayMetrics.density, center.y, messagePaint)
+    }
+
+    private fun drawPlacedObject(canvas: Canvas, data: Projection, bitmapWidth: Float, bitmapHeight: Float, scale: Float, left: Float, top: Float) {
+        val placed = placedObject ?: return
+        placedObjectPaint.color = if (placed.wallMounted) Color.rgb(255, 190, 70) else Color.rgb(70, 225, 255)
+        for (index in placed.segments.indices step 4) {
+            val start = depthToView(placed.segments[index], placed.segments[index + 1], data, bitmapWidth, bitmapHeight, scale, left, top)
+            val end = depthToView(placed.segments[index + 2], placed.segments[index + 3], data, bitmapWidth, bitmapHeight, scale, left, top)
+            canvas.drawLine(start.x, start.y, end.x, end.y, placedShadowPaint)
+            canvas.drawLine(start.x, start.y, end.x, end.y, placedObjectPaint)
+        }
+        val label = depthToView(placed.labelU, placed.labelV, data, bitmapWidth, bitmapHeight, scale, left, top)
+        canvas.drawCircle(label.x, label.y, 7f * resources.displayMetrics.density, placedObjectPaint)
+        canvas.drawText(placed.label, label.x + 10f * resources.displayMetrics.density, label.y - 10f * resources.displayMetrics.density, messagePaint)
     }
 
     private fun drawMeasurement(canvas: Canvas, data: Projection, bitmapWidth: Float, bitmapHeight: Float, scale: Float, left: Float, top: Float) {

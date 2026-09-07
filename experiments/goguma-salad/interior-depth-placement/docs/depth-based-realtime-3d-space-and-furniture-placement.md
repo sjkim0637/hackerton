@@ -180,6 +180,12 @@ Test App의 `공 던지기`는 실제 공간 Geometry가 올바르게 생성되�
 
 이 기능은 Depth 윤곽의 위치와 반동 방향을 눈으로 확인하는 Probe이며, 마찰·회전 관성·연속 mesh collider를 포함하는 완전한 rigid-body 물리엔진은 아니다.
 
+### 11.2 바닥·벽 물체 배치와 재투영
+
+배치 요청에는 `PlacementTarget.HORIZONTAL` 또는 `PlacementTarget.WALL`을 함께 전달한다. 바닥용 물체는 `FLOOR/HORIZONTAL_SURFACE`에서만, 벽걸이 물체는 약 70° 이상 세워진 `WALL`에서만 성공한다. 따라서 벽을 공통 경사 제한으로 거절하던 기존 문제 없이 표면 종류에 맞는 검증을 적용한다.
+
+Test App은 바닥용 `Chair`와 벽걸이용 `Picture Frame`을 제공한다. 배치가 성공하면 `PlacementPose.position`과 `surfaceNormal`로 의자의 다리·좌판·등받이 또는 액자의 테두리·대각선 world-space 선분을 만든다. 이후 매 camera frame마다 각 선분을 현재 camera pose와 intrinsics로 Depth pixel에 재투영하므로 카메라가 움직여도 물체가 선택한 공간 위치에 남아 있는지 확인할 수 있다.
+
 ## 12. 출력 결과
 
 | 필드 | 의미 |

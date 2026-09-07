@@ -62,6 +62,20 @@ class DepthPlacementEngineTest {
         assertEquals(1f, result.endDepthMeters, 0.0001f)
     }
 
+    @Test fun `vertical depth plane accepts wall object and rejects floor object`() {
+        engine.start()
+        engine.updateDepthFrame(wallFrame())
+        val size = PlacementObjectSize(0.4f, 0.3f, 0.05f)
+
+        val wall = engine.evaluatePlacement(20f, 20f, size, PlacementTarget.WALL)
+        assertTrue(wall.isValid, wall.toString())
+        assertEquals(SurfaceType.WALL, wall.surface)
+
+        val floor = engine.evaluatePlacement(20f, 20f, size, PlacementTarget.HORIZONTAL)
+        assertFalse(floor.isValid)
+        assertEquals(PlacementFailureReason.WRONG_SURFACE, floor.failureReason)
+    }
+
     private fun floorFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(
         width = 40,
         height = 40,
@@ -73,6 +87,15 @@ class DepthPlacementEngineTest {
             0f, 1f, 0f, 0f,
             0f, 0f, 0f, 1f,
         )),
+        timestampNanos = 1_000_000_000L,
+    )
+
+    private fun wallFrame() = DepthFrameInput(
+        width = 40,
+        height = 40,
+        depthMillimeters = ShortArray(40 * 40) { 1000.toShort() },
+        intrinsics = CameraIntrinsics(100f, 100f, 20f, 20f),
+        cameraPose = CameraPose.identity(),
         timestampNanos = 1_000_000_000L,
     )
 }

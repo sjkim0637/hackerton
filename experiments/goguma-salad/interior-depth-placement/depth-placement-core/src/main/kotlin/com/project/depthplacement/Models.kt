@@ -83,10 +83,12 @@ data class PlacementObjectSize(
 
 enum class CoordinateSystem { ARCORE_WORLD_METERS }
 enum class SurfaceType { FLOOR, HORIZONTAL_SURFACE, WALL, UNKNOWN }
+enum class PlacementTarget { HORIZONTAL, WALL }
 enum class PlacementFailureReason {
     NO_DEPTH_FRAME,
     OUTSIDE_DEPTH_IMAGE,
     INSUFFICIENT_POINTS,
+    WRONG_SURFACE,
     SURFACE_TOO_STEEP,
     INSUFFICIENT_SURFACE,
     OBSTACLE_DETECTED,

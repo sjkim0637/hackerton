@@ -11,8 +11,14 @@ interface DepthPlacementEngine {
     fun start()
     fun stop()
     fun updateDepthFrame(frame: DepthFrameInput)
-    fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize): PlacementResult
-    fun evaluatePlacementAsync(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, callback: (PlacementResult) -> Unit)
+    fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, target: PlacementTarget = PlacementTarget.HORIZONTAL): PlacementResult
+    fun evaluatePlacementAsync(
+        screenX: Float,
+        screenY: Float,
+        objectSize: PlacementObjectSize,
+        target: PlacementTarget = PlacementTarget.HORIZONTAL,
+        callback: (PlacementResult) -> Unit,
+    )
     fun samplePoint(screenX: Float, screenY: Float): MeasuredDepthPoint?
     fun measureLength(startX: Float, startY: Float, endX: Float, endY: Float): LengthMeasurementResult
     fun measureLength(start: MeasuredDepthPoint, end: MeasuredDepthPoint): LengthMeasurementResult
@@ -124,7 +130,7 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         return samples.copyOf(count * 4)
     }
 
-    override fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize): PlacementResult {
+    override fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, target: PlacementTarget): PlacementResult {
         val started = System.nanoTime()
         val state = latest.get() ?: return failed(PlacementFailureReason.NO_DEPTH_FRAME, started)
         if (screenX < 0f || screenX >= state.input.width || screenY < 0f || screenY >= state.input.height) {
@@ -142,7 +148,14 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
             slope >= 70f -> SurfaceType.WALL
             else -> SurfaceType.UNKNOWN
         }
-        if (slope > cfg.maxSurfaceSlopeDegrees) return failed(PlacementFailureReason.SURFACE_TOO_STEEP, started, fit, surface, roi.size, slope)
+        val targetMatches = when (target) {
+            PlacementTarget.HORIZONTAL -> surface == SurfaceType.FLOOR || surface == SurfaceType.HORIZONTAL_SURFACE
+            PlacementTarget.WALL -> surface == SurfaceType.WALL
+        }
+        if (!targetMatches) return failed(PlacementFailureReason.WRONG_SURFACE, started, fit, surface, roi.size, slope)
+        if (target == PlacementTarget.HORIZONTAL && slope > cfg.maxSurfaceSlopeDegrees) {
+            return failed(PlacementFailureReason.SURFACE_TOO_STEEP, started, fit, surface, roi.size, slope)
+        }
 
         val axisU = Vec3(1f, 0f, 0f).let { (it - fit.normal * it.dot(fit.normal)).normalized() }
         val axisV = fit.normal.cross(axisU).normalized()
@@ -170,8 +183,8 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         return PlacementResult(true, confidence, surface, PlacementPose(fit.center, rotationFromUp(fit.normal), fit.normal), null, -fit.center.z, slope, surfacePoints, obstacles, elapsed)
     }
 
-    override fun evaluatePlacementAsync(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, callback: (PlacementResult) -> Unit) {
-        executor.execute { callback(evaluatePlacement(screenX, screenY, objectSize)) }
+    override fun evaluatePlacementAsync(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, target: PlacementTarget, callback: (PlacementResult) -> Unit) {
+        executor.execute { callback(evaluatePlacement(screenX, screenY, objectSize, target)) }
     }
 
     override fun measureLength(startX: Float, startY: Float, endX: Float, endY: Float): LengthMeasurementResult {
