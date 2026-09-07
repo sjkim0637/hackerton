@@ -127,8 +127,17 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
   `tests/test_mobilesam_real_model.py`, `test_api.py`의 point region 흐름).
 - `ruff check`: 이번에 건드린 파일 기준 통과(사전에 있던 `scenes.py`의 `File(...)` 기본값
   경고 1개는 이번 변경과 무관한 기존 항목이라 그대로 둠).
-- 앱(`BboxSelectionView.kt`) 변경은 컴파일/실기기 확인 못 함 — Android SDK 없는 환경에서
-  작업함. 코드 리뷰상 기존 드래그 경로는 로직을 안 건드렸다(추가만 함).
+- **2026-09-07 실기기 검증 완료 (D6, Depth API + Instant Placement).**
+  `agent/goguma-salad/interior-ui-navigation`(asset·UI 분리)과 이 브랜치(MobileSAM 서버 +
+  D6)를 임시로 병합(`agent/goguma-salad/interior-apk-test`, 이 브랜치 자체엔 반영 안 함)해서
+  `:app:assembleDebug` 빌드(JDK 21) → 실기기 설치 → 실행까지 확인. 크래시 없음,
+  `BboxSelectionView.kt`의 기존 드래그 경로도 정상 동작(회귀 없음).
+  - logcat: `Depth API 지원: true` — 이 실기기는 ARCore Depth API를 지원한다.
+  - **Plane 0개(`planes=0/0`) 상태에서 화면을 탭하니 가구가 즉시 배치됨** — Instant
+    Placement가 의도대로 동작. "AR이 평면 찾는다고 계속 돈다"는 원래 불만이 실기기에서
+    실제로 해소된 것을 확인.
+  - MobileSAM 점 프롬프트로 사물을 선택하는 것 자체는 이번엔 검증 안 함(Out of Scope의
+    앱 배선 미완료 때문 — 여전히 기존 bbox 드래그로만 삭제 요청 가능).
 
 ## Known Issues
 
@@ -140,14 +149,11 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
   모델이라 실기기 요구 응답시간 안에 들어오는지는 실측이 필요하다.
 - 테스트용으로 받은 모델은 저장소에 없다 — 다른 개발자/CI는 위 "모델 준비" 절차를 직접
   거쳐야 `test_mobilesam_real_model.py`가 skip 되지 않고 돈다.
-- D6(Depth API/Instant Placement)은 Android SDK/실기기가 없는 환경에서 짜서 컴파일/실기기
-  확인을 못 했다. 특히 `session.isDepthModeSupported()`/`Config.InstantPlacementMode` 심볼이
-  실제 프로젝트가 받는 ARCore 버전(1.48/1.54 둘 다 gradle 캐시에 있음, 둘 다 이 API를
-  지원하는 버전대)에 존재하는지는 API 문서 기준으로 확인했지 컴파일로 확인한 게 아니다.
-- 이 프로젝트 실기기(Galaxy S25 FE, `ar-cube-min` Workstream 기준)로 추정하면 전용 ToF 센서가
-  없을 가능성이 높다 — 그 경우 Depth API는 소프트웨어 Depth-from-Motion으로 자동 대체되고,
-  "진짜 즉시 배치"는 Instant Placement 쪽에서만 체감된다(D6 참고). 실제로 어느 쪽이 켜지는지는
-  실기기에서 `depthSupported` 로그로 확인해야 한다.
+- ~~D6은 컴파일/실기기 확인 못 함~~ → **2026-09-07 실기기 검증 완료** (아래 Verification
+  참고). 실제 테스트 기기는 `Depth API 지원: true` 로 나왔다 — ToF 하드웨어인지
+  Depth-from-Motion인지는 로그만으론 구분 안 되지만, 어느 쪽이든 지원 자체는 확인됐다.
+  **Plane 0개 상태에서 탭 → 가구가 즉시 배치되는 것도 실기기에서 직접 확인**(Instant
+  Placement가 의도대로 동작). "폰을 막 돌려야 하는" 원래 불만이 실제로 해소됐다.
 
 ## Next
 
@@ -156,9 +162,9 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
    MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다. 이 문서의 "가구 배치 Mode에
    들어갈 때만 Plane 격자·스캔 안내 표시" 요청도 여기서 같이 처리한다(D6과 범위가 겹친다 —
    현재 D6은 hitTest 자체를 즉시 가능하게만 했고, 격자 시각화 조건부 표시는 미포함).
-2. **D6 실기기 검증(우선)**: `depthSupported` 로그 확인, Instant Placement로 배치 후 실제
-   Plane/Depth가 잡히며 위치가 자연스럽게 다듬어지는지, Plane 0개 상태에서 탭 배치가 실제로
-   되는지 확인.
+2. ~~D6 실기기 검증~~ — **완료 (2026-09-07)**. `depthSupported=true` 확인, Plane 0개 상태
+   탭 배치 확인. 다만 Instant Placement로 놓은 뒤 실제 Plane/Depth가 잡히며 위치가
+   "자연스럽게 다듬어지는" 전환까지는 아직 확인 안 함 — 짧은 세션이라 지켜보지 못했다.
 3. **앱 배선**: `RemovalController`에서 "TV 선택 모드" 진입 시
    `binding.bboxSelectionView.onPointSelected = ::onPointSelected` 로 연결하고, 새 핸들러가
    기존 `onRectSelected(rect: RectF)`와 같은 자리에서 `target: {"type": "point", "point": [x,y]}`
