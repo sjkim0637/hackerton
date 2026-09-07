@@ -138,17 +138,20 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
 
 ## Next
 
-1. **앱 배선(우선)**: `RemovalController`에서 "TV 선택 모드" 진입 시
+1. **삭제 결과 fallback 수정(우선)**: [`docs/handoffs/interior-removal-fallback.md`](../handoffs/interior-removal-fallback.md)의
+   완료 조건에 따라 Anchor가 없어도 전체화면 정적 Bitmap을 유지하지 않고 라이브 카메라로 복귀한다.
+   MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다.
+2. **앱 배선**: `RemovalController`에서 "TV 선택 모드" 진입 시
    `binding.bboxSelectionView.onPointSelected = ::onPointSelected` 로 연결하고, 새 핸들러가
    기존 `onRectSelected(rect: RectF)`와 같은 자리에서 `target: {"type": "point", "point": [x,y]}`
    를 만들어 `RemoveObjectRequest`에 실어 보내도록 `InteriorApiClient`를 확장한다.
    단, 기존 `resolveWall(rect)`(벽 hitTest로 실측 크기 표시)는 사각형의 네 변에 의존하므로,
    점 하나로는 그대로 못 쓴다 — 점 주변에 작은 hitTest 사각형을 합성하거나, 정밀 마스크가
    서버에서 오기 전까지는 실측 표시를 생략하는 방향을 검토해야 한다.
-2. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
+3. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
    `iou_predictions`로 함께 주므로, 상위 1개 대신 상위 N개를 앱에 보여줄 수도 있다.
-3. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
-4. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
+4. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
+5. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
 
 ## Integration Candidate
 
