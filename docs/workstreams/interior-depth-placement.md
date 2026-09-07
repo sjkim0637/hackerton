@@ -65,6 +65,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 ## Relevant Commits
 
 - `5d73c09` — 온디바이스 Point Cloud 배치 모듈, ARCore adapter, debug viewer와 테스트 앱 구현
+- `dac675a` — VS Code에서 검증·빌드·설치·실행할 수 있는 task 일괄 등록
 
 ## Updated
 
