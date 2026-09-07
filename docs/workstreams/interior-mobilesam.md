@@ -2,7 +2,12 @@
 
 ## Topic
 
-Interior 사물 선택 — MobileSAM 점 프롬프트 세그멘테이션
+Interior 사물 선택/삭제/재배치 재설계 — MobileSAM 점 프롬프트(D5) + LaMa 로컬
+인페인팅(D7) + Depth API/Instant Placement(D6) + 실제 3D 가구 모델(D8)
+
+이 문서는 애초 D5(세그멘테이션)만 다뤘지만, 이후 같은 브랜치에서 D6~D8까지 이어져
+사실상 "AR 화면 UX 전면 단순화" 작업 전체를 기록한다. 결정별 자세한 내용은
+`experiments/shinym87/interior/docs/decisions.md`의 D5~D8을 참고.
 
 ## Owner
 
@@ -163,7 +168,16 @@ MobileSAM은 "어디를 지울지"만 정하고, 실제로 그 자리를 자연�
 
 ## Known Issues
 
-- 앱이 아직 점을 서버로 안 보낸다 — 이 Branch는 서버 능력만 갖췄다.
+- ~~앱이 아직 점을 서버로 안 보낸다~~ → **완료 (2026-09-07, D8)**. `RemovalController.
+  onScreenTapped`가 탭 좌표를 바로 `PointRegion`으로 보낸다. `:app:assembleDebug` 성공,
+  다만 실기기에서 탭→마스크→인페인팅까지 전체 흐름을 직접 확인하진 못했다(서버 개별
+  기능은 각각 검증됨: MobileSAM 실모델 테스트, LaMa 실모델 테스트, D6 실기기 Depth 테스트).
+- **D8(실제 3D 가구 모델)도 컴파일만 확인, 실기기 미검증.** `ModelLoader.
+  createModelInstance()`가 실제로 캐시 파일 경로에서 로드에 성공하는지, glb 좌표계(원점
+  위치)가 앵커에 자연스럽게 맞는지는 API 문서/바이트코드 추론으로만 확인했다.
+- 선택한 가구가 3D 모델로 바뀌면 선택 강조(파란 하이라이트)가 안 보인다 — 강조는
+  `item.material`(큐브 재질)에만 적용되기 때문. 하단 조작 패널이 뜨는 것으로만 "선택됨"을
+  알 수 있다.
 - `PointRegion` 하나만으로 여러 개 겹친 사물 중 무엇을 고를지는 MobileSAM의 판단에 맡긴다
   (SAM은 점 위치에서 가장 그럴듯한 사물 하나를 고르는데, 겹친 물체가 많으면 여전히 실패할
   수 있다 — 기존 PHASE 2 백로그의 "겹침" 이슈와 동일선상).
@@ -179,25 +193,24 @@ MobileSAM은 "어디를 지울지"만 정하고, 실제로 그 자리를 자연�
 
 ## Next
 
-1. **삭제 결과 fallback 수정**: [`docs/handoffs/interior-removal-fallback.md`](../handoffs/interior-removal-fallback.md)의
+1. **실기기 통합 검증(최우선, 미완료)**: 탭 → 화면 캡처 → MobileSAM 마스크 → LaMa
+   인페인팅 → 벽/바닥에 결과 적용 → 이동 패널까지 실기기에서 한 번에 관통 확인.
+   서버 쪽 개별 기능(MobileSAM, LaMa, Depth API)은 각각 실기기/실모델로 검증했지만
+   D8까지 다 합친 통합 흐름은 아직 안 돌려봤다. `.env`에 `INTERIOR_LAMA_MODEL_PATH`,
+   `INTERIOR_MOBILESAM_ENCODER_PATH`/`DECODER_PATH` 세팅 후 서버를 띄우고 실기기에서
+   확인.
+2. **3D 가구 모델 실기기 확인**: "가구 추가"에서 각 항목을 배치했을 때 큐브 대신 실제
+   글꼴로 모델이 뜨는지, 벽/바닥 원점이 자연스러운지(특히 TV/선반처럼 `wall` 가구가
+   벽에서 붕 뜨거나 파묻히지 않는지).
+3. **삭제 결과 fallback 수정**: [`docs/handoffs/interior-removal-fallback.md`](../handoffs/interior-removal-fallback.md)의
    완료 조건에 따라 Anchor가 없어도 전체화면 정적 Bitmap을 유지하지 않고 라이브 카메라로 복귀한다.
-   MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다. 이 문서의 "가구 배치 Mode에
-   들어갈 때만 Plane 격자·스캔 안내 표시" 요청도 여기서 같이 처리한다(D6과 범위가 겹친다 —
-   현재 D6은 hitTest 자체를 즉시 가능하게만 했고, 격자 시각화 조건부 표시는 미포함).
-2. ~~D6 실기기 검증~~ — **완료 (2026-09-07)**. `depthSupported=true` 확인, Plane 0개 상태
-   탭 배치 확인. 다만 Instant Placement로 놓은 뒤 실제 Plane/Depth가 잡히며 위치가
-   "자연스럽게 다듬어지는" 전환까지는 아직 확인 안 함 — 짧은 세션이라 지켜보지 못했다.
-3. **앱 배선**: `RemovalController`에서 "TV 선택 모드" 진입 시
-   `binding.bboxSelectionView.onPointSelected = ::onPointSelected` 로 연결하고, 새 핸들러가
-   기존 `onRectSelected(rect: RectF)`와 같은 자리에서 `target: {"type": "point", "point": [x,y]}`
-   를 만들어 `RemoveObjectRequest`에 실어 보내도록 `InteriorApiClient`를 확장한다.
-   단, 기존 `resolveWall(rect)`(벽 hitTest로 실측 크기 표시)는 사각형의 네 변에 의존하므로,
-   점 하나로는 그대로 못 쓴다 — 점 주변에 작은 hitTest 사각형을 합성하거나, 정밀 마스크가
-   서버에서 오기 전까지는 실측 표시를 생략하는 방향을 검토해야 한다.
-4. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
+   MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다.
+4. 선택 강조를 3D 모델에도 적용(예: 모델 주위에 아웃라인/바닥 링 표시 — Filament 재질을
+   직접 못 바꾸므로 별도 시각 요소가 필요).
+5. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
    `iou_predictions`로 함께 주므로, 상위 1개 대신 상위 N개를 앱에 보여줄 수도 있다.
-5. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
-6. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
+6. 추론 속도 실측(MobileSAM+LaMa 합산 지연시간), 필요하면 양자화 decoder
+   (`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
 
 ## Integration Candidate
 

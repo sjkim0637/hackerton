@@ -172,3 +172,49 @@
   - pytest 4개 추가(`tests/test_lama.py`, 실제 모델 파일 있을 때만 도는 추론 테스트 1개 포함).
   - 이후 3D 가구 카탈로그(사용자 요청, 별도 작업)와는 무관 — 그건 "제거"가 아니라 "추가"
     쪽 자산 문제라 D7 범위 밖.
+
+---
+
+## D8. AR 화면을 "탭 한 번 삭제" + 실제 3D 가구 모델로 단순화
+
+- Status: Accepted (2026-09-07, `agent/goguma-salad/interior-mobilesam` 브랜치)
+- Context: D5(MobileSAM)/D7(LaMa)로 서버 능력은 갖췄지만 앱 화면(D3 이후 그대로)은 여전히
+  "영역 선택 모드 켜기 → 사각형 드래그 → 사물 종류 선택 → 삭제 요청 버튼"이었다. 사용자
+  피드백: "현재 AR 화면 UI가 너무 지저분함" — 배경 촬영/표시 버튼, 평면 격자 상시 표시,
+  영역 선택 모드가 전부 불필요해졌다고 판단. 또한 "가구 추가"가 여전히 큐브/이미지만
+  보여줘 "실제 모델"이 아니었다.
+- Decision:
+  1. `RemovalController`를 사각형 기반에서 점(탭) 기반으로 재작성. `onScreenTapped(x,y)`
+     하나로 캡처→서버 point 요청→결과 적용까지 이어간다. 사물 종류는 항상 `other`.
+  2. 배경 촬영/표시 UI(`BackgroundKeyframe`)와 사각형 선택 UI(`BboxSelectionView`,
+     스피너, "삭제 요청" 버튼)를 완전히 삭제.
+  3. "탭하면 테스트 큐브 생성"이라는 기존 숨은 동작을 "가구 추가 → 직접 만들기"로 옮겨
+     평소 탭과 분리(`FurnitureController.armTestBlockPlacement`).
+  4. 평면 격자를 상시 표시 대신 "가구 추가" 배치 중에만 표시(`docs/handoffs/
+     interior-removal-fallback.md`의 5번 요청과 같은 방향, 이번엔 격자 조건부 표시만
+     처리하고 그 문서의 "삭제 결과 fallback" 자체는 범위 밖).
+  5. 카탈로그 10개 항목 모두에 절차적 3D 모델(.glb)을 만들어 연결 — `FurnitureController`
+     가 배치 직후 비동기로 모델을 받아와 큐브/썸네일을 실제 모델로 교체한다
+     (`InteriorApiClient.CatalogItem.modelUrl` → `ModelLoader.createModelInstance` →
+     `ModelNode`). 실패해도 큐브가 남아 흐름이 안 막힌다.
+- Reason: 탭 한 번으로 줄이는 게 D5(MobileSAM)를 도입한 애초의 동기(사각형을 정확히
+  그릴 필요 없애기)와 일치한다 — 서버 능력만 바꾸고 앱 UI를 그대로 두면 사용자가
+  누리는 게 없다. 3D 모델은 "실제 모델로"라는 요청을 문자 그대로 받아들였고(질감/조명은
+  필요 없다고 확인받음), SceneView가 이미 `ModelLoader`/`ModelNode`(Filament glTF 로더)를
+  내장하고 있어 새 의존성 없이 가능했다.
+- Alternatives:
+  - 사각형 유지 + 종류 선택만 자동화 — "사각형을 정확히 그려야 하는" 원래 불만이 안
+    풀림.
+  - 3D 모델 대신 썸네일 이미지만 더 예쁘게 — 검토했으나 사용자가 "진짜 3D 지오메트리"를
+    선택함(더 큰 작업임을 인지한 채로).
+- Impact:
+  - `MainActivity`가 `FurnitureController.onEmptyTap`을 `removal.onScreenTapped`에 연결.
+  - 앱 컴파일/빌드 성공 확인(JDK 21, `:app:assembleDebug`). **3D 모델 로딩 자체는
+    이 환경(Android SDK는 있지만 실기기 재검증은 이번 작업 범위 밖)에서 실기기 확인
+    못 함** — `ModelLoader.createModelInstance()`가 실제로 어떤 파일 형식/경로 조합에서
+    성공하는지는 API 문서/바이트코드 추론으로만 확인했다.
+  - 선택 강조(파란색 하이라이트)는 큐브 재질(`item.material`)에만 적용되므로, 3D 모델로
+    바뀐 뒤에는 선택 시 색이 안 바뀐다(하단 조작 패널이 뜨는 것으로만 피드백) — 후속 개선
+    여지로 남긴다.
+  - `docs/handoffs/interior-removal-fallback.md`의 나머지 요청(Anchor 없을 때 전체화면
+    fallback을 전후 비교 Preview로 바꾸는 것)은 이번에 손대지 않았다 — 여전히 열려 있다.
