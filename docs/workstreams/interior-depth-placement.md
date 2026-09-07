@@ -82,6 +82,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `5f2cac3` — 두 Depth 지점의 world 좌표를 이용한 실제 길이 측정 API와 UI 추가
 - `cba005b` — 앵그리버드식 투척 UX와 IR Point Cloud 국소 평면 반동 Geometry Probe 추가
 - `ea4b9ac` — 쇠공이 조준 IR Depth에 도달한 뒤 최대 3회 반동하도록 충돌 판정 보정
+- `b83984c` — 바닥 의자와 벽걸이 액자를 표면별로 판정하고 world pose에 지속 투영
 
 ## Updated
 
