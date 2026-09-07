@@ -32,6 +32,7 @@ AR 기능이 바로 실행되던 단일 화면을 메인 진입 화면, 사용 �
 - 서버 주소는 `SettingsActivity`에서 저장하며 모든 API Controller가 같은 `SharedPreferences` 값을 읽는다.
 - USB 테스트 기본 주소는 `adb reverse`에 맞춘 `http://127.0.0.1:8000`이다.
 - 메인·설명·설정 화면에는 `experiments/shinym87/interior/assets/`에서 만든 이미지를 사용한다.
+- 메인 화면은 Dark Navy 기반 Hero, 단일 Primary CTA, 가이드 카드, 서버 연결 상태 순으로 정보 위계를 구성한다.
 
 ## Verification
 
@@ -40,6 +41,7 @@ AR 기능이 바로 실행되던 단일 화면을 메인 진입 화면, 사용 �
 - `adb reverse tcp:8000 tcp:8000` 성공
 - PC의 `http://127.0.0.1:8000/health` 응답 정상 — Mock AI Provider 준비됨
 - `HomeActivity` 실행 명령 성공, 앱 Process 유지, 치명적 오류 없음
+- 상품성 개선 메인 화면 재빌드 및 `adb install -r` 재설치 성공
 - 휴대폰 잠금 상태로 화면 육안 검토는 사용자의 잠금 해제 후 진행
 
 ## Known Issues

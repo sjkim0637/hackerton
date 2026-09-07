@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.hackathon.interior.databinding.ActivityHomeBinding
+import com.hackathon.interior.settings.ServerSettings
 
 class HomeActivity : AppCompatActivity() {
 
@@ -23,5 +24,13 @@ class HomeActivity : AppCompatActivity() {
         binding.btnOpenSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.serverSummaryText.text = getString(
+            R.string.home_server_summary,
+            ServerSettings.getBaseUrl(this),
+        )
     }
 }
