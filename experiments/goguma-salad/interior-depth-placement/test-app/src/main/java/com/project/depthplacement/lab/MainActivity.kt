@@ -29,6 +29,7 @@ import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.project.depthplacement.DepthPlacementEngine
 import com.project.depthplacement.DepthPlacementEngineFactory
+import com.project.depthplacement.DepthProjectileSimulator
 import com.project.depthplacement.MeasuredDepthPoint
 import com.project.depthplacement.PlacementConfig
 import com.project.depthplacement.PlacementObjectSize
@@ -54,7 +55,7 @@ class MainActivity : AppCompatActivity() {
     private var renderConfig = DebugRenderConfig()
     private var session: Session? = null
     private var latestFrame: Frame? = null
-    private var lastDepthFrame: com.project.depthplacement.arcore.ArCoreDepthFrame? = null
+    @Volatile private var lastDepthFrame: com.project.depthplacement.arcore.ArCoreDepthFrame? = null
     private var textureId: Int? = null
     private var textureConfiguredForSession = false
     private var depthSupported = false
@@ -142,7 +143,8 @@ class MainActivity : AppCompatActivity() {
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
         val rangeText = text("상대 깊이 범위를 계산하는 중…")
         val measurementText = text("길이 측정: 대기")
-        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText); hud.addView(measurementText)
+        val throwText = text("공 테스트: 대기")
+        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText); hud.addView(measurementText); hud.addView(throwText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -155,8 +157,21 @@ class MainActivity : AppCompatActivity() {
         }
         hud.addView(preset)
         var measuring = false
+        var throwing = false
         var measurementStart: MeasuredDepthPoint? = null
+        val projectileSimulator = DepthProjectileSimulator()
         val measureButton = button("길이 측정") { }
+        val throwButton = button("공 던지기") { }
+        projected.onSlingshotRelease = { yawOffset, pitchOffset, power ->
+            val depthFrame = lastDepthFrame?.input
+            if (depthFrame == null) {
+                throwText.text = "공 테스트 실패: Depth frame이 없습니다."
+            } else {
+                projectileSimulator.updateGeometry(engine.getLatestPointCloud())
+                val launched = projectileSimulator.launch(depthFrame.cameraPose, yawOffset, pitchOffset, power)
+                throwText.text = "발사 yaw=${f(launched.launchYawDegrees.toDouble())}° pitch=${f(launched.launchPitchDegrees.toDouble())}° power=${f(power.toDouble() * 100.0)}%"
+            }
+        }
         projected.onDepthTap = { u, v ->
             if (!measuring) {
                 lastResult = engine.evaluatePlacement(u, v, objectSize)
@@ -186,26 +201,73 @@ class MainActivity : AppCompatActivity() {
         }
         measureButton.setOnClickListener {
             measuring = !measuring
+            throwing = false
+            projected.setSlingshotEnabled(false)
+            throwButton.text = "공 던지기"
+            projectileSimulator.clear()
+            projected.clearProjectile()
+            throwText.text = "공 테스트: 대기"
             measurementStart = null
             projected.clearMeasurement()
             measureButton.text = if (measuring) "측정 종료" else "길이 측정"
             measurementText.text = if (measuring) "길이 측정: 첫 지점을 탭하세요." else "길이 측정: 대기"
+        }
+        throwButton.setOnClickListener {
+            throwing = !throwing
+            measuring = false
+            measurementStart = null
+            measureButton.text = "길이 측정"
+            measurementText.text = "길이 측정: 대기"
+            projected.clearMeasurement()
+            projected.setSlingshotEnabled(throwing)
+            if (throwing) {
+                projectileSimulator.clear()
+                projected.clearProjectile()
+                throwButton.text = "공 테스트 종료"
+                throwText.text = "앵그리버드처럼 화면을 뒤로 당겼다가 놓으세요."
+            } else {
+                throwButton.text = "공 던지기"
+                throwText.text = "공 테스트: 대기"
+                projectileSimulator.clear()
+                projected.clearProjectile()
+            }
         }
         hud.addView(buttonRow(
             button("Freeze") { projected.setFrozen(!projected.isFrozen()) },
             button("Points ON/OFF") { projected.setOverlayEnabled(!projected.isOverlayEnabled()) },
             measureButton,
         ))
+        hud.addView(throwButton, LinearLayout.LayoutParams(-1, dp(48)))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         content.removeAllViews(); content.addView(frame)
         if (!streamRunning) startDepth()
+        var lastProjectionSubmitNanos = 0L
         fun refresh() {
             if (!frame.isAttachedToWindow) return
-            val metrics = engine.getMetrics(); val snapshot = engine.getLatestPointCloud(); projected.submit(snapshot)
+            val metrics = engine.getMetrics(); val snapshot = engine.getLatestPointCloud()
+            if (snapshot != null && snapshot.timestampNanos - lastProjectionSubmitNanos >= 100_000_000L) {
+                projected.submit(snapshot)
+                lastProjectionSubmitNanos = snapshot.timestampNanos
+            }
+            projectileSimulator.updateGeometry(snapshot)
+            projectileSimulator.step()?.let { projectile ->
+                val depthFrame = lastDepthFrame?.input
+                val ball = depthFrame?.projectWorldPoint(projectile.position)
+                val hit = projectile.lastCollisionPoint?.let { depthFrame?.projectWorldPoint(it) }
+                val visible = ball ?: hit
+                if (visible != null && depthFrame != null) {
+                    val radiusDepthPx = depthFrame.intrinsics.fx * projectile.radiusMeters / visible.depthMeters.coerceAtLeast(0.05f)
+                    val kind = if ((projectile.lastCollisionNormal?.y ?: 0f) > 0.65f) "GROUND" else "SURFACE"
+                    projected.showProjectile(visible.x, visible.y, radiusDepthPx, hit?.x, hit?.y, "$kind HIT ${projectile.bounceCount}")
+                } else projected.clearProjectile()
+                val hitWorld = projectile.lastCollisionPoint
+                throwText.text = "공 ${if (projectile.active) "비행" else "정지"} · bounce=${projectile.bounceCount} · world=(${f(projectile.position.x.toDouble())}, ${f(projectile.position.y.toDouble())}, ${f(projectile.position.z.toDouble())})" +
+                    if (hitWorld != null) "\n충돌=(${f(hitWorld.x.toDouble())}, ${f(hitWorld.y.toDouble())}, ${f(hitWorld.z.toDouble())})" else ""
+            }
             metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
             rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
             resultText.text = lastResult?.let { "${if (it.isValid) "VALID" else "NO: ${it.failureReason}"}  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}" } ?: "화면을 탭하면 배치를 평가합니다."
-            handler.postDelayed(::refresh, 100)
+            handler.postDelayed(::refresh, if (projectileSimulator.currentState()?.active == true) 33 else 100)
         }
         refresh()
     }

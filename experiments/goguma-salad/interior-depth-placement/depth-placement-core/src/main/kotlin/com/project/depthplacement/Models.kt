@@ -10,6 +10,21 @@ data class CameraPose(val matrix: FloatArray) {
         matrix[8] * x + matrix[9] * y + matrix[10] * z + matrix[11],
     )
 
+    fun position(): Vec3 = Vec3(matrix[3], matrix[7], matrix[11])
+    fun forward(): Vec3 = Vec3(-matrix[2], -matrix[6], -matrix[10]).normalized()
+    fun right(): Vec3 = Vec3(matrix[0], matrix[4], matrix[8]).normalized()
+    fun up(): Vec3 = Vec3(matrix[1], matrix[5], matrix[9]).normalized()
+
+    /** Inverse of the rigid camera-to-world transform. */
+    fun inverseTransform(point: Vec3): Vec3 {
+        val d = point - position()
+        return Vec3(
+            matrix[0] * d.x + matrix[4] * d.y + matrix[8] * d.z,
+            matrix[1] * d.x + matrix[5] * d.y + matrix[9] * d.z,
+            matrix[2] * d.x + matrix[6] * d.y + matrix[10] * d.z,
+        )
+    }
+
     companion object {
         fun identity() = CameraPose(floatArrayOf(
             1f, 0f, 0f, 0f,
@@ -43,7 +58,20 @@ data class DepthFrameInput(
         require(confidence == null || confidence.size == width * height)
         require(intrinsics.fx > 0f && intrinsics.fy > 0f)
     }
+
+    fun projectWorldPoint(point: Vec3): DepthImageProjection? {
+        val camera = cameraPose.inverseTransform(point)
+        val depth = -camera.z
+        if (depth <= 0.001f) return null
+        return DepthImageProjection(
+            x = intrinsics.cx + camera.x * intrinsics.fx / depth,
+            y = intrinsics.cy - camera.y * intrinsics.fy / depth,
+            depthMeters = depth,
+        )
+    }
 }
+
+data class DepthImageProjection(val x: Float, val y: Float, val depthMeters: Float)
 
 data class PlacementObjectSize(
     val widthMeters: Float,

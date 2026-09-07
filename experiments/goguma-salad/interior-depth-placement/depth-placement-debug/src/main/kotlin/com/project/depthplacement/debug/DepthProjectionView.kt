@@ -12,6 +12,7 @@ import android.view.MotionEvent
 import android.view.View
 import com.project.depthplacement.PointCloudSnapshot
 import java.util.Arrays
+import kotlin.math.hypot
 
 /** Camera image and depth samples share one canvas so pixel alignment can be judged directly. */
 class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
@@ -30,6 +31,9 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         strokeWidth = 3f * resources.displayMetrics.density
         style = Paint.Style.STROKE
     }
+    private val projectilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 152, 32); style = Paint.Style.FILL }
+    private val projectileOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = 2f * resources.displayMetrics.density; style = Paint.Style.STROKE }
+    private val slingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(120, 72, 38); strokeWidth = 5f * resources.displayMetrics.density; style = Paint.Style.STROKE }
     private val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 18f * resources.displayMetrics.density * resources.configuration.fontScale }
     @Volatile private var cameraBitmap: Bitmap? = null
     @Volatile private var projection: Projection? = null
@@ -41,7 +45,16 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     private var smoothedNearDepth = Float.NaN
     private var smoothedFarDepth = Float.NaN
     private var measurementPoints: FloatArray? = null
+    private data class ProjectileOverlay(val u: Float, val v: Float, val radiusDepthPx: Float, val hitU: Float?, val hitV: Float?, val hitLabel: String)
+    private var projectile: ProjectileOverlay? = null
+    private var slingshotEnabled = false
+    private var slingDragging = false
+    private var slingAnchorX = 0f
+    private var slingAnchorY = 0f
+    private var slingBallX = 0f
+    private var slingBallY = 0f
     var onDepthTap: ((uPx: Float, vPx: Float) -> Unit)? = null
+    var onSlingshotRelease: ((yawOffsetDegrees: Float, pitchOffsetDegrees: Float, power: Float) -> Unit)? = null
 
     fun submitCamera(bitmap: Bitmap) {
         if (!frozen) { cameraBitmap = bitmap; postInvalidateOnAnimation() }
@@ -71,6 +84,12 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         invalidate()
     }
     fun clearMeasurement() { measurementPoints = null; invalidate() }
+    fun setSlingshotEnabled(value: Boolean) { slingshotEnabled = value; slingDragging = false; invalidate() }
+    fun showProjectile(u: Float, v: Float, radiusDepthPx: Float, hitU: Float? = null, hitV: Float? = null, hitLabel: String = "HIT") {
+        projectile = ProjectileOverlay(u, v, radiusDepthPx, hitU, hitV, hitLabel)
+        postInvalidateOnAnimation()
+    }
+    fun clearProjectile() { projectile = null; invalidate() }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -80,7 +99,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         if (bitmap != null && transform != null) canvas.drawBitmap(bitmap, null, transform.rect, imagePaint)
         else canvas.drawText("카메라 영상을 기다리는 중…", 24f, height / 2f, messagePaint)
 
-        val data = projection ?: return
+        val data = projection
+        if (data == null) { drawSlingshot(canvas); return }
         val bitmapWidth = bitmap?.width?.toFloat() ?: width.toFloat()
         val bitmapHeight = bitmap?.height?.toFloat() ?: height.toFloat()
         val scale = transform?.scale ?: 1f
@@ -108,9 +128,12 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
             }
         }
         drawMeasurement(canvas, data, bitmapWidth, bitmapHeight, scale, left, top)
+        drawProjectile(canvas, data, bitmapWidth, bitmapHeight, scale, left, top)
+        drawSlingshot(canvas)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (slingshotEnabled) return handleSlingshot(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y; return true }
             MotionEvent.ACTION_UP -> {
@@ -133,6 +156,69 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     }
 
     private data class CropTransform(val rect: RectF, val scale: Float)
+
+    private fun handleSlingshot(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                slingDragging = true
+                slingAnchorX = event.x
+                slingAnchorY = event.y
+                slingBallX = event.x
+                slingBallY = event.y
+                invalidate()
+            }
+            MotionEvent.ACTION_MOVE -> if (slingDragging) {
+                val maxPull = minOf(width, height) * 0.28f
+                val dx = event.x - slingAnchorX
+                val dy = event.y - slingAnchorY
+                val distance = hypot(dx, dy)
+                val scale = if (distance > maxPull) maxPull / distance else 1f
+                slingBallX = slingAnchorX + dx * scale
+                slingBallY = slingAnchorY + dy * scale
+                invalidate()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (slingDragging) {
+                val launchX = slingAnchorX - slingBallX
+                val launchY = slingAnchorY - slingBallY
+                val maxPull = minOf(width, height) * 0.28f
+                val power = (hypot(launchX, launchY) / maxPull).coerceIn(0f, 1f)
+                slingDragging = false
+                invalidate()
+                if (event.actionMasked == MotionEvent.ACTION_UP && power >= 0.08f) {
+                    val yaw = launchX / maxPull * 28f
+                    val pitch = -launchY / maxPull * 22f
+                    onSlingshotRelease?.invoke(yaw, pitch, power)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun drawSlingshot(canvas: Canvas) {
+        if (!slingshotEnabled || !slingDragging) return
+        val fork = 18f * resources.displayMetrics.density
+        canvas.drawLine(slingAnchorX - fork, slingAnchorY, slingBallX, slingBallY, slingPaint)
+        canvas.drawLine(slingAnchorX + fork, slingAnchorY, slingBallX, slingBallY, slingPaint)
+        canvas.drawCircle(slingBallX, slingBallY, 15f * resources.displayMetrics.density, projectilePaint)
+        canvas.drawCircle(slingBallX, slingBallY, 15f * resources.displayMetrics.density, projectileOutlinePaint)
+    }
+
+    private fun drawProjectile(canvas: Canvas, data: Projection, bitmapWidth: Float, bitmapHeight: Float, scale: Float, left: Float, top: Float) {
+        val ball = projectile ?: return
+        ball.hitU?.let { hitU -> ball.hitV?.let { hitV ->
+            val hit = depthToView(hitU, hitV, data, bitmapWidth, bitmapHeight, scale, left, top)
+            measurementPaint.color = Color.MAGENTA
+            canvas.drawCircle(hit.x, hit.y, 12f * resources.displayMetrics.density, measurementPaint)
+            canvas.drawText(ball.hitLabel, hit.x + 14f * resources.displayMetrics.density, hit.y, messagePaint)
+            measurementPaint.color = Color.YELLOW
+        } }
+        val center = depthToView(ball.u, ball.v, data, bitmapWidth, bitmapHeight, scale, left, top)
+        val depthToViewScale = bitmapHeight / data.sourceWidth.coerceAtLeast(1) * scale
+        val radius = (ball.radiusDepthPx * depthToViewScale).coerceIn(5f * resources.displayMetrics.density, 44f * resources.displayMetrics.density)
+        canvas.drawCircle(center.x, center.y, radius, projectilePaint)
+        canvas.drawCircle(center.x, center.y, radius, projectileOutlinePaint)
+        canvas.drawCircle(center.x - radius * 0.3f, center.y - radius * 0.3f, radius * 0.18f, projectileOutlinePaint)
+    }
 
     private fun drawMeasurement(canvas: Canvas, data: Projection, bitmapWidth: Float, bitmapHeight: Float, scale: Float, left: Float, top: Float) {
         val points = measurementPoints ?: return

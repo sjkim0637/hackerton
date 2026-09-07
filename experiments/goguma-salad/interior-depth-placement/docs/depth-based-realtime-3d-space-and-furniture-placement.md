@@ -170,6 +170,14 @@ t = clamp(t, 0, 1)
 - 지지점이 부족하거나 장애물이 허용량보다 많으면 배치를 거절한다.
 - point 밀도, 평균 confidence, 평면 오차를 조합한 최종 confidence가 기본 `0.55`보다 낮아도 거절한다.
 
+### 11.1 투척형 Geometry Probe
+
+Test App의 `공 던지기`는 실제 공간 Geometry가 올바르게 생성되는지 확인하기 위한 경량 Debug 기능이다. 화면을 앵그리버드처럼 뒤로 당겼다가 놓으면 ARCore Camera Pose의 `-zAxis`를 기본 전방으로 사용하고, Drag 방향을 camera `right/up` 축의 yaw·pitch offset으로 더한다. 당긴 거리는 초기 속도의 세기가 된다.
+
+공은 world-space에서 중력의 영향을 받아 이동한다. 최신 IR Point Cloud에서 공 주변점을 찾고 PCA로 국소 평면과 normal을 추정한 뒤, 공 반지름이 평면에 닿으면 restitution을 적용해 속도를 반사한다. 충돌 normal이 위쪽을 향하면 `GROUND HIT`, 그 외에는 `SURFACE HIT`로 표시하고 충돌 world 좌표를 남긴다.
+
+이 기능은 Depth 윤곽의 위치와 반동 방향을 눈으로 확인하는 Probe이며, 마찰·회전 관성·연속 mesh collider를 포함하는 완전한 rigid-body 물리엔진은 아니다.
+
 ## 12. 출력 결과
 
 | 필드 | 의미 |
