@@ -32,6 +32,22 @@
       "problemMatcher": []
     },
     {
+      "label": "Interior: 모델 설정 (MobileSAM+LaMa)",
+      "detail": "onnxruntime 설치 + MobileSAM/LaMa 모델 다운로드(~250MB) + .env 경로 설정. 한 번만 실행하면 됨(이미 있으면 재다운로드 안 함).",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "models-setup"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Interior: 서버 실행",
       "type": "shell",
       "command": "powershell.exe",

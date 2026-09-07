@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('doctor', 'server-setup', 'server', 'build', 'install', 'reverse', 'launch', 'all', 'logcat')]
+    [ValidateSet('doctor', 'server-setup', 'models-setup', 'server', 'build', 'install', 'reverse', 'launch', 'all', 'logcat')]
     [string]$Action = 'all'
 )
 
@@ -179,6 +179,70 @@ function Invoke-ServerSetup {
     if ($LASTEXITCODE -ne 0) { throw "Server dependency installation failed (exit $LASTEXITCODE)" }
 }
 
+function Get-ModelFile([string]$Url, [string]$DestPath, [string]$Label) {
+    if (Test-Path -LiteralPath $DestPath) {
+        Write-Host "  $Label already present: $DestPath" -ForegroundColor DarkGray
+        return
+    }
+    Write-Step "Download $Label"
+    Write-Host "  $Url"
+    Write-Host "  -> $DestPath"
+    $destDir = Split-Path -Parent $DestPath
+    New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+    $tmpPath = "$DestPath.download"
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $tmpPath -UseBasicParsing
+        Move-Item -LiteralPath $tmpPath -Destination $DestPath -Force
+    } catch {
+        Remove-Item -LiteralPath $tmpPath -ErrorAction SilentlyContinue
+        throw "Failed to download $Label from $Url : $($_.Exception.Message)"
+    }
+}
+
+function Invoke-ModelsSetup {
+    # D5/D7 모델은 저장소에 커밋하지 않는다(수십~수백MB) — docs/workstreams/
+    # interior-mobilesam.md 의 "모델 준비" 절차와 동일한 출처에서 받는다.
+    Invoke-ServerSetup
+
+    $venvPython = Join-Path $ServerRoot '.venv\Scripts\python.exe'
+    Write-Step 'Install onnxruntime (for MobileSAM + LaMa inference)'
+    & $venvPython -m pip install -r (Join-Path $ServerRoot 'requirements-onnx.txt')
+    if ($LASTEXITCODE -ne 0) { throw "onnxruntime installation failed (exit $LASTEXITCODE)" }
+
+    $modelsDir = Join-Path $ServerRoot 'models'
+    $encoderPath = Join-Path $modelsDir 'mobilesam.encoder.onnx'
+    $decoderPath = Join-Path $modelsDir 'mobilesam.decoder.onnx'
+    $lamaPath = Join-Path $modelsDir 'lama_fp32.onnx'
+
+    Get-ModelFile `
+        -Url 'https://huggingface.co/spaces/Akbartus/projects/resolve/main/mobilesam.encoder.onnx' `
+        -DestPath $encoderPath -Label 'MobileSAM encoder (~28MB)'
+    Get-ModelFile `
+        -Url 'https://raw.githubusercontent.com/akbartus/MobileSAM-in-the-Browser/main/models/mobilesam.decoder.onnx' `
+        -DestPath $decoderPath -Label 'MobileSAM decoder (~16.5MB)'
+    Get-ModelFile `
+        -Url 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx' `
+        -DestPath $lamaPath -Label 'LaMa inpainting (~198MB, may take a while)'
+
+    Write-Step 'Write .env (model paths)'
+    $envPath = Join-Path $ServerRoot '.env'
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $envPath) {
+        Get-Content -LiteralPath $envPath | Where-Object {
+            $_ -notmatch '^INTERIOR_(MOBILESAM_(ENCODER|DECODER)_PATH|LAMA_MODEL_PATH)='
+        } | ForEach-Object { $lines.Add($_) }
+    }
+    $lines.Add("INTERIOR_MOBILESAM_ENCODER_PATH=$encoderPath")
+    $lines.Add("INTERIOR_MOBILESAM_DECODER_PATH=$decoderPath")
+    $lines.Add("INTERIOR_LAMA_MODEL_PATH=$lamaPath")
+    # PowerShell 5.1's "-Encoding utf8" writes a BOM, which some .env parsers choke on.
+    # python-dotenv tolerates it, but write plain UTF-8 (no BOM) to be safe.
+    [System.IO.File]::WriteAllLines($envPath, $lines, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "  Wrote $envPath" -ForegroundColor Green
+
+    Write-Host "`nDone. Run 'Interior: server run' to start the server (INTERIOR_AI_PROVIDER=lama by default)." -ForegroundColor Green
+}
+
 function Invoke-Server {
     $venvPython = Join-Path $ServerRoot '.venv\Scripts\python.exe'
     if (-not (Test-Path -LiteralPath $venvPython)) {
@@ -223,8 +287,18 @@ switch ($Action) {
         } catch {
             Write-Warning $_.Exception.Message
         }
+        $modelsDir = Join-Path $ServerRoot 'models'
+        foreach ($f in @('mobilesam.encoder.onnx', 'mobilesam.decoder.onnx', 'lama_fp32.onnx')) {
+            $p = Join-Path $modelsDir $f
+            if (Test-Path -LiteralPath $p) {
+                Write-Host "Model: $f" -ForegroundColor Green
+            } else {
+                Write-Warning "Model missing: $f (run 'Interior: models setup')"
+            }
+        }
     }
     'server-setup' { Invoke-ServerSetup }
+    'models-setup' { Invoke-ModelsSetup }
     'server' { Invoke-Server }
     'build' { Invoke-Build }
     'install' {
