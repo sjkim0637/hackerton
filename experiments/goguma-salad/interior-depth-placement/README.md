@@ -98,6 +98,8 @@ if (length.isValid) {
 - `바닥 · Chair`를 고르고 바닥을 탭하면 의자 윤곽을, `벽 · Picture Frame`을 고르고 벽을 탭하면 액자 윤곽을 해당 world pose에 배치한다. 카메라가 움직여도 매 frame 다시 투영되며 `배치 제거`로 지울 수 있다.
 - RGB 윤곽과 Depth 점의 정합을 즉시 비교하며 `Freeze`, `Points ON/OFF`, 객체 preset과 placement 결과를 확인
 - Settings: 첫 화면은 `안정 / 균형 / 디테일` preset만 제공하며 전문 threshold는 접힌 `세부 설정`에서 조절
+- `안정 / 균형`에서도 화면 표시용 point stride와 배치 판정용 ROI sampling을 분리해, 표시점이 적어도 배치 판정에는 충분한 Depth를 사용한다.
+- 터치 지점과 깊이가 크게 다른 이웃 point를 제외하고 터치 지점을 fitted plane에 투영해 Pose를 잡으므로, 가까운 물체 경계에서 옆 표면으로 밀리는 현상을 줄였다.
 - 설정은 `SharedPreferences`에 로컬 저장되며 `Reset to Default`로 복원된다.
 
 정상 동작이면 실제 카메라 속 벽·바닥·가구의 모서리 위에 Depth 색점이 겹친다. RGB 모서리와 점의 위치가 어긋나면 좌표 정합 문제이고, 점은 맞지만 듬성듬성하면 sampling 문제이므로 Settings에서 `디테일`을 선택한다. `Points`가 계속 0이면 Depth 미지원 또는 AR tracking 준비 중이다.
@@ -109,14 +111,14 @@ if (length.isValid) {
 1. Depth16 millimetre와 raw confidence를 range/confidence/depth-jump filter에 통과시킨다.
 2. stride와 최대 point 수를 적용하고 pinhole intrinsics로 camera XYZ를 계산한다.
 3. ARCore camera pose로 world coordinate에 변환하고 optional temporal smoothing을 적용한다.
-4. 터치 주변 ROI를 PCA로 plane fitting하여 최소 eigenvector를 surface normal로 선택한다.
+4. 터치 지점과 깊이가 이어지는 ROI를 직접 고밀도로 sampling하고, `안정 / 균형`에서는 RANSAC으로 outlier를 제거한 뒤 PCA로 plane normal을 정제한다.
 5. slope와 plane error를 검사하고 객체 footprint 안의 surface coverage를 계산한다.
 6. plane 위 `obstacleHeightThresholdMeters`보다 높은 point를 장애물로 판정한다.
-7. 성공 시 surface center, up-to-normal quaternion, confidence를 `PlacementResult`로 반환한다.
+7. 성공 시 터치 지점을 fitted plane에 투영한 position, surface quaternion, confidence를 `PlacementResult`로 반환한다.
 
 ## Known Issues
 
 - ARCore Raw Depth 지원 기기의 실측 FPS, 해상도, timestamp 차이와 배치 품질은 아직 측정하지 않았다.
-- `enableRansac`은 향후 확장용 API이며 현재 estimator는 PCA를 사용한다.
+- 누적 공간 mesh와 실제 모델 occlusion은 아직 제공하지 않으므로, 가려짐과 여러 프레임에 걸친 빈 공간 검증은 Host 앱에서 추가해야 한다.
 - RGB camera color 결합과 raw/filtered point를 동시에 보관하는 debug mode는 구현하지 않았다. Viewer 색은 depth 기반이다.
 - 테스트 앱은 portrait 고정이며 기기 회전별 View-to-Depth 좌표 검증이 남아 있다.

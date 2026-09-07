@@ -30,7 +30,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `depth-placement-arcore`: ARCore `Frame`, Depth image, intrinsics, pose 변환
 - `depth-placement-debug`: 제품 앱에서 제외 가능한 OpenGL Point Cloud viewer
 - `test-app`: 상태 Dashboard, Point Cloud Test, Settings를 제공하는 serverless 검증 앱
-- 기존 `experiments/shinym87/interior/` 앱과 소스는 공유하지 않고 Gradle/SDK 호환 버전만 맞춘다.
+- 독립 모듈 경계는 유지하고 `experiments/shinym87/interior/` Host 앱에서 Gradle project dependency와 배치 검증 API로 연결한다.
 
 ## Scope
 
@@ -44,12 +44,12 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 ## Known Issues
 
 - Depth FPS, 실제 해상도와 기기별 placement 품질은 ARCore Raw Depth 지원 실기기에서 추가 측정이 필요하다.
-- RGB 색상 결합과 RANSAC은 Public Config에 예약되어 있으나 초기 구현은 depth 기반 색상과 PCA plane fitting을 사용한다.
+- RGB 색상 결합과 누적 공간 mesh/occlusion은 구현하지 않았다. 국소 표면은 RANSAC outlier 제거 후 PCA로 정제한다.
 - portrait 고정 테스트 앱만 빌드 검증했으며 화면 회전별 View-to-Depth 좌표 검증은 남아 있다.
 
 ## Verification
 
-- `depth-placement-core` synthetic unit test 11개 통과: 평면 normal, 20° 경사, 바닥 배치, 벽걸이 배치와 잘못된 표면 거절, 장애물 검출, sampling 밀도 분리, 실제 길이, Pose 발사 방향, slingshot offset, IR 바닥 반동, 목표 Depth 도달 전 충돌 방지
+- `depth-placement-core` synthetic unit test 14개 통과: 평면 normal, RANSAC outlier 제거, 20° 경사, 바닥 배치, 벽걸이 배치와 잘못된 표면 거절, 장애물 검출, 표시/배치 sampling 밀도 분리, 표면 경계 터치 Pose, 실제 길이, Pose 발사 방향, slingshot offset, IR 바닥 반동, 목표 Depth 도달 전 충돌 방지
 - `depth-placement-arcore` release AAR build 성공
 - `depth-placement-debug` release AAR build 성공
 - `test-app` debug APK build 성공
@@ -62,12 +62,14 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - ARCore camera 축과 slingshot gesture로 쇠공을 발사하고, 조준 IR Depth에 도달한 뒤 이동 선분과 Point Cloud 평면이 교차할 때만 최대 3회 반동하도록 Geometry Probe를 보정했다.
 - 바닥용 Chair와 벽걸이 Picture Frame을 각각 올바른 표면에서 판정하고, 성공 Pose에 만든 형태 윤곽을 camera 이동에 맞춰 실화면에 지속 재투영하도록 연결했다.
 - Depth 입력부터 3D 좌표, 상대 색상 투영, 국소 평면·장애물·가구 배치 판정까지 현재 구현을 실험 기술 문서로 정리했다.
+- 안정·균형 preset의 sparse 표시 point 때문에 배치 최소 point를 채울 수 없던 구조를 수정하고, 배치 ROI를 원본 Depth에서 별도로 sampling하도록 변경했다.
+- 터치 깊이 연속성 filter, RANSAC, 터치 중심 plane Pose를 적용해 가까운 물체 경계의 잘못된 표면 선택과 위치 밀림을 줄였다.
 
 ## Next
 
 1. ARCore Raw Depth 지원 실기기에서 APK를 설치해 Depth FPS, 해상도, point 수와 배치 품질 측정
 2. 기기별 sensitivity 기본값 튜닝
-3. 기존 메인 AR 앱에 module dependency로 연결해 import 검증
+3. 메인 AR 앱에서 최초 배치뿐 아니라 드래그 완료 후에도 Depth footprint를 재검증하는 UX 검토
 
 ## Relevant Commits
 
@@ -83,7 +85,8 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `cba005b` — 앵그리버드식 투척 UX와 IR Point Cloud 국소 평면 반동 Geometry Probe 추가
 - `ea4b9ac` — 쇠공이 조준 IR Depth에 도달한 뒤 최대 3회 반동하도록 충돌 판정 보정
 - `b83984c` — 바닥 의자와 벽걸이 액자를 표면별로 판정하고 world pose에 지속 투영
+- `75cb99b` — 안정·균형 배치 sampling, 깊이 연속성, RANSAC과 터치 중심 Pose 개선
 
 ## Updated
 
-2026-09-07
+2026-09-08
