@@ -2,6 +2,8 @@
 
 ARCore Depth를 기기 안에서 Point Cloud로 변환하고 AR 객체의 배치 가능 Pose를 계산하는 독립 Android 모듈 실험이다. 네트워크 권한, 서버, AI Runtime, OpenCV를 사용하지 않는다.
 
+전체 계산 흐름과 정확도 판별 기준은 [심도 기반 실시간 3D 공간 및 가구 배치 계산 정리](docs/depth-based-realtime-3d-space-and-furniture-placement.md)를 참고한다.
+
 ## Module
 
 | Module | 역할 | 제품 앱 포함 여부 |
