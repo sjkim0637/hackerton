@@ -505,7 +505,9 @@ class FurnitureController(
                     cacheFile.writeBytes(bytes)
                 }
                 val instance = withContext(Dispatchers.IO) {
-                    sceneView.modelLoader.createModelInstance(cacheFile.absolutePath)
+                    // 순수 절대경로 문자열은 ModelLoader 가 못 여는 것으로 실기기에서 확인함
+                    // (예외 메시지가 그 경로 그대로였다) — file:// 스킴 URI 로 넘긴다.
+                    sceneView.modelLoader.createModelInstance("file://${cacheFile.absolutePath}")
                 } ?: return@launch
 
                 if (item !in items) return@launch  // 로딩 중 삭제됐으면 좀비 노드를 붙이지 않는다.
@@ -517,7 +519,7 @@ class FurnitureController(
                 applyPlacement(item)
                 Log.d(TAG, "3D 모델 로드 완료: '${item.name}' ($modelUrl)")
             } catch (e: Exception) {
-                Log.w(TAG, "3D 모델 로드 실패, 큐브로 유지: $modelUrl (${e.message ?: e.javaClass.simpleName})")
+                Log.w(TAG, "3D 모델 로드 실패, 큐브로 유지: $modelUrl (${e.javaClass.simpleName}: ${e.message})")
             }
         }
     }
