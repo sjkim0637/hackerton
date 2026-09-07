@@ -18,7 +18,7 @@ shinym87 + Claude
 
 ## Status
 
-IN_PROGRESS
+INTEGRATION
 
 ## Goal
 
@@ -46,12 +46,13 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
   한 브랜치에서 앱 → 서버 → 외부 AI 순으로 수직 슬라이스를 만든다. PHASE 0 완료.
 - 아키텍처는 A(외부 AI 이미지 편집 API) 우선. B/C 는 PHASE 6/7 별도 실험.
 - AR 라이브러리는 `io.github.sceneview:arsceneview:2.3.0` 을 계속 사용한다.
+- `depth-placement-core`와 `depth-placement-arcore`를 Gradle project dependency로 가져와 ARCore plane hit 전에 Depth 표면 품질을 추가 검증한다.
 - `MainActivity` 한 파일이던 검증 코드를 역할별로 나눈다.
   - `ar/ArSpaceController` : 카메라 실행, 세션 설정, 평면 인식, hitTest
   - `furniture/FurnitureController` : 생성 · 선택 · 이동 · 크기 조절 · 삭제
   - `keyframe/BackgroundKeyframe` : 대표 이미지 캡처와 오버레이
   - `ui/FurnitureInfoDialog` : 이름 / 실물 크기 입력 팝업
-- 가구는 아직 3D 모델(glTF) 이 아니라 반투명 큐브로 부피만 표현한다.
+- 가구는 외부 glTF 대신 카탈로그 종류별 procedural 저폴리 모델로 표현한다.
 - 기술 선택은 이 Workstream 내부 가설이며 프로젝트 공통 표준이 아니다.
 
 ## Scope
@@ -63,14 +64,15 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 - 크기 조절: SceneView `onScale` (핀치) 와 `＋`/`－` 버튼, 배율 0.3~3.0
 - 수직면(벽) 배치: `Plane.Type.VERTICAL` 히트 시 큐브 회전 + 벽 바깥 오프셋
 - 대표 이미지: `PixelCopy` 로 현재 창 캡처(가구 숨김) → `filesDir` 저장 → 반투명 오버레이
+- 가구 최초 배치와 드래그 완료 시 Depth 표면 종류·평탄도·footprint·장애물 검증
+- 선택 가구의 양방향 15° 회전, 각도 표시와 서버 저장/복원
 - 디버그 APK 빌드 및 `adb install` 절차 문서화
 
 ## Out of Scope
 
-- 가구 회전, 실제 3D 가구 모델, 바닥/벽 자동 맞춤, 충돌 처리
-- 사물 인식 및 AI 기반 빈 공간 복원 (사용자 2 영역)
-- API 서버, 작업 세션, 가구 카탈로그 (사용자 3 영역)
-- 공간 정합(Spatial Anchoring) / 재투영(Reprojection) 고도화 (설계서 PHASE 3)
+- 여러 프레임을 합친 누적 공간 mesh와 모델 occlusion
+- 영구 Spatial Anchor 기반 세션 간 동일 world pose 복원
+- 제품용 glTF/재질/그림자 품질과 모델 다운로드 파이프라인
 
 ## API / 입력 / 출력
 
@@ -86,9 +88,9 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 
 ## Known Issues
 
-- SceneView `onScale` 콜백 시그니처는 v2.3.0 소스로 확인했으나, 실기기 빌드로
-  핀치 동작을 아직 검증하지 않았다.
-- 핀치와 드래그가 겹칠 가능성 (현재는 `draggingSelected` 가드로만 방어).
+- Depth 미지원 또는 최초 Depth frame 준비 전에는 기존 ARCore plane 배치로 fallback한다.
+- Depth threshold는 합성 테스트를 통과했지만 기기·조명·재질별 튜닝과 실기기 회귀 검증이 필요하다.
+- 누적 mesh가 없어 화면 밖 장애물과 장시간 공간 일관성은 판정하지 못한다.
 - 한글 저장소 경로에서 Kotlin 컴파일러 경로 문제 → `gradle.properties` 우회 설정 의존.
 
 ## Decisions
@@ -132,19 +134,22 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
   `gemini-2.5-flash-image` 검증 → TV·사운드바·전선 제거, 벽 자연 복원, 14/14 PASS.
   mock 은 그대로, `INTERIOR_AI_PROVIDER=external` + `INTERIOR_AI_API_KEY`(`.env`, gitignore).
   인계: `docs/handoffs/user2.md`.
-- 남은 것: 실기기 네트워크 검증(P1-11), 프롬프트/경계 튜닝(PHASE 2).
+- PHASE 5 카탈로그: 종류별 procedural 모델, 벽/바닥 우선 배치, 이동·크기·회전과 서버 저장/복원을 구현했다.
+- Depth 통합: 독립 모듈을 앱에 import하고 최초 배치 및 드래그 완료 시 표면·footprint·장애물을 비동기로 검사한다. 벽/바닥 fallback을 제거하고 회전 좌/우 버튼과 현재 각도를 표시한다.
+- 남은 것: 실기기 네트워크 검증(P1-11), 프롬프트/경계 튜닝(PHASE 2), Depth 지원 실기기 회귀 검증.
 
 ## Next
 
-1. 서버를 `--host 0.0.0.0` 로 띄우고 앱의 `InteriorApiClient.DEFAULT_BASE_URL` 을
-   PC LAN IP 로 바꿔 실기기에서 캡처→전송→응답→화면적용 한 번 관통 (P1-11).
-2. 서버 `app/ai/external.py` 의 `TODO(P1-10)` 를 실제 외부 AI 호출로 교체 (P1-10).
-3. 결과 quad 방향/스케일/정합 다듬기 (PHASE 3 로 이어짐).
+1. Depth 지원 실기기에서 안정/균형 preset의 가구 최초 배치·이동·거절 메시지를 회귀 검증한다.
+2. 서버를 `--host 0.0.0.0` 로 띄우고 실기기에서 캡처→전송→응답→화면 적용을 관통한다(P1-11).
+3. 배치 전 반투명 ghost preview, 바닥 접촉 그림자와 모델 occlusion을 제품 UX 후보로 검토한다.
+4. 서버 저장 pose를 영구 Spatial Anchor 또는 재정합 기준으로 교체한다.
 
 ## Relevant Commits
 
 - 이 Workstream 등록 및 `experiments/shinym87/interior/` 초기 구현 커밋 (본 Branch)
+- `90c268a` — 독립 Depth 모듈 import, 최초/이동 배치 검증, 벽·바닥 고정과 양방향 회전 UX 통합
 
 ## Updated
 
-2026-09-02
+2026-09-08

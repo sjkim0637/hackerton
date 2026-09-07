@@ -18,7 +18,7 @@ goguma-salad + Codex
 
 ## Status
 
-REVIEW
+INTEGRATION
 
 ## Goal
 
@@ -69,7 +69,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 
 1. ARCore Raw Depth 지원 실기기에서 APK를 설치해 Depth FPS, 해상도, point 수와 배치 품질 측정
 2. 기기별 sensitivity 기본값 튜닝
-3. 메인 AR 앱에서 최초 배치뿐 아니라 드래그 완료 후에도 Depth footprint를 재검증하는 UX 검토
+3. 메인 AR 앱 통합 완료: 최초 배치와 드래그 완료 후 Depth footprint를 재검증하며 실기기 회귀 테스트가 남았다.
 
 ## Relevant Commits
 
@@ -86,6 +86,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `ea4b9ac` — 쇠공이 조준 IR Depth에 도달한 뒤 최대 3회 반동하도록 충돌 판정 보정
 - `b83984c` — 바닥 의자와 벽걸이 액자를 표면별로 판정하고 world pose에 지속 투영
 - `75cb99b` — 안정·균형 배치 sampling, 깊이 연속성, RANSAC과 터치 중심 Pose 개선
+- `90c268a` — Interior Host 앱에 Depth 모듈과 최초/이동 배치 gate 통합
 
 ## Updated
 
