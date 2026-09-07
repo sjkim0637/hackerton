@@ -1,0 +1,165 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Interior: 환경 확인",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "doctor"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: 서버 환경 준비",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "server-setup"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: 서버 실행",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "server"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "interior-server",
+        "pattern": {
+          "regexp": "^(?!)$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Started server process|Starting server",
+          "endsPattern": "Uvicorn running on"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Interior: APK 빌드",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "build"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: APK 설치",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "install"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: USB 서버 연결",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "reverse"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: 앱 실행",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "launch"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: 폰 테스트 전체",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "all"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Interior: 앱 Logcat",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\scripts\\phone-test.ps1",
+        "-Action",
+        "logcat"
+      ],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

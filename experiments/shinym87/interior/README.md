@@ -114,6 +114,23 @@ adb shell am start -n com.hackathon.interior/.MainActivity
 첫 실행 시 카메라 권한을 허용하고, 기기에 "Google Play 서비스 (AR)" 가 없으면
 Play 스토어 설치 안내를 따른다.
 
+### VS Code Task로 USB 실기기 테스트
+
+저장소 루트를 VS Code로 열고 `Terminal > Run Task`에서 다음 순서로 실행한다.
+
+1. `Interior: 환경 확인` — ADB 연결, JDK 17/21, Python 3.11 이상을 확인한다.
+2. `Interior: 서버 환경 준비` — 최초 한 번 `.venv`를 만들고 서버 의존성을 설치한다.
+3. `Interior: 서버 실행` — FastAPI를 `0.0.0.0:8000`으로 실행한다.
+4. `Interior: 폰 테스트 전체` — APK 빌드·설치, USB 포트 연결, 앱 실행을 한 번에 수행한다.
+
+`폰 테스트 전체`는 `adb reverse tcp:8000 tcp:8000`을 적용한다. 따라서 폰과 PC가 같은
+Wi-Fi에 없어도 되며, 앱 상단 서버 주소에는 **`http://127.0.0.1:8000`**을 입력한다.
+폰에서는 개발자 옵션과 USB 디버깅을 켜고 RSA 연결 승인 창을 허용해야 한다.
+
+필요하면 `Interior: APK 빌드`, `Interior: APK 설치`, `Interior: USB 서버 연결`,
+`Interior: 앱 실행`, `Interior: 앱 Logcat`을 개별 실행할 수 있다. JDK 자동 탐색이 실패하면
+JDK 17/21을 설치하거나 `INTERIOR_JAVA_HOME`에 해당 JDK 경로를 지정한다.
+
 ## 사용 방법
 
 1. 바닥·책상·벽을 천천히 비춰 격자가 나타나게 한다.
