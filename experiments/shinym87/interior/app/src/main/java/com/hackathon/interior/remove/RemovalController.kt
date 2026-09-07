@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.PixelCopy
 import android.view.View
 import com.google.ar.core.Anchor
@@ -108,7 +109,11 @@ class RemovalController(
      * 보낸다 — 예전(D3)엔 사각형 드래그 + 종류 선택 + "삭제 요청" 버튼, 세 단계였다.
      */
     fun onScreenTapped(xPx: Float, yPx: Float) {
-        if (busy) return
+        if (busy) {
+            Log.d(TAG, "onScreenTapped 무시됨 (이미 처리 중)")
+            return
+        }
+        Log.d(TAG, "onScreenTapped x=$xPx y=$yPx")
         clearResult()
         val vw = sceneView.width.toFloat().coerceAtLeast(1f)
         val vh = sceneView.height.toFloat().coerceAtLeast(1f)
@@ -488,6 +493,7 @@ class RemovalController(
             .format(Date())
 
     private fun status(message: String) {
+        Log.d(TAG, "status: $message")
         binding.removalStatusText.text = message
     }
 
@@ -497,6 +503,9 @@ class RemovalController(
     }
 
     private companion object {
+        const val TAG = "InteriorRemoval"
+
+        /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
 
         /** 탭 지점 하나만으론 실제 사물 크기를 모르므로 쓰는 초기 패치 크기(m). */
