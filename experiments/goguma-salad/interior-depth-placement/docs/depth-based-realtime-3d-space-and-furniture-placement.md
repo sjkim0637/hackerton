@@ -6,7 +6,43 @@
 
 현재 구현은 방 전체를 영구적인 3D mesh로 복원하는 방식이 아니다. 매 Depth frame에서 world-space point cloud를 만들고, 터치 위치 주변의 국소 평면과 장애물을 계산하는 배치 판단 모듈이다.
 
-## 2. 전체 처리 흐름
+## 2. 기본 원리
+
+### 2.1 RGB 영상에 거리 정보를 더한다
+
+일반 카메라의 RGB 영상은 물체의 색과 모양은 보여주지만, 카메라에서 물체까지의 실제 거리는 직접 알려주지 않는다. Depth image는 RGB 영상과 대응하는 각 pixel에 거리값을 기록한다. 예를 들어 한 pixel의 값이 `650mm`라면 그 방향의 표면이 카메라에서 약 `0.65m` 떨어져 있다는 뜻이다.
+
+따라서 RGB와 Depth를 겹치면 “무엇이 보이는가”와 “얼마나 떨어져 있는가”를 한 화면에서 함께 판단할 수 있다.
+
+### 2.2 거리 pixel을 3D 점으로 바꾼다
+
+Depth의 한 pixel은 거리만 가지고 있으므로 그 자체로는 3D 위치가 아니다. 카메라의 초점거리와 중심점인 `CameraIntrinsics`를 이용해 pixel이 카메라 기준으로 어느 방향에 있는지 계산한다. 이 방향과 Depth 거리를 결합하면 `(x, y, z)` 형태의 camera-space point가 된다.
+
+이 계산을 여러 pixel에 반복한 결과가 Point Cloud다. 점이 충분히 촘촘하면 바닥, 벽, 탁자와 물체의 대략적인 윤곽이 나타난다.
+
+### 2.3 카메라가 움직여도 같은 공간 좌표로 변환한다
+
+Camera-space 좌표는 카메라가 움직일 때마다 기준이 달라진다. ARCore가 추정한 `CameraPose`를 적용하면 각 3D 점을 고정된 world-space 좌표로 변환할 수 있다. 가구의 위치와 회전도 이 world-space를 기준으로 반환하므로 AR 화면의 객체 Pose로 연결할 수 있다.
+
+현재 모듈은 매 frame의 Point Cloud를 최신 CameraPose로 변환하지만, 여러 frame을 누적해 영구적인 공간 mesh를 만드는 단계까지는 포함하지 않는다.
+
+### 2.4 가까운 점들의 배열로 표면을 추정한다
+
+사용자가 화면을 누르면 해당 위치 주변의 3D 점만 ROI로 모은다. 같은 바닥이나 탁자 위의 점들은 하나의 평면 근처에 모이므로, 점들의 분포에서 가장 변화가 작은 방향을 찾으면 surface normal을 얻을 수 있다. 이 normal로 표면의 방향과 경사를 계산한다.
+
+점이 너무 적거나 평면에서 크게 벗어나면 신뢰할 수 없는 표면으로 판단한다.
+
+### 2.5 가구가 차지할 공간과 실제 점을 비교한다
+
+선택한 가구의 폭·깊이·높이를 추정 평면 위에 가상의 footprint로 놓는다. footprint 안에 평면을 지지하는 점이 충분한지, 평면 위로 튀어나온 장애물 점이 있는지, 경사가 허용 범위인지 검사한다.
+
+조건을 통과하면 배치 가능한 `Pose`와 confidence를 반환하고, 통과하지 못하면 점 부족·급경사·지지면 부족·장애물 같은 실패 원인을 반환한다.
+
+### 2.6 화면의 색상은 측정값을 해석하기 위한 표현이다
+
+빨강·초록·파랑 점은 Depth 센서의 측정 결과를 사람이 쉽게 비교하도록 표현한 Debug 정보다. 현재 화면 안에서 가까운 점은 빨강, 먼 점은 파랑으로 나타낸다. 근거리 차이를 잘 보이게 하는 상대 색상은 윤곽 검증에는 유용하지만 실제 Depth값이나 센서 정확도를 변경하지 않는다.
+
+## 3. 전체 처리 흐름
 
 ```mermaid
 flowchart LR
@@ -26,7 +62,7 @@ flowchart LR
     M --> N[PlacementResult]
 ```
 
-## 3. 입력 데이터
+## 4. 입력 데이터
 
 | 입력 | 단위·형식 | 용도 |
 |---|---|---|
@@ -38,7 +74,7 @@ flowchart LR
 
 ARCore에서는 가능한 경우 주변 pixel과 motion 정보를 보완한 `AUTOMATIC` dense Depth를 우선 사용한다. 지원하지 않으면 Raw Depth와 confidence image로 전환한다.
 
-## 4. Depth pixel의 3D 좌표 변환
+## 5. Depth pixel의 3D 좌표 변환
 
 Depth pixel `(u, v)`와 거리 `z`를 meter로 바꾼 뒤 pinhole camera model을 적용한다.
 
@@ -52,7 +88,7 @@ worldPoint = cameraPose × cameraPoint
 
 결과 좌표계는 ARCore world coordinate이며 거리 단위는 meter이다. Point마다 원본 Depth 좌표와 confidence도 함께 유지한다.
 
-## 5. Filter와 시간 안정화
+## 6. Filter와 시간 안정화
 
 기본 처리 순서는 다음과 같다.
 
@@ -64,7 +100,7 @@ worldPoint = cameraPose × cameraPoint
 
 시간 안정화는 화면 떨림을 줄이지만 빠르게 움직일 때 반응이 늦어질 수 있다. 반사체, 투명체, 매우 어두운 표면과 센서 최소 거리보다 가까운 물체는 유효 Depth가 적거나 잘못 측정될 수 있다.
 
-## 6. 분석 Point와 화면 투영 Point
+## 7. 분석 Point와 화면 투영 Point
 
 두 종류의 sample은 목적과 밀도를 분리한다.
 
@@ -75,7 +111,7 @@ worldPoint = cameraPose × cameraPoint
 
 분석 stride가 `4`이면 투영 stride는 `2`가 되어, 같은 유효 영역에서 화면 점은 최대 약 4배 촘촘해진다. 투영 밀도를 높여도 배치 계산에 쓰는 3D point 수는 그대로이므로 분석 비용은 제한된다. HUD의 `분석 N / 투영 M` 값으로 두 밀도를 따로 확인할 수 있다.
 
-## 7. 근거리 상대 Depth 시각화
+## 8. 근거리 상대 Depth 시각화
 
 절대 거리 `0.2m..5.0m`를 그대로 색상에 대응시키면 가까운 물체가 모두 빨강으로 뭉쳐 작은 굴곡을 구분하기 어렵다. Debug 화면은 현재 frame의 유효 Depth 중 5 percentile을 `near`, 95 percentile을 `far`로 사용해 극단값을 제외한다.
 
@@ -92,13 +128,13 @@ t = clamp(t, 0, 1)
 
 범위가 frame마다 갑자기 흔들리지 않도록 이전 범위 80%와 새 범위 20%를 혼합한다. 이 색상은 같은 화면 안에서 물체의 상대적인 앞뒤와 윤곽을 쉽게 보는 Debug 표현이다. 색상 대비가 커졌다고 Depth 센서 자체의 절대 정확도가 높아지는 것은 아니다.
 
-## 8. 화면 Tap과 Depth 좌표
+## 9. 화면 Tap과 Depth 좌표
 
 배치 계산 API는 Android View pixel이 아니라 Depth image pixel을 입력받는다. 일반 Host 화면에서는 ARCore의 `transformCoordinates2d`를 이용해 View 좌표를 camera image 좌표로 바꾸고, Depth 해상도 비율을 적용한다.
 
 현재 Test App은 portrait 검증 화면에 맞춰 RGB와 Depth를 90° 회전해 겹친다. RGB 물체 경계와 Depth 점이 일정한 방향으로 어긋난다면 Depth 정확도보다 회전·crop·좌표 변환 문제를 먼저 의심해야 한다.
 
-## 9. 국소 평면 계산
+## 10. 국소 평면 계산
 
 터치한 Depth 좌표를 중심으로 기본 `15×15 pixel` ROI를 선택한다. 유효점이 기본 20개보다 적으면 `INSUFFICIENT_POINTS`로 종료한다.
 
@@ -112,7 +148,7 @@ t = clamp(t, 0, 1)
 
 평면 normal과 world up vector의 각도로 경사를 계산한다. 기본 허용 경사는 `15°`이다.
 
-## 10. Surface와 장애물 판정
+## 11. Surface와 장애물 판정
 
 추정한 normal과 경사를 이용해 surface를 `FLOOR`, `HORIZONTAL_SURFACE`, `WALL`, `UNKNOWN`으로 분류한다. 이후 선택한 가구의 `width × depth × height` footprint를 평면 위에 투영한다.
 
@@ -121,7 +157,7 @@ t = clamp(t, 0, 1)
 - 지지점이 부족하거나 장애물이 허용량보다 많으면 배치를 거절한다.
 - point 밀도, 평균 confidence, 평면 오차를 조합한 최종 confidence가 기본 `0.55`보다 낮아도 거절한다.
 
-## 11. 출력 결과
+## 12. 출력 결과
 
 | 필드 | 의미 |
 |---|---|
@@ -136,7 +172,7 @@ t = clamp(t, 0, 1)
 | `obstaclePointCount` | footprint 안의 장애물 점 수 |
 | `failureReason` | 실패한 경우 구체적인 원인 |
 
-## 12. 정확도를 확인하는 방법
+## 13. 정확도를 확인하는 방법
 
 정확도는 다음 세 단계를 따로 확인해야 한다.
 
@@ -146,7 +182,7 @@ t = clamp(t, 0, 1)
 
 `Points ON/OFF`로 RGB 원본과 투영 결과를 비교하고, 움직임이 멈춘 상태에서 `Freeze`하여 화면을 캡처한다. 근거리 검증은 카메라와 물체 사이가 최소 유효 거리 `0.2m`보다 충분히 먼 상태에서 시작한다.
 
-## 13. 현재 한계
+## 14. 현재 한계
 
 - Test App의 RGB 투영은 portrait 90° 회전을 전제로 하며 모든 기기 회전을 검증하지 않았다.
 - RGB preview와 Depth의 취득 시점이 완전히 같지 않아 빠른 움직임에서는 경계가 어긋날 수 있다.
@@ -155,7 +191,7 @@ t = clamp(t, 0, 1)
 - Plane fitting은 PCA 기반이며 `enableRansac` 옵션은 아직 구현되지 않았다.
 - 실기기별 Depth 해상도·FPS·최소 거리·반사 재질 성능을 추가 측정해야 한다.
 
-## 14. 구현 위치와 실행
+## 15. 구현 위치와 실행
 
 | 구성 | 위치 |
 |---|---|
