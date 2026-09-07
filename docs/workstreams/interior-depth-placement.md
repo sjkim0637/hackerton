@@ -74,6 +74,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `67a5d85` — RGB 실화면 위에 Depth Point를 직접 투영하는 정확도 검증 UI 적용
 - `1a72d40` — 근거리 inverse-depth 상대 색상과 분석/투영 sampling 밀도 분리 적용
 - `f8e30bb` — Depth 기반 실시간 3D 공간과 가구 배치 계산 기술 정리
+- `3af7f70` — RGB·Depth에서 3D 표면과 가구 배치를 계산하는 기본 원리 설명 추가
 
 ## Updated
 
