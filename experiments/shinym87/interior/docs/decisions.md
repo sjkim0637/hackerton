@@ -89,3 +89,44 @@
     `onPointSelected` 콜백을 추가했지만(기존 드래그 경로는 그대로 유지), `RemovalController`가
     이걸 받아 `PointRegion`을 서버로 보내도록 연결하는 작업은 남아 있다
     (`docs/workstreams/interior-mobilesam.md`의 Next 참고).
+
+---
+
+## D6. 초기 AR 진입을 ARCore Depth API + Instant Placement로 가속
+
+- Status: Accepted (2026-09-07, `agent/goguma-salad/interior-mobilesam` 브랜치)
+- Context: 기존 AR 진입은 `Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL`(순수 시각 SLAM)
+  만 썼다. 이 방식은 사용자가 폰을 좌우로 움직여 특징점을 충분히 모아야 Plane 이 잡히고,
+  그 전까지는 `ArSpaceController.hitTest*()` 가 항상 null 이라 아무것도 배치할 수 없었다
+  ("초기에 AR이 평면 찾는다고 계속 돈다"는 사용자 피드백의 원인). "IR 기반 Depth/ToF 로
+  바꿔달라"는 요청이 있었다.
+- Decision:
+  1. `session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)` 로 지원 여부를 확인한 뒤
+     지원하면 `config.depthMode = Config.DepthMode.AUTOMATIC` 를 켠다.
+  2. 하드웨어와 무관하게 `config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP`
+     을 항상 켠다.
+  3. `ArSpaceController.hitTest()`/`hitTestPreferring()` 의 fallback 단계에서
+     `depthPoint`/`instantPlacementPoint` 를 함께 받아들이도록 `hitTestAR` 호출을 확장한다.
+- Reason: **"IR 기반 Depth/ToF"는 요청한 그대로는 일부 기기에서만 성립한다.** ARCore의
+  Depth API(`DepthMode.AUTOMATIC`)는 기기에 실제 ToF/IR 깊이 센서가 있으면 그 하드웨어 값을
+  자동으로 쓰지만, 요즘 주요 플래그십 다수(예: 이 프로젝트가 검증에 쓰는 Galaxy S25 FE 계열)는
+  전용 ToF 센서가 없어 ARCore의 Motion Stereo(Depth-from-Motion, 카메라 이동으로 깊이 추정)로
+  자동 대체된다 — 이 경로는 여전히 약간의 카메라 이동이 필요하다. 반면 Instant Placement는
+  하드웨어와 무관하게 모든 ARCore 지원 기기에서 즉시 대략적인 배치를 허용하고, 이후 실제
+  Plane/Depth 가 잡히면 자동으로 위치를 다듬는다 — "폰을 막 돌려야 하는" 체감을 실제로
+  없애는 것은 이 부분이다. 그래서 "ToF만" 넣는 대신 두 기능을 함께 켜서, ToF가 있는 기기는
+  최상의 정밀도를, 없는 기기도 즉시 반응성을 얻게 했다.
+- Alternatives:
+  - Depth API만 켜고 Instant Placement는 안 씀 — ToF 없는 기기(팀 보유 기기 대부분)에서는
+    체감 개선이 거의 없어 기각.
+  - 자체 IR/ToF 카메라 API(`android.hardware.camera2` Depth16, RGBD 등)를 직접 다룸 —
+    기기별 파편화가 심하고 ARCore가 이미 추상화해주는 것을 재구현하는 셈이라 기각.
+- Impact:
+  - `ArSpaceController.kt` 에 `depthSupported` 프로퍼티 추가(hitTest 에서 depthPoint 사용
+    여부 판단), 안내 문구가 더 이상 "평면부터 찾아야 함"을 암시하지 않도록 수정.
+  - 실기기 검증 못 함(이 환경엔 Android SDK/실기기 없음) — 특히 Instant Placement 로 배치한
+    뒤 실제 Plane 이 잡히며 위치가 "다듬어지는" 전환이 자연스러운지, ToF 미보유 기기에서
+    체감 개선이 실제로 있는지는 실기기 확인이 필요하다.
+  - 기존 `docs/handoffs/interior-removal-fallback.md`(삭제 결과 전체화면 fallback 문제)와
+    별개 이슈다 — 그 문서의 "가구 배치 Mode에 들어갈 때만 Plane 격자 표시" 요청은 이번
+    변경에 포함하지 않았다(RemovalController 쪽 모드 전환 로직이 필요해 범위를 분리함).

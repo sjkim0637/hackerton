@@ -21,6 +21,16 @@ import io.github.sceneview.ar.scene.PlaneRenderer
  * - 벽 / 바닥 평면 탐지
  * - 화면 터치 위치 획득(hitTest)
  * 부분을 캡슐화한다. 가구 생성/편집 로직은 [com.hackathon.interior.furniture] 쪽이 담당한다.
+ *
+ * D6(`docs/decisions.md`): 기존엔 순수 Plane 추적만 써서, 사용자가 폰을 좌우로 움직여
+ * 특징점을 충분히 모으기 전까지는 아무 곳도 hitTest 되지 않았다. `Config.DepthMode.AUTOMATIC`
+ * 과 `Config.InstantPlacementMode.LOCAL_Y_UP` 을 추가해 두 단계로 즉시성을 높인다:
+ * - Depth API 는 기기에 실제 ToF/IR Depth 센서가 있으면 그 하드웨어 깊이 값을 쓰고, 없으면
+ *   ARCore 의 Motion Stereo(Depth-from-Motion) 로 대체된다 — "IR ToF" 는 지원 기기에서만
+ *   실제로 동작하고, 그 외 기기는 여전히 약간의 시차(움직임)가 필요하다(완전히 없앨 수는 없음).
+ * - Instant Placement 는 하드웨어와 무관하게 Plane 이 아직 없어도 즉시 대략적인 위치에
+ *   배치를 허용하고, 이후 실제 Plane/Depth 가 잡히면 자동으로 자리를 다듬는다. 이게
+ *   "폰을 막 돌려야 하는" 체감을 실제로 없애는 부분이다.
  */
 class ArSpaceController(
     private val sceneView: ARSceneView,
@@ -38,6 +48,10 @@ class ArSpaceController(
     /** 화면에 아무것도 선택/입력 중이 아니면 true. 이때만 안내 문구를 자동 갱신한다. */
     var isIdle: () -> Boolean = { true }
 
+    /** 이 기기가 Depth API(ToF/IR 센서 또는 Depth-from-Motion)를 지원하는지. `configureSession`에서 채워진다. */
+    var depthSupported: Boolean = false
+        private set
+
     // 상태 로그 스팸 방지용.
     private var lastTrackingState: TrackingState? = null
     private var lastFailureReason: String? = null
@@ -50,11 +64,23 @@ class ArSpaceController(
         sceneView.planeRenderer.isEnabled = true
         sceneView.planeRenderer.planeRendererMode = PlaneRenderer.PlaneRendererMode.RENDER_ALL
 
-        sceneView.configureSession { _, config ->
+        sceneView.configureSession { session, config ->
             // 바닥/책상 같은 수평면 + 벽 같은 수직면 모두 인식.
             config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
             // 실내 조명에 맞춰 오브젝트 밝기를 자동 조정 (없으면 Filament 오브젝트가 새까맣게 보임).
             config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+
+            // D6: 기기에 ToF/IR Depth 센서가 있으면 그 값을, 없으면 Depth-from-Motion 을 쓴다.
+            // 지원 여부를 반드시 먼저 확인해야 한다 — 미지원 기기에 그냥 설정하면 세션 설정이
+            // 실패한다. `depthSupported` 는 hitTest 에서 depthPoint 를 켤지 판단하는 데도 쓴다.
+            depthSupported = session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
+            config.depthMode =
+                if (depthSupported) Config.DepthMode.AUTOMATIC else Config.DepthMode.DISABLED
+            Log.d(TAG, "Depth API 지원: $depthSupported")
+
+            // D6: Plane 이 아직 안 잡혀도 대략적인 위치에 즉시 배치를 허용한다(하드웨어 무관).
+            // 이후 실제 Plane/Depth 가 추적되면 ARCore 가 자동으로 위치를 다듬는다.
+            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
         }
 
         sceneView.onSessionFailed = { exception ->
@@ -69,21 +95,32 @@ class ArSpaceController(
         }
     }
 
-    /** 화면 좌표 (xPx, yPx) 에서 벽/바닥 평면과의 hitTest 결과를 돌려준다. */
+    /**
+     * 화면 좌표 (xPx, yPx) 에서 hitTest 한다. Plane 을 우선하되, D6 부터는 Depth 포인트와
+     * Instant Placement 포인트도 함께 후보로 받아 Plane 이 아직 없어도 즉시 결과를 준다
+     * (SceneView `hitTestAR` 는 내부적으로 Plane → 그 외 순으로 가장 적절한 결과 하나를 고른다).
+     */
     fun hitTest(xPx: Float, yPx: Float): HitResult? =
-        sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
+        sceneView.hitTestAR(
+            xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES,
+            depthPoint = depthSupported, instantPlacementPoint = true,
+        )
 
     /**
      * 원하는 평면 종류를 우선해서 hitTest 한다.
      * TV/선반은 벽(수직), 소파/테이블 등은 바닥(수평)에 붙이려고 쓴다.
-     * 원하는 종류가 없으면 아무 평면이나(그마저 없으면 null) 돌려준다.
+     * 원하는 종류가 없으면 아무 평면이나, 그마저 없으면 Depth/Instant Placement 포인트(D6),
+     * 그것도 없으면 null 을 돌려준다.
      */
     fun hitTestPreferring(xPx: Float, yPx: Float, wantVertical: Boolean): HitResult? {
         val preferred: Set<Plane.Type> =
             if (wantVertical) setOf(Plane.Type.VERTICAL)
             else setOf(Plane.Type.HORIZONTAL_UPWARD_FACING, Plane.Type.HORIZONTAL_DOWNWARD_FACING)
         return sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = preferred)
-            ?: sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
+            ?: sceneView.hitTestAR(
+                xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES,
+                depthPoint = depthSupported, instantPlacementPoint = true,
+            )
     }
 
     /**
@@ -114,11 +151,13 @@ class ArSpaceController(
         Log.d(TAG, "tracking=$trackingState failureReason=$failureReason planes=$trackingPlanes/${planes.size}")
 
         if (isIdle()) {
+            // D6: Instant Placement 덕분에 Plane 이 0개여도 탭하면 바로 배치된다(위치는
+            // Plane/Depth 가 잡히면 자동으로 다듬어짐) — 더 이상 "평면부터 찾아야" 안내하지 않는다.
             instruction.text = when {
                 trackingState != TrackingState.TRACKING ->
-                    "추적 준비 중 ($failureReason) · 밝은 곳에서 폰을 좌우로 천천히 움직이세요"
+                    "추적 준비 중 ($failureReason) · 밝은 곳에서 폰을 천천히 움직이세요"
                 trackingPlanes == 0 ->
-                    "평면 찾는 중 · 바닥/책상/벽을 비추며 폰을 움직이세요"
+                    "탭하면 바로 가구를 놓을 수 있어요 (평면 인식 중 · 자동으로 위치가 맞춰져요)"
                 else ->
                     "평면 $trackingPlanes 개 (바닥·벽) · 탭하면 가구 생성, 길게 누르면 선택"
             }

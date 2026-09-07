@@ -54,6 +54,11 @@ IN_PROGRESS
   (기존엔 "가운데 절반"으로 근사하던 것을 실제 바운딩 박스로 교체 — `mock.py`도 동일 로직 재사용).
 - 앱: `BboxSelectionView`에 탭/누르고 있기 좌표를 알려주는 `onPointSelected` 콜백 추가
   (기존 드래그 경로는 그대로 유지, 순수 추가라 기존 동작 회귀 없음).
+- 앱: D6 — 초기 AR 진입 가속. `ArSpaceController`에 ARCore Depth API(`DepthMode.AUTOMATIC`,
+  지원 기기만) + Instant Placement(`InstantPlacementMode.LOCAL_Y_UP`, 전 기기)를 추가해
+  Plane 을 아직 못 찾아도 즉시 hitTest/배치가 되게 한다. "IR 기반 Depth/ToF" 요청에 대한
+  실제 구현 범위와 한계(ToF 없는 기기에서는 소프트웨어 Depth-from-Motion으로 대체)는
+  `docs/decisions.md` D6 참고.
 
 ## Out of Scope (이번 Branch 에서는 안 함, Next 참고)
 
@@ -135,23 +140,36 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
   모델이라 실기기 요구 응답시간 안에 들어오는지는 실측이 필요하다.
 - 테스트용으로 받은 모델은 저장소에 없다 — 다른 개발자/CI는 위 "모델 준비" 절차를 직접
   거쳐야 `test_mobilesam_real_model.py`가 skip 되지 않고 돈다.
+- D6(Depth API/Instant Placement)은 Android SDK/실기기가 없는 환경에서 짜서 컴파일/실기기
+  확인을 못 했다. 특히 `session.isDepthModeSupported()`/`Config.InstantPlacementMode` 심볼이
+  실제 프로젝트가 받는 ARCore 버전(1.48/1.54 둘 다 gradle 캐시에 있음, 둘 다 이 API를
+  지원하는 버전대)에 존재하는지는 API 문서 기준으로 확인했지 컴파일로 확인한 게 아니다.
+- 이 프로젝트 실기기(Galaxy S25 FE, `ar-cube-min` Workstream 기준)로 추정하면 전용 ToF 센서가
+  없을 가능성이 높다 — 그 경우 Depth API는 소프트웨어 Depth-from-Motion으로 자동 대체되고,
+  "진짜 즉시 배치"는 Instant Placement 쪽에서만 체감된다(D6 참고). 실제로 어느 쪽이 켜지는지는
+  실기기에서 `depthSupported` 로그로 확인해야 한다.
 
 ## Next
 
-1. **삭제 결과 fallback 수정(우선)**: [`docs/handoffs/interior-removal-fallback.md`](../handoffs/interior-removal-fallback.md)의
+1. **삭제 결과 fallback 수정**: [`docs/handoffs/interior-removal-fallback.md`](../handoffs/interior-removal-fallback.md)의
    완료 조건에 따라 Anchor가 없어도 전체화면 정적 Bitmap을 유지하지 않고 라이브 카메라로 복귀한다.
-   MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다.
-2. **앱 배선**: `RemovalController`에서 "TV 선택 모드" 진입 시
+   MobileSAM Mask 성공 여부와 AR 결과 표시 상태를 분리한다. 이 문서의 "가구 배치 Mode에
+   들어갈 때만 Plane 격자·스캔 안내 표시" 요청도 여기서 같이 처리한다(D6과 범위가 겹친다 —
+   현재 D6은 hitTest 자체를 즉시 가능하게만 했고, 격자 시각화 조건부 표시는 미포함).
+2. **D6 실기기 검증(우선)**: `depthSupported` 로그 확인, Instant Placement로 배치 후 실제
+   Plane/Depth가 잡히며 위치가 자연스럽게 다듬어지는지, Plane 0개 상태에서 탭 배치가 실제로
+   되는지 확인.
+3. **앱 배선**: `RemovalController`에서 "TV 선택 모드" 진입 시
    `binding.bboxSelectionView.onPointSelected = ::onPointSelected` 로 연결하고, 새 핸들러가
    기존 `onRectSelected(rect: RectF)`와 같은 자리에서 `target: {"type": "point", "point": [x,y]}`
    를 만들어 `RemoveObjectRequest`에 실어 보내도록 `InteriorApiClient`를 확장한다.
    단, 기존 `resolveWall(rect)`(벽 hitTest로 실측 크기 표시)는 사각형의 네 변에 의존하므로,
    점 하나로는 그대로 못 쓴다 — 점 주변에 작은 hitTest 사각형을 합성하거나, 정밀 마스크가
    서버에서 오기 전까지는 실측 표시를 생략하는 방향을 검토해야 한다.
-3. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
+4. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
    `iou_predictions`로 함께 주므로, 상위 1개 대신 상위 N개를 앱에 보여줄 수도 있다.
-4. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
-5. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
+5. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
+6. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
 
 ## Integration Candidate
 
