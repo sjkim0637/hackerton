@@ -11,6 +11,8 @@ __pycache__/
 # E2E 스크립트가 내려받은 결과 이미지
 scripts/_out/
 
-# MobileSAM 모델 파일 (수십MB, 수동 다운로드 — docs/workstreams/interior-mobilesam.md 참고)
-models/
+# MobileSAM/LaMa 모델 파일 (수십~수백MB, 수동 다운로드 — docs/workstreams/interior-mobilesam.md
+# 참고). 반드시 저장소 루트(server/models/)만 가리켜야 한다 — 그냥 "models/"로 쓰면
+# catalog/assets/models/의 가구 3D 모델(.glb, 수십KB, 커밋 대상)까지 잘못 무시된다.
+/models/
 *.onnx

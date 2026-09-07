@@ -25,9 +25,14 @@ PALETTE = {
     "table": (184, 134, 63),
     "chair": (62, 155, 95),
     "shelf": (122, 79, 191),
+    "vase": (196, 90, 110),
+    "lamp": (214, 158, 46),
+    "plant": (58, 140, 74),
+    "bed": (90, 110, 200),
 }
 NAMES = {
     "tv": "TV", "sofa": "소파", "table": "테이블", "chair": "의자", "shelf": "선반",
+    "vase": "꽃병", "lamp": "조명", "plant": "화분", "bed": "침대",
 }
 
 
@@ -96,9 +101,37 @@ def draw_shelf(d: ImageDraw.ImageDraw, c: tuple[int, int, int]) -> None:
         d.rectangle((x, 210 - i % 2 * 8, x + 14, 288), outline=c, width=6)
 
 
+def draw_vase(d: ImageDraw.ImageDraw, c: tuple[int, int, int]) -> None:
+    d.line((300, 150, 300, 200), fill=c, width=14)  # neck
+    d.polygon(
+        [(260, 200), (340, 200), (400, 340), (380, 430), (220, 430), (200, 340)],
+        outline=c, width=14, fill=(*c, 40),
+    )
+
+
+def draw_lamp(d: ImageDraw.ImageDraw, c: tuple[int, int, int]) -> None:
+    d.line((320, 250, 320, 430), fill=c, width=12)          # pole
+    d.ellipse((270, 430, 370, 450), outline=c, width=12)    # base
+    d.polygon([(270, 170), (370, 170), (400, 250), (240, 250)], outline=c, width=14, fill=(*c, 45))  # shade
+
+
+def draw_plant(d: ImageDraw.ImageDraw, c: tuple[int, int, int]) -> None:
+    d.ellipse((220, 190, 420, 340), outline=c, width=14, fill=(*c, 40))  # foliage
+    d.polygon([(240, 340), (400, 340), (380, 440), (260, 440)], outline=c, width=14)  # pot
+
+
+def draw_bed(d: ImageDraw.ImageDraw, c: tuple[int, int, int]) -> None:
+    d.rounded_rectangle((160, 300, 480, 400), radius=16, fill=(*c, 40), outline=c, width=14)  # mattress
+    d.rounded_rectangle((160, 230, 200, 400), radius=8, outline=c, width=14)   # headboard
+    d.rounded_rectangle((190, 260, 260, 300), radius=10, fill=(*c, 60), outline=c, width=10)  # pillow
+    for x in (180, 460):
+        d.line((x, 400, x, 440), fill=c, width=14)  # legs
+
+
 DRAWERS = {
     "tv": draw_tv, "sofa": draw_sofa, "table": draw_table,
     "chair": draw_chair, "shelf": draw_shelf,
+    "vase": draw_vase, "lamp": draw_lamp, "plant": draw_plant, "bed": draw_bed,
 }
 
 
