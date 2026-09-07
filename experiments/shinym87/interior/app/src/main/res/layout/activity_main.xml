@@ -49,6 +49,38 @@
         android:paddingTop="40dp"
         android:paddingHorizontal="12dp">
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_ar_toolbar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="6dp">
+
+            <Button
+                android:id="@+id/btnExitAr"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:text="@string/back_home" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="@string/ar_title"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnArSettings"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:text="@string/home_settings" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/instructionText"
             android:layout_width="match_parent"
@@ -100,24 +132,6 @@
             android:visibility="gone" />
 
         <!-- 사물 제거 흐름 (P1-2/P1-3/P1-8/P1-9) -->
-
-        <!-- 서버 주소. 실기기에서는 localhost 가 아니라 서버 PC 의 LAN IP 를 넣어야 한다.
-             입력값은 저장되어 다음 실행에도 유지된다. -->
-        <EditText
-            android:id="@+id/serverUrlInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#33FFFFFF"
-            android:textColor="@android:color/white"
-            android:textColorHint="#99FFFFFF"
-            android:textSize="13sp"
-            android:padding="8dp"
-            android:singleLine="true"
-            android:inputType="textUri"
-            android:imeOptions="actionDone"
-            android:hint="서버 주소 (예: http://192.168.0.10:8000)"
-            android:importantForAutofill="no" />
 
         <!-- 지울 사물 종류. 서버 요청의 objectType 이 이 선택값을 따라간다. -->
         <LinearLayout

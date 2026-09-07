@@ -11,7 +11,7 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $ServerRoot = Join-Path $ProjectRoot 'server'
 $ApkPath = Join-Path $ProjectRoot 'app\build\outputs\apk\debug\app-debug.apk'
 $PackageName = 'com.hackathon.interior'
-$ActivityName = "$PackageName/.MainActivity"
+$ActivityName = "$PackageName/.HomeActivity"
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -162,7 +162,7 @@ function Invoke-Launch([string]$Adb, [string]$Serial) {
     & $Adb -s $Serial shell am force-stop $PackageName
     & $Adb -s $Serial shell am start -n $ActivityName
     if ($LASTEXITCODE -ne 0) { throw "App launch failed (exit $LASTEXITCODE)" }
-    Write-Host 'Set the in-app server URL to http://127.0.0.1:8000.' -ForegroundColor Yellow
+    Write-Host 'The Settings screen defaults to http://127.0.0.1:8000 for adb reverse.' -ForegroundColor Yellow
 }
 
 function Invoke-ServerSetup {

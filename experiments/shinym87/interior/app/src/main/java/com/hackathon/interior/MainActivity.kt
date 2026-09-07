@@ -1,6 +1,7 @@
 package com.hackathon.interior
 
 import android.os.Bundle
+import android.content.Intent
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -42,6 +43,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         val sceneView = binding.sceneView
+
+        binding.btnExitAr.setOnClickListener { finish() }
+        binding.btnArSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
         space = ArSpaceController(sceneView, lifecycle, binding.instructionText)
 

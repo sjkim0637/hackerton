@@ -31,6 +31,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 
 | 설계서 항목 (사용자 1) | 구현 위치 |
 |---|---|
+| 메인 화면 → AR·사용 방법·설정 분기 | `HomeActivity.kt`, `GuideActivity.kt`, `SettingsActivity.kt` |
 | 카메라 화면 표시 / AR 실행 환경 구성 | `ar/ArSpaceController.kt` |
 | 벽 / 바닥 평면 탐지 (수평 + 수직) | `ar/ArSpaceController.kt`, `ar/PlaneKind.kt` |
 | 화면 터치 위치 획득 (hitTest) | `ar/ArSpaceController.hitTest()` |
@@ -43,7 +44,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
 | job 폴링 → 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
 
-서버 주소는 **화면 상단 입력창**에서 지정한다(값은 저장돼 유지). 실기기에서는
+서버 주소는 메인 화면의 **설정**에서 지정한다(값은 저장돼 모든 API에 적용). 실기기에서는
 `localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,
 서버는 `uvicorn app.main:app --host 0.0.0.0` 로 띄운다.
 
@@ -58,7 +59,11 @@ experiments/shinym87/interior/
 │  └─ src/main/
 │     ├─ AndroidManifest.xml             # CAMERA 권한, AR Required 메타데이터
 │     ├─ java/com/hackathon/interior/
-│     │  ├─ MainActivity.kt              # 네 컨트롤러를 레이아웃/제스처에 연결
+│     │  ├─ HomeActivity.kt              # 앱 Launcher와 화면 분기
+│     │  ├─ GuideActivity.kt             # 사용 방법과 흐름 Asset
+│     │  ├─ SettingsActivity.kt          # 서버 주소 설정
+│     │  ├─ MainActivity.kt              # AR 컨트롤러를 레이아웃/제스처에 연결
+│     │  ├─ settings/ServerSettings.kt   # 서버 주소 저장과 정규화
 │     │  ├─ ar/
 │     │  │  ├─ ArSpaceController.kt      # 카메라·AR 세션·평면 인식·hitTest
 │     │  │  └─ PlaneKind.kt              # 평면 타입 집합 + 수직/수평 판별
@@ -108,7 +113,7 @@ cd experiments/shinym87/interior
 # 폰을 USB 로 연결 (개발자 옵션 + USB 디버깅 ON)
 adb devices
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.hackathon.interior/.MainActivity
+adb shell am start -n com.hackathon.interior/.HomeActivity
 ```
 
 첫 실행 시 카메라 권한을 허용하고, 기기에 "Google Play 서비스 (AR)" 가 없으면
@@ -124,7 +129,7 @@ Play 스토어 설치 안내를 따른다.
 4. `Interior: 폰 테스트 전체` — APK 빌드·설치, USB 포트 연결, 앱 실행을 한 번에 수행한다.
 
 `폰 테스트 전체`는 `adb reverse tcp:8000 tcp:8000`을 적용한다. 따라서 폰과 PC가 같은
-Wi-Fi에 없어도 되며, 앱 상단 서버 주소에는 **`http://127.0.0.1:8000`**을 입력한다.
+Wi-Fi에 없어도 되며, 메인 화면의 설정에서 서버 주소를 **`http://127.0.0.1:8000`**으로 저장한다.
 폰에서는 개발자 옵션과 USB 디버깅을 켜고 RSA 연결 승인 창을 허용해야 한다.
 
 필요하면 `Interior: APK 빌드`, `Interior: APK 설치`, `Interior: USB 서버 연결`,
@@ -133,12 +138,13 @@ JDK 17/21을 설치하거나 `INTERIOR_JAVA_HOME`에 해당 JDK 경로를 지정
 
 ## 사용 방법
 
-1. 바닥·책상·벽을 천천히 비춰 격자가 나타나게 한다.
-2. 평면을 **탭** → 이름과 실물 크기(cm)를 입력하면 반투명 가구가 생긴다.
-3. 가구를 **탭/길게 누르기** 로 선택(밝게 강조) → 하단 조작 패널 표시.
-4. 선택 상태에서 **드래그** 하면 평면을 따라 이동, 떼면 그 자리에 고정된다.
-5. **두 손가락 핀치** 또는 패널의 `＋`/`－` 로 크기를 조절한다. `삭제` 로 제거.
-6. `배경 촬영` 으로 가구가 없는 현재 화면을 저장하고, `배경 표시` + 불투명도
+1. 메인 화면에서 필요하면 **설정**에 서버 주소를 저장하고 **AR 인테리어 시작**을 누른다.
+2. 바닥·책상·벽을 천천히 비춰 격자가 나타나게 한다.
+3. 평면을 **탭** → 이름과 실물 크기(cm)를 입력하면 반투명 가구가 생긴다.
+4. 가구를 **탭/길게 누르기** 로 선택(밝게 강조) → 하단 조작 패널 표시.
+5. 선택 상태에서 **드래그** 하면 평면을 따라 이동, 떼면 그 자리에 고정된다.
+6. **두 손가락 핀치** 또는 패널의 `＋`/`－` 로 크기를 조절한다. `삭제` 로 제거.
+7. `배경 촬영` 으로 가구가 없는 현재 화면을 저장하고, `배경 표시` + 불투명도
    슬라이더로 "가구가 사라진 것처럼" 겹쳐 본다.
 
 ## 알려진 제약

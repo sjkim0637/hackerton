@@ -2,4 +2,28 @@
 <resources>
     <string name="app_name">Interior AR</string>
     <string name="instruction_scan">바닥·책상·벽을 천천히 비추세요 · 격자가 보이면 화면을 탭</string>
+    <string name="home_eyebrow">SPACE EDITOR</string>
+    <string name="home_title">내 공간을\n새롭게 배치해 보세요</string>
+    <string name="home_subtitle">카메라로 공간을 인식하고, 사물을 지우거나 새로운 가구를 AR로 배치합니다.</string>
+    <string name="home_hero_description">AR로 새롭게 꾸민 거실</string>
+    <string name="home_start_ar">AR 인테리어 시작</string>
+    <string name="home_guide">사용 방법</string>
+    <string name="home_settings">설정</string>
+    <string name="home_tip">처음이라면 사용 방법과 서버 설정을 먼저 확인하세요.</string>
+    <string name="back_home">‹ 홈</string>
+    <string name="ar_title">AR 인테리어</string>
+    <string name="guide_title">이렇게 사용하세요</string>
+    <string name="guide_subtitle">공간 인식부터 영역 선택과 가구 배치까지 세 단계로 진행됩니다.</string>
+    <string name="guide_flow_description">스캔, 선택, 배치로 이어지는 사용 흐름</string>
+    <string name="guide_step_scan">1. 바닥과 벽을 천천히 비춰 공간을 인식합니다.</string>
+    <string name="guide_step_select">2. 지우려는 사물을 사각형 안에 정확히 선택합니다.</string>
+    <string name="guide_step_place">3. 가구를 고르고 바닥을 탭한 뒤 이동·회전·크기를 조절합니다.</string>
+    <string name="settings_title">서버 설정</string>
+    <string name="settings_header_description">AR 공간과 서버 연결 설정 이미지</string>
+    <string name="settings_server_description">삭제 처리와 가구 카탈로그 API에 사용할 서버 주소입니다. 저장하면 모든 AR 기능에 공통 적용됩니다.</string>
+    <string name="settings_server_hint">예: http://127.0.0.1:8000</string>
+    <string name="settings_save">서버 주소 저장</string>
+    <string name="settings_saved">서버 주소를 저장했습니다.</string>
+    <string name="settings_saved_value">저장됨: %1$s</string>
+    <string name="settings_usb_hint">USB 테스트는 adb reverse가 적용되므로 http://127.0.0.1:8000 을 사용하세요. 같은 Wi-Fi의 서버에 직접 연결할 때는 PC의 LAN IP를 입력합니다.</string>
 </resources>

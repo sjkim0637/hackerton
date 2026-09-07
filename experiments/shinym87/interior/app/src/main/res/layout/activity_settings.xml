@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_screen"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <Button
+            android:id="@+id/btnSettingsBack"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="@string/back_home" />
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="170dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:contentDescription="@string/settings_header_description"
+            android:scaleType="centerCrop"
+            android:src="@drawable/settings_header" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/settings_title"
+            android:textColor="#0B1736"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/settings_server_description"
+            android:textColor="#596277"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/serverUrlInput"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_card"
+            android:hint="@string/settings_server_hint"
+            android:imeOptions="actionDone"
+            android:importantForAutofill="no"
+            android:inputType="textUri"
+            android:paddingHorizontal="16dp"
+            android:singleLine="true"
+            android:textColor="#0B1736"
+            android:textColorHint="#7B8498" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveServer"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:text="@string/settings_save"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/serverStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_card"
+            android:padding="16dp"
+            android:textColor="#34405A"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>
