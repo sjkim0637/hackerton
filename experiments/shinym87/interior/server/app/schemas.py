@@ -1,7 +1,7 @@
 """요청/응답 스키마. 형식 근거는 docs/data-model.md, docs/api.md."""
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -55,7 +55,18 @@ class MaskRegion(CamelModel):
     size: ImageSize
 
 
-Region = Annotated[Union[BBoxRegion, MaskRegion], Field(discriminator="type")]
+class PointRegion(BaseModel):
+    """MobileSAM 점 프롬프트로 지정한 사물 영역. 키프레임 이미지 기준 정규화 [x, y] 좌표.
+
+    서버가 `remove-object` 처리 전에 이 점을 MobileSAM 으로 실제 마스크로 변환해
+    `MaskRegion` 으로 바꾼 뒤 이후 파이프라인(페더링·크롭·색감 보정)에 넘긴다.
+    """
+
+    type: Literal["point"] = "point"
+    point: Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
+Region = Annotated[BBoxRegion | MaskRegion | PointRegion, Field(discriminator="type")]
 
 
 class TargetObject(CamelModel):

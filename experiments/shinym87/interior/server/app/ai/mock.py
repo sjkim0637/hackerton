@@ -10,13 +10,13 @@ import io
 from PIL import Image, ImageDraw, ImageFilter
 
 from .base import RemoveObjectProvider, RemoveResult
+from .mask import region_bbox
 
 
 def _bbox_px(region: dict, width: int, height: int) -> tuple[int, int, int, int]:
-    if region.get("type") == "bbox":
-        rx, ry, rw, rh = region["rect"]
-    else:  # mask 는 아직 mock 에서 세밀 처리 안 함 → 가운데 절반
-        rx, ry, rw, rh = 0.25, 0.25, 0.5, 0.5
+    # region_bbox 가 bbox/mask/point 를 모두 정규화 [x,y,w,h] 로 정리해준다
+    # (mask 는 D5 이후 실제 마스크 픽셀의 바운딩 박스, 근사가 아니다).
+    rx, ry, rw, rh = region_bbox(region)
     x = max(0, min(int(rx * width), width - 1))
     y = max(0, min(int(ry * height), height - 1))
     w = max(1, min(int(rw * width), width - x))
