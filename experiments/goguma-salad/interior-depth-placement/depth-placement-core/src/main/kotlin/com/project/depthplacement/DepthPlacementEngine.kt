@@ -50,17 +50,13 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         val started = System.nanoTime()
         val points = generatePoints(frame, cfg)
         val packed = FloatArray(points.size * 4)
-        val imagePoints = FloatArray(points.size * 4)
         points.forEachIndexed { i, point ->
             packed[i * 4] = point.position.x
             packed[i * 4 + 1] = point.position.y
             packed[i * 4 + 2] = point.position.z
             packed[i * 4 + 3] = point.confidence
-            imagePoints[i * 4] = point.u.toFloat()
-            imagePoints[i * 4 + 1] = point.v.toFloat()
-            imagePoints[i * 4 + 2] = point.depthMeters
-            imagePoints[i * 4 + 3] = point.confidence
         }
+        val imagePoints = generateProjectionSamples(frame, cfg)
         val snapshot = PointCloudSnapshot(packed, imagePoints, points.size, frame.timestampNanos, sourceWidth = frame.width, sourceHeight = frame.height)
         latest.set(FrameState(frame, points, snapshot))
         lastProcessedNanos = frame.timestampNanos
@@ -96,6 +92,33 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         }
         previousDepth = smoothed
         return result
+    }
+
+    /**
+     * Projection samples are intentionally denser than the world-space analysis cloud.
+     * This keeps plane fitting bounded while making object boundaries easier to inspect.
+     */
+    private fun generateProjectionSamples(frame: DepthFrameInput, cfg: PlacementConfig): FloatArray {
+        val stride = ((cfg.globalStride + 1) / 2).coerceAtLeast(1)
+        val capacity = minOf(30_000, ((frame.width + stride - 1) / stride) * ((frame.height + stride - 1) / stride))
+        val samples = FloatArray(capacity * 4)
+        var count = 0
+        loop@ for (v in 0 until frame.height step stride) {
+            for (u in 0 until frame.width step stride) {
+                if (count >= capacity) break@loop
+                val index = v * frame.width + u
+                val depth = (frame.depthMillimeters[index].toInt() and 0xffff) / 1000f
+                val confidence = frame.confidence?.get(index) ?: if (depth > 0f) 1f else 0f
+                if (depth <= 0f || depth !in cfg.minDepthMeters..cfg.maxDepthMeters || confidence < cfg.depthConfidenceThreshold) continue
+                val offset = count * 4
+                samples[offset] = u.toFloat()
+                samples[offset + 1] = v.toFloat()
+                samples[offset + 2] = depth
+                samples[offset + 3] = confidence
+                count++
+            }
+        }
+        return samples.copyOf(count * 4)
     }
 
     override fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize): PlacementResult {

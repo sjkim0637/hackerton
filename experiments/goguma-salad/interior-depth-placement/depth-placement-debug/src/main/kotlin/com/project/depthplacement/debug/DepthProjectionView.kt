@@ -10,6 +10,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import com.project.depthplacement.PointCloudSnapshot
+import java.util.Arrays
 
 /** Camera image and depth samples share one canvas so pixel alignment can be judged directly. */
 class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
@@ -17,8 +18,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         val points: FloatArray,
         val sourceWidth: Int,
         val sourceHeight: Int,
-        val minDepth: Float,
-        val maxDepth: Float,
+        val nearDepth: Float,
+        val farDepth: Float,
     )
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -31,6 +32,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     private var pointRadiusPx = 3.5f * resources.displayMetrics.density
     private var downX = 0f
     private var downY = 0f
+    private var smoothedNearDepth = Float.NaN
+    private var smoothedFarDepth = Float.NaN
     var onDepthTap: ((uPx: Float, vPx: Float) -> Unit)? = null
 
     fun submitCamera(bitmap: Bitmap) {
@@ -40,15 +43,13 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     fun submit(snapshot: PointCloudSnapshot?) {
         if (frozen || snapshot == null) return
         val points = snapshot.copyImagePoints()
-        var minDepth = Float.POSITIVE_INFINITY
-        var maxDepth = Float.NEGATIVE_INFINITY
-        for (i in 0 until snapshot.pointCount) {
-            val depth = points[i * 4 + 2]
-            if (depth > 0f) { minDepth = minOf(minDepth, depth); maxDepth = maxOf(maxDepth, depth) }
-        }
-        if (!minDepth.isFinite()) { minDepth = 0.2f; maxDepth = 5f }
-        if (maxDepth - minDepth < 0.1f) maxDepth = minDepth + 0.1f
-        projection = Projection(points, snapshot.sourceWidth, snapshot.sourceHeight, minDepth, maxDepth)
+        val depths = FloatArray(snapshot.imagePointCount) { points[it * 4 + 2] }
+        Arrays.sort(depths)
+        val near = percentile(depths, 0.05f, 0.2f)
+        val far = maxOf(percentile(depths, 0.95f, 5f), near + 0.1f)
+        smoothedNearDepth = smoothRange(smoothedNearDepth, near)
+        smoothedFarDepth = maxOf(smoothRange(smoothedFarDepth, far), smoothedNearDepth + 0.1f)
+        projection = Projection(points, snapshot.sourceWidth, snapshot.sourceHeight, smoothedNearDepth, smoothedFarDepth)
         postInvalidateOnAnimation()
     }
 
@@ -57,6 +58,7 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     fun setOverlayEnabled(value: Boolean) { overlayEnabled = value; invalidate() }
     fun isOverlayEnabled(): Boolean = overlayEnabled
     fun setPointSize(value: Float) { pointRadiusPx = value.coerceIn(1f, 12f) * resources.displayMetrics.density / 2f; invalidate() }
+    fun relativeRangeMeters(): Pair<Float, Float>? = projection?.let { it.nearDepth to it.farDepth }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -73,7 +75,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         val scale = transform?.scale ?: 1f
         val left = transform?.rect?.left ?: 0f
         val top = transform?.rect?.top ?: 0f
-        val depthRange = data.maxDepth - data.minDepth
+        val nearInverse = 1f / data.nearDepth
+        val inverseRange = nearInverse - 1f / data.farDepth
         for (index in data.points.indices step 4) {
             val u = data.points[index]
             val v = data.points[index + 1]
@@ -85,7 +88,9 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
             val x = left + bitmapX * scale
             val y = top + bitmapY * scale
             if (x < -pointRadiusPx || x > width + pointRadiusPx || y < -pointRadiusPx || y > height + pointRadiusPx) continue
-            val normalized = ((depth - data.minDepth) / depthRange).coerceIn(0f, 1f)
+            // Inverse-depth expands nearby differences; percentile bounds prevent outliers
+            // from collapsing most of the visible scene into one color.
+            val normalized = ((nearInverse - 1f / depth) / inverseRange).coerceIn(0f, 1f)
             pointPaint.color = Color.HSVToColor((90 + 130 * confidence).toInt().coerceIn(80, 220), floatArrayOf(240f * normalized, 0.95f, 1f))
             canvas.drawCircle(x, y, pointRadiusPx, pointPaint)
         }
@@ -114,6 +119,14 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     }
 
     private data class CropTransform(val rect: RectF, val scale: Float)
+
+    private fun percentile(sorted: FloatArray, ratio: Float, fallback: Float): Float {
+        if (sorted.isEmpty()) return fallback
+        return sorted[((sorted.lastIndex * ratio).toInt()).coerceIn(0, sorted.lastIndex)]
+    }
+
+    private fun smoothRange(previous: Float, current: Float): Float =
+        if (previous.isFinite()) previous * 0.8f + current * 0.2f else current
 
     private fun centerCropTransform(bitmapWidth: Int, bitmapHeight: Int): CropTransform {
         val scale = maxOf(width.toFloat() / bitmapWidth, height.toFloat() / bitmapHeight)

@@ -97,6 +97,7 @@ class PointCloudSnapshot(
     private val immutablePoints = points.copyOf()
     /** Depth-image samples: [uPx, vPx, depthMeters, confidence, ...]. */
     private val immutableImagePoints = imagePoints.copyOf()
+    val imagePointCount: Int = immutableImagePoints.size / 4
     fun copyPoints(): FloatArray = immutablePoints.copyOf()
     fun copyImagePoints(): FloatArray = immutableImagePoints.copyOf()
 }

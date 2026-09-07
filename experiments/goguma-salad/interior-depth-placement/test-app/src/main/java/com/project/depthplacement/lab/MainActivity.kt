@@ -142,7 +142,8 @@ class MainActivity : AppCompatActivity() {
         val hud = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12); setBackgroundColor(0x990B1020.toInt()) }
         val metricsText = text("Waiting for depth…")
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
-        hud.addView(metricsText); hud.addView(text("RGB 실화면 + Depth 직접 투영  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(resultText)
+        val rangeText = text("상대 깊이 범위를 계산하는 중…")
+        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -163,8 +164,9 @@ class MainActivity : AppCompatActivity() {
         if (!streamRunning) startDepth()
         fun refresh() {
             if (!frame.isAttachedToWindow) return
-            val metrics = engine.getMetrics(); projected.submit(engine.getLatestPointCloud())
-            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  Points ${metrics.pointCount}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
+            val metrics = engine.getMetrics(); val snapshot = engine.getLatestPointCloud(); projected.submit(snapshot)
+            metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"
+            rangeText.text = projected.relativeRangeMeters()?.let { "화면 기준 5~95%: ${f(it.first.toDouble())}m → ${f(it.second.toDouble())}m · 근거리 강조" } ?: "상대 깊이 범위를 계산하는 중…"
             resultText.text = lastResult?.let { "${if (it.isValid) "VALID" else "NO: ${it.failureReason}"}  confidence=${f(it.confidence.toDouble())}  ${it.surface}\ndepth=${f(it.depthMeters.toDouble())}m  slope=${f(it.slopeDegrees.toDouble())}°  points=${it.validPointCount}" } ?: "화면을 탭하면 배치를 평가합니다."
             handler.postDelayed(::refresh, 100)
         }

@@ -39,6 +39,19 @@ class DepthPlacementEngineTest {
         assertEquals(PlacementFailureReason.OBSTACLE_DETECTED, result.failureReason)
     }
 
+    @Test fun `projection samples are denser than analysis cloud`() {
+        val sparseEngine = DepthPlacementEngineFactory.create(config.copy(globalStride = 4))
+        try {
+            sparseEngine.start()
+            sparseEngine.updateDepthFrame(floorFrame())
+            val snapshot = sparseEngine.getLatestPointCloud()!!
+            assertEquals(100, snapshot.pointCount)
+            assertEquals(400, snapshot.imagePointCount)
+        } finally {
+            sparseEngine.release()
+        }
+    }
+
     private fun floorFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(
         width = 40,
         height = 40,
