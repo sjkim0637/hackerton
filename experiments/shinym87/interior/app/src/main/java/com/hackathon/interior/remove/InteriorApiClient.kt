@@ -46,12 +46,13 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
     )
 
     /**
-     * D8: `POST /keyframes/{id}/segment` 응답 — 탭 한 점을 MobileSAM 마스크로 바꾼 것.
-     * 인페인팅 전 미리보기 오버레이 용도. [rawJson] 을 그대로 보관해뒀다가 사용자가
-     * "삭제"를 누르면 [requestRemoveObjectWithMask] 의 `target` 으로 그대로 재사용한다.
+     * D9: 사용자가 손가락으로 그린 폴리곤을 로컬(`RemovalController.buildLocalMaskRegion`)에서
+     * 흑백 PNG 마스크로 래스터화한 것 — 인페인팅 전 미리보기 오버레이 겸 삭제 요청 대상.
+     * [rawJson] 을 그대로 보관해뒀다가 사용자가 "삭제"를 누르면
+     * [requestRemoveObjectWithMask] 의 `target` 으로 그대로 재사용한다.
      */
     data class MaskRegion(
-        val pngDataUrl: String,   // "data:image/png;base64,...."
+        val pngDataUrl: String,   // base64 PNG (접두어 없음)
         val width: Int,
         val height: Int,
         val rawJson: JSONObject,
@@ -141,59 +142,7 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         JSONObject(readBody(conn)).getString("keyframe_id")
     }
 
-    suspend fun requestRemoveObject(
-        sceneId: String,
-        keyframeId: String,
-        bbox: FloatArray,      // [x, y, w, h] 정규화
-        objectType: String,
-    ): String = requestRemoveObjectWithTarget(
-        sceneId, keyframeId, objectType,
-        JSONObject().put("type", "bbox").put("rect", JSONArray(bbox.map { it.toDouble() })),
-    )
-
-    /**
-     * D5(MobileSAM): 사각형 대신 점 하나로 사물을 지정한다. 서버가 point 를 실제 마스크로
-     * 바꿔서 처리한다(app/routers/scenes.py::_resolve_point_region).
-     */
-    suspend fun requestRemoveObjectAtPoint(
-        sceneId: String,
-        keyframeId: String,
-        xNorm: Float,
-        yNorm: Float,
-        objectType: String,
-    ): String = requestRemoveObjectWithTarget(
-        sceneId, keyframeId, objectType,
-        JSONObject().put("type", "point")
-            .put("point", JSONArray(listOf(xNorm.toDouble(), yNorm.toDouble()))),
-    )
-
-    /**
-     * D8: `POST /scenes/{id}/keyframes/{kf}/segment` — 탭 한 점의 마스크만 즉시 받는다
-     * (인페인팅 없음, 빠름). 앱은 이 결과를 오버레이로 보여주고 확인을 받는다.
-     */
-    suspend fun segmentPoint(
-        sceneId: String,
-        keyframeId: String,
-        xNorm: Float,
-        yNorm: Float,
-    ): MaskRegion = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-            .put("point", JSONArray(listOf(xNorm.toDouble(), yNorm.toDouble())))
-        val conn = open("/scenes/$sceneId/keyframes/$keyframeId/segment", "POST")
-        conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/json")
-        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-        val json = JSONObject(readBody(conn))
-        val size = json.getJSONObject("size")
-        MaskRegion(
-            pngDataUrl = json.getString("png"),
-            width = size.getInt("width"),
-            height = size.getInt("height"),
-            rawJson = json,
-        )
-    }
-
-    /** D8: 미리 받아둔 [MaskRegion](탭 마스킹 미리보기)을 그대로 target 으로 삭제 요청한다. */
+    /** D9: 사용자가 직접 그려 로컬에서 래스터화한 [MaskRegion]을 그대로 target 으로 삭제 요청한다. */
     suspend fun requestRemoveObjectWithMask(
         sceneId: String,
         keyframeId: String,

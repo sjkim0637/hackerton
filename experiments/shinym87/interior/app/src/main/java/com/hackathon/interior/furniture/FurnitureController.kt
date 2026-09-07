@@ -57,9 +57,10 @@ class FurnitureController(
     /** 선택 대상이나 크기가 바뀔 때 호출. null 이면 선택 해제. */
     private val onSelectionChanged: (FurnitureItem?) -> Unit,
     /**
-     * 마커/카탈로그 배치/선택 해제/테스트 블록, 그 무엇도 아닌 탭(빈 화면 또는 사물 위 탭).
-     * D5/D7: 이 자리에서 예전엔 항상 테스트용 큐브를 만들었지만, 이제는 기본적으로
-     * "이 사물을 지워줘" 로 해석해 [com.hackathon.interior.remove.RemovalController]로 넘긴다.
+     * 마커/카탈로그 배치/선택 해제/테스트 블록, 그 무엇도 아닌 단순 탭(빈 화면 또는 사물 위 탭).
+     * D9: 사물 삭제는 이제 탭이 아니라 드래그로 외곽선을 그려 시작하므로(제스처는
+     * `MainActivity`가 [com.hackathon.interior.remove.RemovalController]로 직접 라우팅),
+     * 여기 남는 단순 탭은 열려 있는 마스크 미리보기를 취소하는 신호로만 쓰인다.
      */
     private val onEmptyTap: (Float, Float) -> Unit = { _, _ -> },
     /** 테스트 블록 배치가 끝나면(생성됐든 취소됐든) 호출 — 평면 격자를 다시 끄는 데 쓴다. */
