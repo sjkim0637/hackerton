@@ -71,6 +71,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `dac675a` — VS Code에서 검증·빌드·설치·실행할 수 있는 task 일괄 등록
 - `be6a46b` — dense Depth, 높이 컬러 Point Cloud, 하단 실화면과 쉬운 설정 UI 적용
 - `67a5d85` — RGB 실화면 위에 Depth Point를 직접 투영하는 정확도 검증 UI 적용
+- `1a72d40` — 근거리 inverse-depth 상대 색상과 분석/투영 sampling 밀도 분리 적용
 
 ## Updated
 
