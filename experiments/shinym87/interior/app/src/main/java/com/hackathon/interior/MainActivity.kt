@@ -20,7 +20,7 @@ import com.hackathon.interior.remove.RemovalController
  * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
  * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 회전 · 삭제
  * - [CatalogController]  : "가구 추가" → 서버 카탈로그 목록 → 골라서 배치 (PHASE 5)
- * - [RemovalController]  : 탭 → 키프레임 캡처 → 서버(MobileSAM+LaMa) 호출 → 결과를 벽에 적용 (D5/D7)
+ * - [RemovalController]  : 자유형 드로잉 → 로컬 마스크 → 확인 후 서버(LaMa) 인페인팅 → 결과를 벽에 적용 (D9)
  * - [MovedObjectController]: 삭제한 사물을 다른 위치로 이동 + placements 서버 저장/복원
  *
  * MainActivity 는 이 조각들을 레이아웃 위젯과 제스처에 연결만 한다.
@@ -56,8 +56,9 @@ class MainActivity : AppCompatActivity() {
             scope = lifecycleScope,
             serverBaseUrl = { removal.serverBaseUrl() },
             onSelectionChanged = ::renderSelectionPanel,
-            // D5/D7: 마커/카탈로그/선택/테스트블록, 그 무엇도 아닌 탭은 "이 사물 지워줘"로 본다.
-            onEmptyTap = { x, y -> removal.onScreenTapped(x, y) },
+            // D9: 마커/카탈로그/선택/테스트블록, 그 무엇도 아닌 빈 곳 탭은 미리보기가 떠 있으면
+            // 취소 신호로만 쓴다 — 실제 삭제는 이제 탭이 아니라 드래그로 외곽선을 그려야 시작된다.
+            onEmptyTap = { _, _ -> removal.onEmptyTap() },
             onTestBlockDone = { space.setPlaneVisualizationEnabled(false) },
         )
 
@@ -132,13 +133,32 @@ class MainActivity : AppCompatActivity() {
         }
         space.isIdle = { furniture.isIdle() }
 
-        // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
+        // 이동 마커/선택된 가구는 드래그로 옮긴다. 그 무엇도 아닌 드래그(빈 곳에서 시작)는
+        // D9: 지울 사물의 외곽선을 자유형으로 그리는 것으로 본다.
         sceneView.setOnGestureListener(
             onSingleTapConfirmed = { me, node -> furniture.handleTap(me, node) },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
-            onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
-            onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },
-            onMoveEnd = { _, _, _ -> if (!moved.onDragEnd()) furniture.endDrag() },
+            onMoveBegin = { _, me, node ->
+                when {
+                    moved.onDragBegin(me.x, me.y) -> Unit
+                    furniture.hasSelection() -> furniture.beginDrag(node)
+                    else -> removal.onDrawBegin(me.x, me.y)
+                }
+            },
+            onMove = { _, me, _ ->
+                when {
+                    moved.onDrag(me.x, me.y) -> Unit
+                    furniture.hasSelection() -> furniture.drag(me)
+                    else -> removal.onDrawMove(me.x, me.y)
+                }
+            },
+            onMoveEnd = { _, _, _ ->
+                when {
+                    moved.onDragEnd() -> Unit
+                    furniture.hasSelection() -> furniture.endDrag()
+                    else -> removal.onDrawEnd()
+                }
+            },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },

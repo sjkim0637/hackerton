@@ -20,8 +20,17 @@
         android:clickable="false"
         android:focusable="false" />
 
-    <!-- D8: 탭 직후 MobileSAM 마스크 미리보기(인페인팅 전). sceneView 와 같은 픽셀 크기의
-         키프레임 위에 계산된 마스크라 FIT_XY 로 그대로 겹치면 위치가 맞는다. -->
+    <!-- D9: 지울 사물의 외곽선을 손가락으로 그리는 동안의 실시간 선/채움 미리보기.
+         sceneView 와 같은 크기로 겹쳐서 좌표 변환 없이 그대로 픽셀 1:1 로 그린다. -->
+    <com.hackathon.interior.remove.FreehandDrawView
+        android:id="@+id/freehandDrawView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- D8/D9: 그리기가 끝난 뒤의 확정 마스크 미리보기(인페인팅 전). sceneView 와 같은 픽셀
+         크기로 만든 마스크라 FIT_XY 로 그대로 겹치면 위치가 맞는다. -->
     <ImageView
         android:id="@+id/maskPreviewOverlay"
         android:layout_width="match_parent"

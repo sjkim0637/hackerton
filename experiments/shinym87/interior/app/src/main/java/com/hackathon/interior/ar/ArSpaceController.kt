@@ -154,15 +154,16 @@ class ArSpaceController(
         Log.d(TAG, "tracking=$trackingState failureReason=$failureReason planes=$trackingPlanes/${planes.size}")
 
         if (isIdle()) {
-            // D6: Instant Placement 덕분에 Plane 이 0개여도 탭하면 바로 배치된다(위치는
-            // Plane/Depth 가 잡히면 자동으로 다듬어짐) — 더 이상 "평면부터 찾아야" 안내하지 않는다.
+            // D9: 사물은 손가락으로 외곽선을 그려서 지운다(자유형 드로잉 → 마스킹). D6:
+            // Instant Placement 덕분에 Plane 이 0개여도 배치는 바로 된다(위치는 Plane/Depth 가
+            // 잡히면 자동으로 다듬어짐) — 더 이상 "평면부터 찾아야" 안내하지 않는다.
             instruction.text = when {
                 trackingState != TrackingState.TRACKING ->
                     "추적 준비 중 ($failureReason) · 밝은 곳에서 폰을 천천히 움직이세요"
                 trackingPlanes == 0 ->
-                    "탭하면 바로 가구를 놓을 수 있어요 (평면 인식 중 · 자동으로 위치가 맞춰져요)"
+                    "지울 사물의 테두리를 손가락으로 그리세요 (평면 인식 중 · 위치는 자동으로 맞춰져요)"
                 else ->
-                    "평면 $trackingPlanes 개 (바닥·벽) · 탭하면 가구 생성, 길게 누르면 선택"
+                    "평면 $trackingPlanes 개 인식됨 · 지울 사물의 테두리를 그리세요 · 가구는 우하단에서 추가"
             }
         }
     }
