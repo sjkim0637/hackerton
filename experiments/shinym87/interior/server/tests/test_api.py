@@ -137,6 +137,50 @@ def test_point_region_resolves_to_mask_without_mobilesam_configured(client):
     assert again.json()["job_id"] == job_id
 
 
+def test_segment_point_returns_mask_without_inpainting(client):
+    """D8: 탭 한 점 → 마스크 미리보기만(인페인팅 없음, remove-object 와 별개 job 없음)."""
+    scene_id = client.post("/scenes", json={"device": "android"}).json()["scene_id"]
+    meta = _meta()
+    meta.pop("targetObject", None)
+    keyframe_id = client.post(
+        f"/scenes/{scene_id}/keyframes",
+        files={"image": ("kf.jpg", _jpeg(), "image/jpeg")},
+        data={"meta": json.dumps(meta)},
+    ).json()["keyframe_id"]
+
+    resp = client.post(
+        f"/scenes/{scene_id}/keyframes/{keyframe_id}/segment",
+        json={"point": [0.5, 0.5]},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["type"] == "mask"
+    assert body["size"] == {"width": W, "height": H}
+    assert body["png"]  # base64 data URL
+
+    # 마스크만 요청했으므로 job/AI 호출은 하나도 생기지 않는다.
+    assert client.get(f"/scenes/{scene_id}/objects").json() == []
+
+    # 그 마스크를 그대로 target 으로 넘겨 삭제를 요청할 수 있다 (탭→미리보기→삭제 흐름).
+    started = client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={"keyframe_id": keyframe_id, "object_type": "other", "target": body},
+    )
+    assert started.status_code == 202, started.text
+    job = client.get(
+        f"/scenes/{scene_id}/jobs/{started.json()['job_id']}"
+    ).json()
+    assert job["status"] == "done", job
+
+
+def test_segment_point_missing_keyframe_is_404(client):
+    scene_id = client.post("/scenes", json={"device": "android"}).json()["scene_id"]
+    resp = client.post(
+        f"/scenes/{scene_id}/keyframes/kf_nope/segment", json={"point": [0.5, 0.5]}
+    )
+    assert resp.status_code == 404
+
+
 def _new_scene_with_keyframe(client) -> tuple[str, str]:
     scene_id = client.post("/scenes", json={"device": "t"}).json()["scene_id"]
     meta = _meta()

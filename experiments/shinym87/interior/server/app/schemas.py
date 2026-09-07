@@ -124,6 +124,12 @@ class RemoveObjectRequest(BaseModel):
     object_type: str
 
 
+class SegmentPointRequest(BaseModel):
+    """탭 위치만으로 마스크 미리보기를 요청한다(인페인팅 없음, 빠름)."""
+
+    point: Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
 class JobOut(BaseModel):
     job_id: str
     keyframe_id: str

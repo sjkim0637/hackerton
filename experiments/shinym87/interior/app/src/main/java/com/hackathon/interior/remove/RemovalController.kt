@@ -4,8 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import android.view.PixelCopy
 import android.view.View
@@ -34,13 +40,14 @@ import java.util.TimeZone
 import kotlin.math.sqrt
 
 /**
- * D5/D7: 화면을 한 번 탭 → 그 점을 서버(MobileSAM)로 보내 사물 마스크를 얻고 → 로컬 LaMa
- * 인페인팅으로 빈 공간을 채운 결과를 벽/바닥 평면에 붙인다.
+ * D5/D7/D8: 화면을 한 번 탭 → 그 점을 서버(MobileSAM)로 보내 마스크만 빠르게 받아 빨간
+ * 오버레이로 미리 보여준다(인페인팅 없음) → 사용자가 "삭제"를 눌러야 그 마스크로 로컬 LaMa
+ * 인페인팅을 돌려 벽/바닥 평면에 결과를 붙인다. "취소"를 누르면 아무 것도 지워지지 않는다.
  *
  * 예전엔 "영역 선택 모드" 켜기 → 사각형 드래그 → 사물 종류 선택 → "삭제 요청" 버튼,
- * 이렇게 여러 단계였다(D3). MobileSAM 도입 후 사각형을 정확히 그릴 필요가 없어져 이
- * 단계들을 없애고 탭 한 번으로 압축했다 — 사물 종류는 서버가 몰라도 되므로 항상
- * `other`(범용)로 보낸다.
+ * 이렇게 여러 단계였다(D3). 그 다음(D5/D7)엔 탭 한 번으로 바로 인페인팅까지 실행했는데,
+ * 사용자가 "탭하면 바로 삭제되는" 흐름이 위험하다고 지적해 D8에서 마스킹 미리보기 확인
+ * 단계를 다시 넣었다. 사물 종류는 서버가 몰라도 되므로 항상 `other`(범용)로 보낸다.
  */
 class RemovalController(
     private val activity: Activity,
@@ -82,9 +89,18 @@ class RemovalController(
     /** 결과 quad 위치의 이동 평균값(지터 완화). onFrame 에서 갱신. */
     private var smoothedPos: FloatArray? = null
 
+    /** D8: 탭 → 마스킹 미리보기 단계에서 확인 대기 중인 상태. "삭제"를 눌러야 실제로 쓰인다. */
+    private var pendingSceneId: String? = null
+    private var pendingKeyframeId: String? = null
+    private var pendingJpeg: ByteArray? = null
+    private var pendingPoint: FloatArray? = null
+    private var pendingMask: InteriorApiClient.MaskRegion? = null
+
     init {
         binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
         binding.btnToggleRemoval.setOnClickListener { toggleBeforeAfter() }
+        binding.btnMaskDelete.setOnClickListener { confirmDelete() }
+        binding.btnMaskCancel.setOnClickListener { cancelPreview() }
     }
 
     /** 이미 처리 중이면 새 탭을 무시한다(FurnitureController 가 탭 라우팅 전에 확인용으로도 씀). */
@@ -98,17 +114,19 @@ class RemovalController(
         wallPlaneJson = null
         planeIsVertical = false
         clearResult()
+        hideMaskPreview()
+        clearPendingState()
         capturedObjectBitmap = null
         originalObjectPose = null
         onRemovalCleared()   // 이동된 사물도 함께 정리
     }
 
-    // -------------------------------------------------------------- 1. 탭 → 즉시 삭제 요청 (D5/D7)
+    // -------------------------------------------------------------- 1. 탭 → 마스킹 미리보기 (D8)
 
     /**
-     * 화면 탭 한 번으로 그 지점의 사물을 지운다. [FurnitureController]가 마커/카탈로그 배치가
-     * 아닌 탭을 이 함수로 넘긴다. 사물 종류는 서버(MobileSAM)가 몰라도 되므로 항상 `other`로
-     * 보낸다 — 예전(D3)엔 사각형 드래그 + 종류 선택 + "삭제 요청" 버튼, 세 단계였다.
+     * 화면 탭 한 번으로 그 지점의 마스크 미리보기를 요청한다(인페인팅 없음, 빠름).
+     * [FurnitureController]가 마커/카탈로그 배치가 아닌 탭을 이 함수로 넘긴다. 실제 삭제는
+     * 미리보기를 보고 사용자가 "삭제"를 눌러야 [confirmDelete] 에서 실행된다.
      */
     fun onScreenTapped(xPx: Float, yPx: Float) {
         if (busy) {
@@ -117,11 +135,13 @@ class RemovalController(
         }
         Log.d(TAG, "onScreenTapped x=$xPx y=$yPx")
         clearResult()
+        hideMaskPreview()
+        clearPendingState()
         val vw = sceneView.width.toFloat().coerceAtLeast(1f)
         val vh = sceneView.height.toFloat().coerceAtLeast(1f)
         pointNorm = floatArrayOf((xPx / vw).coerceIn(0f, 1f), (yPx / vh).coerceIn(0f, 1f))
         resolveWallAtPoint(xPx, yPx)
-        requestRemoval()
+        requestPreview()
     }
 
     /** 탭 지점에서 hitTest 해 벽 앵커·평면 정보를 잡는다. 패치 크기는 결과를 받은 뒤 다듬는다. */
@@ -194,7 +214,8 @@ class RemovalController(
         return floatArrayOf(x, y, side, side)
     }
 
-    private fun requestRemoval() {
+    /** 1단계: 캡처 → 세션/키프레임 → `/segment` 로 마스크만 받아 미리보기로 보여준다. */
+    private fun requestPreview() {
         val point = pointNorm ?: return
         val client = InteriorApiClient(currentBaseUrl())
         busy = true
@@ -208,20 +229,14 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
-            // PHASE 4: 삭제 전 사물 모습(근사 크롭)과 원래 위치를 기억해 둔다. 결과가 오면
-            // 서버가 계산한 실제 마스크 범위(changedRect)로 더 정확하게 다시 크롭한다.
-            val approxRect = approxRectAroundPoint(point)
-            capturedObjectBitmap = runCatching {
-                BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, approxRect) }
-            }.getOrNull()
             originalObjectPose = wallAnchor?.pose
             val meta = buildMetaJson(imageW, imageH, point)
             scope.launch {
                 try {
-                    runFlow(client, jpeg, meta, point, approxRect)
+                    runPreviewFlow(client, jpeg, meta, point)
                 } catch (e: Exception) {
                     status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
-                } finally {
+                    clearPendingState()
                     busy = false
                     setControlsEnabled(true)
                 }
@@ -229,12 +244,11 @@ class RemovalController(
         }
     }
 
-    private suspend fun runFlow(
+    private suspend fun runPreviewFlow(
         client: InteriorApiClient,
         jpeg: ByteArray,
         metaJson: String,
         point: FloatArray,
-        approxRect: FloatArray,
     ) {
         status("세션 생성 중…")
         val sceneId = client.createScene()
@@ -242,8 +256,71 @@ class RemovalController(
         status("키프레임 업로드 중…")
         val keyframeId = client.uploadKeyframe(sceneId, jpeg, metaJson)
 
-        status("사물 인식 + 삭제 요청 전송 중…")
-        val jobId = client.requestRemoveObjectAtPoint(sceneId, keyframeId, point[0], point[1], OBJECT_TYPE)
+        status("영역 인식 중…")
+        val mask = client.segmentPoint(sceneId, keyframeId, point[0], point[1])
+
+        pendingSceneId = sceneId
+        pendingKeyframeId = keyframeId
+        pendingJpeg = jpeg
+        pendingPoint = point
+        pendingMask = mask
+        showMaskPreview(mask)
+        status("빨간 영역을 지울까요? · '삭제'를 눌러야 실제로 지워집니다")
+        // busy 는 사용자가 삭제/취소를 누를 때까지 유지 (다른 탭으로 미리보기가 덮이지 않게).
+    }
+
+    /** "취소" — 마스크 미리보기만 지우고 아무 것도 삭제하지 않는다. */
+    private fun cancelPreview() {
+        hideMaskPreview()
+        clearPendingState()
+        busy = false
+        setControlsEnabled(true)
+        status("취소했습니다")
+    }
+
+    /** "삭제" — 미리 받아둔 마스크를 그대로 target 으로 실제 삭제(인페인팅)를 요청한다. */
+    private fun confirmDelete() {
+        val sceneId = pendingSceneId
+        val keyframeId = pendingKeyframeId
+        val jpeg = pendingJpeg
+        val point = pendingPoint
+        val mask = pendingMask
+        if (sceneId == null || keyframeId == null || jpeg == null || point == null || mask == null) {
+            cancelPreview()
+            return
+        }
+        hideMaskPreview()
+        val client = InteriorApiClient(currentBaseUrl())
+        // PHASE 4: 삭제 전 사물 모습(근사 크롭)을 기억해 둔다. 결과가 오면 서버가 계산한
+        // 실제 마스크 범위(changedRect)로 더 정확하게 다시 크롭한다.
+        val approxRect = approxRectAroundPoint(point)
+        capturedObjectBitmap = runCatching {
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, approxRect) }
+        }.getOrNull()
+        scope.launch {
+            try {
+                runRemovalFlow(client, sceneId, keyframeId, jpeg, mask, approxRect)
+            } catch (e: Exception) {
+                status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
+            } finally {
+                clearPendingState()
+                busy = false
+                setControlsEnabled(true)
+            }
+        }
+    }
+
+    /** 2단계: 확인된 마스크로 실제 인페인팅을 요청 → 폴링 → 결과 적용. */
+    private suspend fun runRemovalFlow(
+        client: InteriorApiClient,
+        sceneId: String,
+        keyframeId: String,
+        jpeg: ByteArray,
+        mask: InteriorApiClient.MaskRegion,
+        approxRect: FloatArray,
+    ) {
+        status("삭제 요청 전송 중…")
+        val jobId = client.requestRemoveObjectWithMask(sceneId, keyframeId, OBJECT_TYPE, mask)
 
         var job = client.getJob(sceneId, jobId)
         var tries = 0
@@ -286,6 +363,55 @@ class RemovalController(
             capturedObjectBitmap, originalObjectPose, actualRect,
             patchWidthM, patchHeightM,
         )
+    }
+
+    private fun clearPendingState() {
+        pendingSceneId = null
+        pendingKeyframeId = null
+        pendingJpeg = null
+        pendingPoint = null
+        pendingMask = null
+    }
+
+    /** 마스크 PNG(흑백)를 반투명 빨간 오버레이로 바꿔 sceneView 와 같은 크기로 겹쳐 보여준다. */
+    private fun showMaskPreview(mask: InteriorApiClient.MaskRegion) {
+        val base64 = mask.pngDataUrl.substringAfter(",", mask.pngDataUrl)
+        val pngBytes = runCatching { Base64.decode(base64, Base64.DEFAULT) }.getOrNull() ?: return
+        val overlay = runCatching { maskToOverlayBitmap(pngBytes) }.getOrNull() ?: return
+        binding.maskPreviewOverlay.setImageBitmap(overlay)
+        binding.maskPreviewOverlay.visibility = View.VISIBLE
+        binding.maskConfirmPanel.visibility = View.VISIBLE
+    }
+
+    private fun hideMaskPreview() {
+        binding.maskPreviewOverlay.visibility = View.GONE
+        binding.maskPreviewOverlay.setImageDrawable(null)
+        binding.maskConfirmPanel.visibility = View.GONE
+    }
+
+    /**
+     * 흑백 마스크(사물=흰색)를 [MASK_OVERLAY_COLOR] 반투명 오버레이로 바꾼다. 픽셀 루프 대신
+     * ColorMatrix 한 번으로 처리: 입력 R 채널(흑백이라 R=G=B)을 그대로 출력 알파로 쓰고
+     * (흰색=불투명, 검은색=완전 투명), 출력 RGB 는 고정 틴트 색상으로 채운다.
+     */
+    private fun maskToOverlayBitmap(pngBytes: ByteArray): Bitmap? {
+        val src = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size) ?: return null
+        val tint = MASK_OVERLAY_COLOR
+        val alphaScale = MASK_OVERLAY_ALPHA / 255f
+        val matrix = ColorMatrix(
+            floatArrayOf(
+                0f, 0f, 0f, 0f, Color.red(tint).toFloat(),
+                0f, 0f, 0f, 0f, Color.green(tint).toFloat(),
+                0f, 0f, 0f, 0f, Color.blue(tint).toFloat(),
+                alphaScale, 0f, 0f, 0f, 0f,
+            ),
+        )
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(
+            src, 0f, 0f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { colorFilter = ColorMatrixColorFilter(matrix) },
+        )
+        return out
     }
 
     /** 결과 이미지를 벽 평면 quad 로 붙인다. 벽 앵커가 없으면 전체화면으로 대체 표시. */
@@ -537,6 +663,10 @@ class RemovalController(
 
         /** 결과가 오기 전 미리보기 크롭에 쓰는 탭 지점 중심 정사각형 한 변(이미지 짧은 변 비율). */
         const val FALLBACK_BOX_FRACTION = 0.28f
+
+        /** D8: 마스크 미리보기 오버레이 색(빨강) · 알파(0~255, 클수록 진하게). */
+        val MASK_OVERLAY_COLOR = Color.rgb(255, 64, 48)
+        const val MASK_OVERLAY_ALPHA = 150
 
         /**
          * MobileSAM은 사물 종류를 몰라도 점 위치로 마스크를 잡으므로, 서버에는 항상 `other`

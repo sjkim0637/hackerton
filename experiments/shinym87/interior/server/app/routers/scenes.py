@@ -29,11 +29,13 @@ from ..schemas import (
     JobOut,
     KeyframeMeta,
     KeyframeOut,
+    MaskRegion,
     ObjectInfoOut,
     RemoveObjectRequest,
     ResultInfoOut,
     SceneCreate,
     SceneOut,
+    SegmentPointRequest,
 )
 
 router = APIRouter(tags=["scenes"])
@@ -176,6 +178,27 @@ def get_keyframe_image(scene_id: str, keyframe_id: str) -> FileResponse:
     if kf is None or kf["scene_id"] != scene_id:
         raise HTTPException(status_code=404, detail=f"키프레임 없음: {keyframe_id}")
     return FileResponse(kf["image_path"], media_type="image/jpeg")
+
+
+# --------------------------------------------------------- 탭 마스킹 미리보기(인페인팅 없음)
+
+@router.post(
+    "/scenes/{scene_id}/keyframes/{keyframe_id}/segment", response_model=MaskRegion
+)
+def segment_point(scene_id: str, keyframe_id: str, body: SegmentPointRequest) -> dict:
+    """탭 한 점을 MobileSAM 마스크로만 변환해 즉시 돌려준다(인페인팅 없이 빠름).
+
+    앱은 이 마스크를 화면에 오버레이로 보여주고, 사용자가 "삭제"를 눌렀을 때만
+    이 마스크(MaskRegion)를 `target` 으로 `POST /remove-object` 를 호출한다.
+    """
+    _require_scene(scene_id)
+    kf = get_store().get_keyframe(keyframe_id)
+    if kf is None or kf["scene_id"] != scene_id:
+        raise HTTPException(status_code=404, detail=f"키프레임 없음: {keyframe_id}")
+
+    return _resolve_point_region(
+        kf["image_path"], {"type": "point", "point": body.point}
+    )
 
 
 # ------------------------------------------------------------------- 사물 정보 조회

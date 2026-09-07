@@ -20,6 +20,18 @@
         android:clickable="false"
         android:focusable="false" />
 
+    <!-- D8: 탭 직후 MobileSAM 마스크 미리보기(인페인팅 전). sceneView 와 같은 픽셀 크기의
+         키프레임 위에 계산된 마스크라 FIT_XY 로 그대로 겹치면 위치가 맞는다. -->
+    <ImageView
+        android:id="@+id/maskPreviewOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:visibility="gone"
+        android:contentDescription="선택된 영역 미리보기"
+        android:clickable="false"
+        android:focusable="false" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -39,7 +51,7 @@
             android:shadowColor="@android:color/black"
             android:shadowRadius="6" />
 
-        <!-- D5/D7: 화면을 탭하면 그 자리의 사물을 바로 지운다(MobileSAM + LaMa).
+        <!-- D5/D7: 화면을 탭하면 그 자리의 사물을 마스킹→확인 후 지운다(MobileSAM + LaMa).
              예전엔 "영역 선택 모드"로 사각형을 그리고 사물 종류를 고른 뒤 "삭제 요청"을
              눌러야 했지만(D3), 이제 그 단계들이 필요 없어져 버튼도 없앴다. -->
         <LinearLayout
@@ -49,18 +61,10 @@
             android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
-            <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). -->
-            <Button
-                android:id="@+id/btnAddFurniture"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="가구 추가" />
-
             <Button
                 android:id="@+id/btnToggleRemoval"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:visibility="gone"
                 android:text="삭제 전/후" />
         </LinearLayout>
@@ -94,6 +98,45 @@
             android:shadowColor="@android:color/black"
             android:shadowRadius="6"
             android:text="" />
+    </LinearLayout>
+
+    <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). 다른 조작
+         패널(이동/선택/카탈로그)과 안 겹치게 화면 우하단에 고정. -->
+    <Button
+        android:id="@+id/btnAddFurniture"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="32dp"
+        android:text="가구 추가" />
+
+    <!-- D8: 탭 → 마스킹 미리보기 → 이 패널로 삭제 확정/취소. "삭제"를 눌러야 그때
+         인페인팅(LaMa)이 실행된다 — 탭만으로 바로 지워지지 않는다. -->
+    <LinearLayout
+        android:id="@+id/maskConfirmPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_horizontal"
+        android:background="#CC000000"
+        android:padding="10dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btnMaskDelete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="삭제" />
+
+        <Button
+            android:id="@+id/btnMaskCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="취소" />
     </LinearLayout>
 
     <!-- PHASE 4/5: 삭제한 사물을 이동하는 패널. 삭제 완료 시 나타나고, 마커가 바로 떠서
@@ -156,28 +199,6 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="회전 ⟳" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnMovedRestore"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:enabled="false"
-                android:text="서버 배치 복원" />
-
-            <Button
-                android:id="@+id/btnMovedUndo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:enabled="false"
-                android:text="실행 취소" />
         </LinearLayout>
     </LinearLayout>
 

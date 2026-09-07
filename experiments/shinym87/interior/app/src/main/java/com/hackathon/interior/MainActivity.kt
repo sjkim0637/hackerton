@@ -88,7 +88,6 @@ class MainActivity : AppCompatActivity() {
             serverBaseUrl = { removal.serverBaseUrl() },
             furnitureHasSelection = furniture::hasSelection,
             status = { binding.removalStatusText.text = it },
-            onAlsoRestore = { furniture.restoreCatalogFromServer() },  // "서버 배치 복원" 이 카탈로그도 복원
         )
 
         // PHASE 5: 서버 카탈로그에서 새 가구 추가 (삭제-후-재배치와 별개 진입점).

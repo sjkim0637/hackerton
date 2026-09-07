@@ -1,9 +1,7 @@
 package com.hackathon.interior.remove
 
 import android.app.Activity
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
@@ -33,9 +31,9 @@ import kotlinx.coroutines.launch
  * 쉽게 조금 크게)를 띄운다. 그 마커를 손가락으로 끌면 실시간 hitTest 로 따라오고, 떼는 순간
  * ([onDragEnd]) 그 자리에 최종 배치된다("여기로 옮기기" 버튼/탭 단계 없음).
  *
- * 배치/드래그/회전/크기 변경이 잦아들면(디바운스) `POST /scenes/{id}/placements` 로 저장한다.
- * "원위치" 는 삭제된 자리로 되돌리고, "서버 배치 복원" 은 `GET .../placements` 로,
- * "실행 취소" 는 `POST .../placements/undo` 로 처리한다.
+ * 배치/드래그/회전/크기 변경이 잦아들면(디바운스) `POST /scenes/{id}/placements` 로 저장한다
+ * (다른 화면·기기가 재사용할 수 있게 서버에도 남기지만, UI 에는 복원/취소 버튼을 두지 않는다
+ * — D8: 의미가 바로 안 와닿는 버튼이라 없앴다). "원위치" 는 삭제된 자리로 되돌린다.
  */
 class MovedObjectController(
     private val activity: Activity,
@@ -48,11 +46,8 @@ class MovedObjectController(
     /** 지금 큐브가 선택돼 있으면 제스처는 큐브 몫 — 이동된 사물은 손대지 않는다. */
     private val furnitureHasSelection: () -> Boolean,
     private val status: (String) -> Unit,
-    /** "서버 배치 복원" 을 누를 때 함께 호출 — 카탈로그 가구 복원 등. */
-    private val onAlsoRestore: () -> Unit = {},
 ) {
 
-    private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
     private val handler = Handler(Looper.getMainLooper())
     private val saveDebounce = Runnable { savePlacementNow() }
 
@@ -80,21 +75,10 @@ class MovedObjectController(
 
     init {
         binding.btnMovedHome.setOnClickListener { placeAtOriginal() }
-        binding.btnMovedRestore.setOnClickListener { restoreFromServer() }
-        binding.btnMovedUndo.setOnClickListener { undoOnServer() }
         binding.btnMovedShrink.setOnClickListener { bump(1f / SCALE_STEP) }
         binding.btnMovedGrow.setOnClickListener { bump(SCALE_STEP) }
         binding.btnMovedRotate.setOnClickListener { rotate() }
         binding.btnMovedClear.setOnClickListener { clearMovedNode(); status("이동한 사물을 치웠습니다") }
-
-        // 지난 세션에 저장된 배치가 있으면, 복원/취소만 가능한 상태로 패널을 연다.
-        currentSceneId = prefs.getString(KEY_LAST_SCENE, null)
-        currentJobId = prefs.getString(KEY_LAST_JOB, null)
-        if (currentSceneId != null) {
-            binding.movedObjectPanel.visibility = View.VISIBLE
-            enableButtons(home = false, adjust = false, restore = true, undo = true, clear = false)
-            status("이전 세션 배치가 있습니다 · 평면 인식 후 '서버 배치 복원'을 누르세요")
-        }
     }
 
     private fun label(): String = OBJECT_LABELS[objectType] ?: "사물"
@@ -126,12 +110,8 @@ class MovedObjectController(
         this.rotDeg = 0f
         armed = true
         awaitingPlane = false
-        prefs.edit().putString(KEY_LAST_SCENE, sceneId).putString(KEY_LAST_JOB, jobId).apply()
         binding.movedObjectPanel.visibility = View.VISIBLE
-        enableButtons(
-            home = originalPose != null, adjust = false,
-            restore = true, undo = true, clear = true,
-        )
+        enableButtons(home = originalPose != null, adjust = false, clear = true)
         originalPose?.let {
             Log.d(TAG, "원래 위치 저장: t=(%.3f, %.3f, %.3f)".format(it.tx(), it.ty(), it.tz()))
         }
@@ -153,7 +133,6 @@ class MovedObjectController(
         sourceRect = null
         objectBitmap = null
         originalPose = null
-        prefs.edit().remove(KEY_LAST_SCENE).remove(KEY_LAST_JOB).apply()
         binding.movedObjectPanel.visibility = View.GONE
     }
 
@@ -294,93 +273,6 @@ class MovedObjectController(
         }
     }
 
-    private fun restoreFromServer() {
-        onAlsoRestore()   // 카탈로그 가구 등 다른 복원도 함께
-        val sceneId = currentSceneId ?: run { status("복원할 세션이 없습니다"); return }
-        val base = serverBaseUrl()
-        status("서버에서 배치 불러오는 중…")
-        scope.launch {
-            val client = InteriorApiClient(base)
-            val plc = try {
-                client.latestActivePlacement(sceneId)
-            } catch (e: Exception) {
-                status("배치 조회 실패: ${e.message ?: e.javaClass.simpleName}")
-                return@launch
-            }
-            if (plc == null) {
-                status("서버에 복원할 active 배치가 없습니다")
-                return@launch
-            }
-
-            // 사물 이미지: 서버의 제거-사물 크롭({job}_object.jpg). 없으면 플레이스홀더.
-            val jid = plc.jobId
-            val bmp: Bitmap? = if (jid != null) {
-                try {
-                    val bytes = client.downloadBytes("/scenes/$sceneId/results/${jid}_object.jpg")
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                } catch (_: Exception) {
-                    null
-                }
-            } else {
-                null
-            }
-
-            objectType = plc.objectType
-            scaleF = plc.scale.coerceIn(0.3f, 3f)
-            rotDeg = plc.rotationDeg
-            sourceRect = plc.sourceRect?.copyOf()
-            currentJobId = jid
-            objectBitmap = (bmp ?: placeholderBitmap()).let { EdgeFade.feather(downscale(it)) }
-            armed = true
-            awaitingPlane = false
-            binding.movedObjectPanel.visibility = View.VISIBLE
-            enableButtons(home = false, adjust = false, restore = true, undo = true, clear = true)
-
-            // pose 는 세션 로컬이라 못 쓴다 → source_region 중심을 현재 화면에서 다시 hitTest.
-            val src = plc.sourceRect
-            val wantWall = when (plc.plane) {
-                "wall" -> true
-                "floor" -> false
-                else -> wantsWall()
-            }
-            val cx = (((src?.getOrNull(0) ?: 0.4f) + (src?.getOrNull(2) ?: 0.2f) / 2f)) * sceneView.width
-            val cy = (((src?.getOrNull(1) ?: 0.4f) + (src?.getOrNull(3) ?: 0.2f) / 2f)) * sceneView.height
-            val hit = space.hitTestPreferring(cx, cy, wantWall)
-            if (hit == null) {
-                status("평면을 아직 못 찾았어요 · 그 방향을 비춘 뒤 '서버 배치 복원'을 다시 눌러주세요")
-                return@launch
-            }
-            val hitVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
-            val anchor = hit.createAnchorOrNull()
-                ?: runCatching { sceneView.session?.createAnchor(hit.hitPose) }.getOrNull()
-            if (anchor == null) {
-                status("앵커 생성 실패 · 다시 시도해주세요")
-                return@launch
-            }
-            setNode(anchor, hitVertical)   // 복원은 다시 저장하지 않는다
-            status("서버 배치 복원 완료 · 마커를 끌어서 위치를 다듬으면 다시 저장됩니다")
-        }
-    }
-
-    private fun undoOnServer() {
-        val sceneId = currentSceneId ?: run { status("취소할 배치가 없습니다"); return }
-        val base = serverBaseUrl()
-        scope.launch {
-            try {
-                val ok = InteriorApiClient(base).undoPlacement(sceneId)
-                if (ok) {
-                    handler.removeCallbacks(saveDebounce)   // 취소 직전 예약된 저장은 버린다
-                    clearMovedNode()
-                    status("실행 취소됨 · 서버 배치 1건 취소")
-                } else {
-                    status("취소할 배치가 없습니다")
-                }
-            } catch (e: Exception) {
-                status("실행 취소 실패: ${e.message ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
     // ------------------------------------------------------------------- 노드
 
     private fun setNode(anchor: Anchor, onVertical: Boolean) {
@@ -411,7 +303,7 @@ class MovedObjectController(
         imageNode = img
         labelNode = lbl
         awaitingPlane = false
-        enableButtons(home = originalPose != null, adjust = true, restore = true, undo = true, clear = true)
+        enableButtons(home = originalPose != null, adjust = true, clear = true)
         applyChildTransforms()
         Log.d(TAG, "이동 마커: type=$objectType vertical=$onVertical pose=${anchor.pose}")
     }
@@ -441,16 +333,11 @@ class MovedObjectController(
         imageNode = null
         labelNode = null
         dragging = false
-        val hasScene = currentSceneId != null
-        enableButtons(home = false, adjust = false, restore = hasScene, undo = hasScene, clear = false)
+        enableButtons(home = false, adjust = false, clear = false)
     }
 
-    private fun enableButtons(
-        home: Boolean, adjust: Boolean, restore: Boolean, undo: Boolean, clear: Boolean,
-    ) {
+    private fun enableButtons(home: Boolean, adjust: Boolean, clear: Boolean) {
         binding.btnMovedHome.isEnabled = home
-        binding.btnMovedRestore.isEnabled = restore
-        binding.btnMovedUndo.isEnabled = undo
         binding.btnMovedClear.isEnabled = clear
         binding.btnMovedShrink.isEnabled = adjust
         binding.btnMovedGrow.isEnabled = adjust
@@ -483,8 +370,6 @@ class MovedObjectController(
         const val SAVE_DEBOUNCE_MS = 500L
         /** 마커를 실제 크기보다 이만큼 크게 그려 손가락으로 잡기 쉽게 한다. */
         const val MARKER_SCALE = 1.35f
-        const val KEY_LAST_SCENE = "moved_last_scene"
-        const val KEY_LAST_JOB = "moved_last_job"
         val OBJECT_LABELS = mapOf(
             "tv" to "TV", "sofa" to "소파", "table" to "테이블",
             "chair" to "의자", "shelf" to "선반", "other" to "사물",
