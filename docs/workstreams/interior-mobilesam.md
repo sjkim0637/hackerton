@@ -65,7 +65,8 @@ IN_PROGRESS
 - `RemovalController`/`InteriorApiClient`/`MainActivity`를 실제로 `onPointSelected`에 연결해
   서버로 `PointRegion`을 보내는 앱 쪽 배선. AR 상태 기계(`RemovalController.kt`, 641줄)를
   깊이 이해하지 못한 채 blind edit 하는 위험을 피하려고 이번 Branch에서는 보류했다.
-- 모델 파일을 저장소에 커밋하는 것(로컬에 받아 실제로 돌려보긴 했다 — 아래 참고).
+- 모델 파일(MobileSAM, LaMa 둘 다)을 저장소에 커밋하는 것(로컬에 받아 실제로
+  돌려보긴 했다 — 아래 참고).
 - 앱 실기기 빌드 검증(이 환경엔 Android SDK/실기기가 없어 서버만 pytest로 검증했다).
 
 ## MobileSAM 모델 준비 (수동, 저장소에 커밋 안 함)
@@ -85,7 +86,9 @@ IN_PROGRESS
    INTERIOR_MOBILESAM_ENCODER_PATH=/path/to/mobilesam.encoder.onnx
    INTERIOR_MOBILESAM_DECODER_PATH=/path/to/mobilesam.decoder.onnx
    ```
-3. `pip install -r requirements.txt -r requirements-mobilesam.txt` (onnxruntime 추가 설치).
+3. `pip install -r requirements.txt -r requirements-onnx.txt` (onnxruntime 추가 설치;
+   D7에서 MobileSAM 전용이던 `requirements-mobilesam.txt`를 `requirements-onnx.txt`로
+   리네임했다 — LaMa도 같은 의존성을 쓴다).
 4. 둘 중 하나라도 없거나 로드 실패하면 자동으로 bbox 근사로 대체되므로, 모델 없이도
    서버는 정상 동작한다(품질만 낮다) — 팀원 각자 환경에서 안전하게 개발 가능.
 
@@ -96,6 +99,25 @@ encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없�
 0~255 원본 픽셀 그대로(정규화가 그래프 안에 있음). 실제 파일로 검증하지 않았다면 이
 버그를 그대로 커밋할 뻔했다 — `app/ai/mobilesam.py` 상단 docstring에 실측한 정확한
 계약을 적어뒀다.
+
+## LaMa 인페인팅 모델 준비 (D7, 수동, 저장소에 커밋 안 함)
+
+MobileSAM은 "어디를 지울지"만 정하고, 실제로 그 자리를 자연스럽게 채우는 건 별도
+인페인팅 모델의 역할이다. mock(주변 색 평균)은 품질이 낮아 D7에서 로컬 LaMa로 교체했다.
+
+1. 다운로드(약 198MB): `https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx`
+   (`opencv/inpainting_lama`, `sapienkit/LaMa-ONNX` 등 다른 재배포본도 있다).
+2. `.env` 또는 환경변수: `INTERIOR_LAMA_MODEL_PATH=/path/to/lama_fp32.onnx`
+3. `INTERIOR_AI_PROVIDER` 기본값이 이미 `lama` 로 바뀌었다(D7) — 경로만 지정하면 된다.
+   경로가 없거나 파일이 없으면(MobileSAM과 달리) **조용히 mock으로 대체되지 않고
+   `remove-object` 요청이 503으로 실패한다** — 품질 저하를 숨기지 않기 위한 의도적 설계.
+4. Gemini API 키가 생기면 `INTERIOR_AI_PROVIDER=external` + `INTERIOR_AI_API_KEY`로 언제든
+   전환 가능(코드 변경 불필요).
+
+실측 스펙(모델 카드에 없어서 실제 파일을 열어 확인함): 입력 `image` (1,3,512,512) float32
+0~1 정규화, `mask` (1,1,512,512) float32(1=채울 영역), 출력은 0~1이 아니라 **0~255** 범위로
+나온다(이것도 실측 확인 — 카드/README에 안 적혀 있었다). CPU 기준 4032×3024 이미지에서
+약 5초.
 
 ## API 변경
 
