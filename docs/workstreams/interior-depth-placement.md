@@ -77,6 +77,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `f8e30bb` — Depth 기반 실시간 3D 공간과 가구 배치 계산 기술 정리
 - `3af7f70` — RGB·Depth에서 3D 표면과 가구 배치를 계산하는 기본 원리 설명 추가
 - `ed61618` — Depth pixel 값을 camera principal axis 기준 Z 깊이로 명확화
+- `e11554b` — RGB 투영과 Orbit·Zoom 가능한 3D Point Cloud Viewer 전환 UI 추가
 
 ## Updated
 
