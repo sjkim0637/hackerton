@@ -52,3 +52,40 @@
   Filament 씬 그래프, 권한/설치 안내를 라이브러리가 처리.
 - Alternatives: 순수 ARCore + OpenGL(`hello_ar_kotlin`).
 - Impact: 씬 그래프/제스처 API 가 SceneView 에 종속. 프로젝트 공통 표준은 아님.
+
+---
+
+## D5. 사물 선택은 드래그 bbox 대신 MobileSAM 점 프롬프트
+
+- Status: Accepted (2026-09-07, `agent/goguma-salad/interior-mobilesam` 브랜치)
+- Context: D3(bbox 드래그)의 UX가 "정확히 사각형을 그려야 함"이라 사용자 피드백상
+  너무 번거로웠다. 순수 OpenCV(GrabCut/Saliency/floodFill)로 완전 자동화를 검토했으나,
+  인테리어 사진은 배경(벽·바닥) 비중이 크고 색상이 사물과 비슷한 경우가 많아 점 하나
+  또는 무입력만으로는 실패가 잦다(고전 CV는 "의미"를 모름).
+- Decision: 탭(또는 누르고 있기) 한 번으로 지정한 점을 MobileSAM(Segment Anything의
+  경량 증류 모델, point-prompt 전용 설계)에 넘겨 사물 마스크를 얻는다. 모델 파일이
+  없거나 로드에 실패하면 점 중심 정사각형 bbox로 자동 대체한다(품질은 낮지만 항상 동작).
+- Reason: SAM 계열은 정확히 "점 하나 → 물체 마스크" 문제를 풀도록 학습된 모델이라,
+  질감/색상이 배경과 비슷해도 GrabCut·floodFill보다 훨씬 안정적이다. MobileSAM은 CPU
+  추론이 가능할 만큼 가벼워 서버에 GPU 없이도 쓸 수 있다.
+- Alternatives:
+  - OpenCV GrabCut(사용자 bbox seed) — 입력 자체가 여전히 필요, 정밀도는 개선되지만
+    "사각형을 그려야 하는" 문제는 안 풀림.
+  - OpenCV Saliency/floodFill(무입력 또는 점 하나) — 인테리어처럼 배경 비중이 큰 장면에서
+    신뢰도가 낮음(D5 Context 참고).
+  - 사전학습 객체탐지(YOLO 등, `cv2.dnn`) — 완전 무클릭이 가능하지만 클래스가 제한되고
+    모델 관리 부담이 큼. 지금은 채택하지 않음.
+- Impact:
+  - 서버: `Region` 스키마에 `PointRegion`(`type: "point"`) 추가, `remove-object` 처리 전
+    `_resolve_point_region()`이 점을 `MaskRegion`으로 변환(`app/routers/scenes.py`).
+    변환 로직은 `app/ai/mobilesam.py`(MobileSAM 추론)와 `app/ai/mask.py`(대체/페더링)에 있다.
+    `onnxruntime`은 지연 import라 모델 미설정 환경에서도 서버는 정상 기동한다.
+  - `mask.py::region_bbox()`가 `mask` 타입일 때 더 이상 "가운데 절반"으로 근사하지 않고
+    실제 마스크 픽셀의 바운딩 박스를 계산한다 — `mock.py`의 자체 bbox 로직도 이걸 재사용하도록
+    통합했다(전에는 mock만 별도로 가운데 절반 근사를 썼다).
+  - 모델 파일(encoder/decoder ONNX, 수십MB)은 저장소에 커밋하지 않는다. 수동 다운로드 방법은
+    `docs/workstreams/interior-mobilesam.md` 참고.
+  - **앱(Kotlin) 쪽은 아직 부분 구현이다.** `BboxSelectionView`에 탭 좌표를 넘기는
+    `onPointSelected` 콜백을 추가했지만(기존 드래그 경로는 그대로 유지), `RemovalController`가
+    이걸 받아 `PointRegion`을 서버로 보내도록 연결하는 작업은 남아 있다
+    (`docs/workstreams/interior-mobilesam.md`의 Next 참고).

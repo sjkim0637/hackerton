@@ -45,8 +45,12 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 - [DONE] 서버(사용자 3): objectType 정규화(별칭 흡수)·중복 요청 방지(처리 중 포함)·
   일시적 오류 자동 재시도(1회)·타임아웃 대응·AI 호출 횟수/비용 로그. `docs/handoffs/user3.md`.
 - [DONE] 앱(사용자 1): 드래그 박스가 화면 40% 이상이면 겹침 경고 Toast, 선택 모드 안내 문구.
-- [TODO] 정밀 세그멘테이션 마스크(bbox → 실제 사물 윤곽) 또는 포인트/브러시 "이 사물만" 선택,
-  remove-object 를 BackgroundTasks 밖 워커/큐로.
+- [IN_PROGRESS] 정밀 세그멘테이션(점 프롬프트 "이 사물만" 선택) — D5, `docs/decisions.md`,
+  `docs/workstreams/interior-mobilesam.md`. 서버: MobileSAM 점 프롬프트 → 마스크 변환
+  완료(`app/ai/mobilesam.py`, `app/routers/scenes.py::_resolve_point_region`), 모델 미설정
+  시 bbox 근사 대체, pytest 11개 추가. 앱: `BboxSelectionView`에 탭 좌표 콜백
+  (`onPointSelected`)만 추가, `RemovalController` 연동은 미완료(다음 담당자 몫).
+- [TODO] remove-object 를 BackgroundTasks 밖 워커/큐로.
 
 ## PHASE 3 (진행 중)
 

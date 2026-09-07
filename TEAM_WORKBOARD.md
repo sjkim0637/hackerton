@@ -8,6 +8,7 @@
 |---|---|---|---|---|---|---|---|
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
 | shinym87 + Claude | `agent/shinym87/interior` | `experiments/shinym87/interior/` | 카메라 기반 공간 편집 / AR 가구 재배치 | 설계서의 공간·AR 흐름(카메라·평면 인식·탭 배치·드래그 이동·핀치 크기 조절·대표 이미지)을 구현한다. | `IN_PROGRESS` | [interior](docs/workstreams/interior.md) | 2026-09-02 |
+| goguma-salad + Claude | `agent/goguma-salad/interior-mobilesam` | `experiments/shinym87/interior/` | Interior 사물 선택 — MobileSAM 점 프롬프트 | 드래그 bbox 대신 탭 한 번으로 사물을 지정하고 MobileSAM으로 정밀 마스크를 얻는다(서버 구현 완료, 앱 배선은 다음 단계). | `IN_PROGRESS` | [interior-mobilesam](docs/workstreams/interior-mobilesam.md) | 2026-09-07 |
 
 ## 사용 방법
 
