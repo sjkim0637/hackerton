@@ -44,6 +44,18 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         val modelUrl: String?,
     )
 
+    /**
+     * D8: `POST /keyframes/{id}/segment` 응답 — 탭 한 점을 MobileSAM 마스크로 바꾼 것.
+     * 인페인팅 전 미리보기 오버레이 용도. [rawJson] 을 그대로 보관해뒀다가 사용자가
+     * "삭제"를 누르면 [requestRemoveObjectWithMask] 의 `target` 으로 그대로 재사용한다.
+     */
+    data class MaskRegion(
+        val pngDataUrl: String,   // "data:image/png;base64,...."
+        val width: Int,
+        val height: Int,
+        val rawJson: JSONObject,
+    )
+
     /** PHASE 4/5: 서버에 저장된 배치(이동/회전/크기) 한 건. */
     data class Placement(
         val placementId: String,
@@ -153,6 +165,40 @@ class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
         JSONObject().put("type", "point")
             .put("point", JSONArray(listOf(xNorm.toDouble(), yNorm.toDouble()))),
     )
+
+    /**
+     * D8: `POST /scenes/{id}/keyframes/{kf}/segment` — 탭 한 점의 마스크만 즉시 받는다
+     * (인페인팅 없음, 빠름). 앱은 이 결과를 오버레이로 보여주고 확인을 받는다.
+     */
+    suspend fun segmentPoint(
+        sceneId: String,
+        keyframeId: String,
+        xNorm: Float,
+        yNorm: Float,
+    ): MaskRegion = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("point", JSONArray(listOf(xNorm.toDouble(), yNorm.toDouble())))
+        val conn = open("/scenes/$sceneId/keyframes/$keyframeId/segment", "POST")
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val json = JSONObject(readBody(conn))
+        val size = json.getJSONObject("size")
+        MaskRegion(
+            pngDataUrl = json.getString("png"),
+            width = size.getInt("width"),
+            height = size.getInt("height"),
+            rawJson = json,
+        )
+    }
+
+    /** D8: 미리 받아둔 [MaskRegion](탭 마스킹 미리보기)을 그대로 target 으로 삭제 요청한다. */
+    suspend fun requestRemoveObjectWithMask(
+        sceneId: String,
+        keyframeId: String,
+        objectType: String,
+        mask: MaskRegion,
+    ): String = requestRemoveObjectWithTarget(sceneId, keyframeId, objectType, mask.rawJson)
 
     private suspend fun requestRemoveObjectWithTarget(
         sceneId: String,
