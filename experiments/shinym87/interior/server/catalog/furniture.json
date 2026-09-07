@@ -3,8 +3,16 @@
     "id": "cat_tv_wall-55",
     "name": "55인치 벽걸이 TV",
     "category": "tv",
-    "size_m": { "w": 1.24, "h": 0.72, "d": 0.06 },
-    "model": { "type": "glb", "url": "/assets/tv-wall-55.glb", "placeholder": "cube" },
+    "size_m": {
+      "w": 1.24,
+      "h": 0.72,
+      "d": 0.06
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_tv_wall-55.glb",
+      "placeholder": "cube"
+    },
     "thumbnail": "/assets/furniture/tv.png",
     "anchor_hint": "wall"
   },
@@ -12,8 +20,16 @@
     "id": "cat_sofa_nordic-3seat",
     "name": "노르딕 3인 소파",
     "category": "sofa",
-    "size_m": { "w": 2.1, "h": 0.85, "d": 0.95 },
-    "model": { "type": "glb", "url": "/assets/nordic-3seat.glb", "placeholder": "cube" },
+    "size_m": {
+      "w": 2.1,
+      "h": 0.85,
+      "d": 0.95
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_sofa_nordic-3seat.glb",
+      "placeholder": "cube"
+    },
     "thumbnail": "/assets/furniture/sofa.png",
     "anchor_hint": "floor"
   },
@@ -21,8 +37,16 @@
     "id": "cat_table_low-oak",
     "name": "오크 로우 테이블",
     "category": "table",
-    "size_m": { "w": 1.1, "h": 0.4, "d": 0.6 },
-    "model": { "type": "glb", "url": "/assets/low-oak-table.glb", "placeholder": "cube" },
+    "size_m": {
+      "w": 1.1,
+      "h": 0.4,
+      "d": 0.6
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_table_low-oak.glb",
+      "placeholder": "cube"
+    },
     "thumbnail": "/assets/furniture/table.png",
     "anchor_hint": "floor"
   },
@@ -30,8 +54,16 @@
     "id": "cat_chair_dining-basic",
     "name": "기본 식탁 의자",
     "category": "chair",
-    "size_m": { "w": 0.46, "h": 0.9, "d": 0.5 },
-    "model": { "type": "glb", "url": "/assets/dining-chair.glb", "placeholder": "cube" },
+    "size_m": {
+      "w": 0.46,
+      "h": 0.9,
+      "d": 0.5
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_chair_dining-basic.glb",
+      "placeholder": "cube"
+    },
     "thumbnail": "/assets/furniture/chair.png",
     "anchor_hint": "floor"
   },
@@ -39,9 +71,102 @@
     "id": "cat_shelf_wall-3tier",
     "name": "3단 벽 선반",
     "category": "shelf",
-    "size_m": { "w": 0.8, "h": 0.9, "d": 0.25 },
-    "model": { "type": "glb", "url": "/assets/wall-shelf-3tier.glb", "placeholder": "cube" },
+    "size_m": {
+      "w": 0.8,
+      "h": 0.9,
+      "d": 0.25
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_shelf_wall-3tier.glb",
+      "placeholder": "cube"
+    },
     "thumbnail": "/assets/furniture/shelf.png",
     "anchor_hint": "wall"
+  },
+  {
+    "id": "cat_vase_ceramic-round",
+    "name": "세라믹 원형 꽃병",
+    "category": "vase",
+    "size_m": {
+      "w": 0.18,
+      "h": 0.3,
+      "d": 0.18
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_vase_ceramic-round.glb",
+      "placeholder": "cube"
+    },
+    "thumbnail": "/assets/furniture/vase.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_lamp_floor-standard",
+    "name": "스탠드 조명",
+    "category": "lamp",
+    "size_m": {
+      "w": 0.35,
+      "h": 1.5,
+      "d": 0.35
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_lamp_floor-standard.glb",
+      "placeholder": "cube"
+    },
+    "thumbnail": "/assets/furniture/lamp.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_plant_potted-medium",
+    "name": "중형 화분",
+    "category": "plant",
+    "size_m": {
+      "w": 0.4,
+      "h": 0.7,
+      "d": 0.4
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_plant_potted-medium.glb",
+      "placeholder": "cube"
+    },
+    "thumbnail": "/assets/furniture/plant.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_bookshelf_open-4tier",
+    "name": "4단 오픈 책장",
+    "category": "shelf",
+    "size_m": {
+      "w": 0.9,
+      "h": 1.8,
+      "d": 0.3
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_bookshelf_open-4tier.glb",
+      "placeholder": "cube"
+    },
+    "thumbnail": "/assets/furniture/shelf.png",
+    "anchor_hint": "floor"
+  },
+  {
+    "id": "cat_bed_queen-frame",
+    "name": "퀸 사이즈 침대",
+    "category": "bed",
+    "size_m": {
+      "w": 1.6,
+      "h": 0.6,
+      "d": 2.05
+    },
+    "model": {
+      "type": "glb",
+      "url": "/assets/models/cat_bed_queen-frame.glb",
+      "placeholder": "cube"
+    },
+    "thumbnail": "/assets/furniture/bed.png",
+    "anchor_hint": "floor"
   }
 ]

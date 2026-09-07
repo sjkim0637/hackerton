@@ -3,19 +3,14 @@ package com.hackathon.interior.remove
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingState
-import com.hackathon.interior.R
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
 import com.hackathon.interior.settings.ServerSettings
@@ -38,10 +33,13 @@ import java.util.TimeZone
 import kotlin.math.sqrt
 
 /**
- * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 서버 호출 → job 폴링 →
- * 결과 이미지를 벽 평면에 붙이기 → "삭제 전/후" 전환.
+ * D5/D7: 화면을 한 번 탭 → 그 점을 서버(MobileSAM)로 보내 사물 마스크를 얻고 → 로컬 LaMa
+ * 인페인팅으로 빈 공간을 채운 결과를 벽/바닥 평면에 붙인다.
  *
- * PHASE 1 목표는 흐름 연결이다. 3D 배치의 방향/스케일은 대략치이며 실기기에서 다듬는다.
+ * 예전엔 "영역 선택 모드" 켜기 → 사각형 드래그 → 사물 종류 선택 → "삭제 요청" 버튼,
+ * 이렇게 여러 단계였다(D3). MobileSAM 도입 후 사각형을 정확히 그릴 필요가 없어져 이
+ * 단계들을 없애고 탭 한 번으로 압축했다 — 사물 종류는 서버가 몰라도 되므로 항상
+ * `other`(범용)로 보낸다.
  */
 class RemovalController(
     private val activity: Activity,
@@ -63,13 +61,13 @@ class RemovalController(
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var selectionMode = false
-    private var bboxNorm: FloatArray? = null          // [x, y, w, h] — sceneView 대비 정규화
+
+    private var pointNorm: FloatArray? = null         // [x, y] — sceneView 대비 정규화, 탭 지점
     private var wallAnchor: Anchor? = null
     private var planeIsVertical = false
     private var wallPlaneJson: JSONObject? = null
-    private var patchWidthM = 1.2f
-    private var patchHeightM = 0.7f
+    private var patchWidthM = DEFAULT_PATCH_WIDTH_M
+    private var patchHeightM = DEFAULT_PATCH_HEIGHT_M
 
     private var resultNode: AnchorNode? = null
     private var showingAfter = false
@@ -83,165 +81,74 @@ class RemovalController(
     private var smoothedPos: FloatArray? = null
 
     init {
-        // 0번은 "선택 안 함" 안내 항목. 사용자가 실제 종류를 고르기 전엔 삭제 요청을 막는다.
-        binding.objectTypeSpinner.adapter = ArrayAdapter(
-            activity,
-            R.layout.spinner_item_light,
-            listOf(SPINNER_PROMPT) + OBJECT_TYPES.map { it.second },
-        ).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        binding.objectTypeSpinner.setSelection(0)
-        binding.objectTypeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = refreshRequestButton()
-            override fun onNothingSelected(p: AdapterView<*>?) = refreshRequestButton()
-        }
-
-        binding.bboxSelectionView.onRectFinalized = ::onRectSelected
-        binding.btnTvSelectMode.setOnClickListener { toggleSelectionMode() }
-        binding.btnClearSelection.setOnClickListener { clearSelection() }
-        binding.btnRequestRemove.setOnClickListener { requestRemoval() }
         binding.btnToggleRemoval.setOnClickListener { toggleBeforeAfter() }
-        refreshRequestButton()
     }
 
-    /** 스피너에서 고른 사물의 서버 키(tv / sofa / table / other …). 미선택이면 null. */
-    private fun selectedObjectTypeOrNull(): String? {
-        val pos = binding.objectTypeSpinner.selectedItemPosition
-        return OBJECT_TYPES.getOrNull(pos - 1)?.first   // pos 0 = SPINNER_PROMPT
-    }
+    /** 이미 처리 중이면 새 탭을 무시한다(FurnitureController 가 탭 라우팅 전에 확인용으로도 씀). */
+    fun isBusy(): Boolean = busy
 
-    /** bbox 도 있고 사물 종류도 골랐을 때만 "삭제 요청" 을 활성화한다. */
-    private fun refreshRequestButton() {
-        binding.btnRequestRemove.isEnabled =
-            !busy && bboxNorm != null && selectedObjectTypeOrNull() != null
-    }
-
-    // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
-
-    fun toggleSelectionMode() {
-        if (!selectionMode) {
-            clearSelection(announce = false)   // 새로 그리기 전에 이전 선택 정리
-            selectionMode = true
-            binding.bboxSelectionView.isSelecting = true
-            binding.bboxSelectionView.visibility = View.VISIBLE
-            binding.btnTvSelectMode.text = "선택 모드 끄기"
-            binding.btnClearSelection.visibility = View.VISIBLE
-            status(
-                "지우고 싶은 사물에 딱 맞게 사각형을 그리면,\n" +
-                    "결과 품질과 크기 측정 정확도가 모두 좋아집니다."
-            )
-        } else {
-            selectionMode = false
-            binding.bboxSelectionView.isSelecting = false
-            val hasSelection = bboxNorm != null
-            binding.bboxSelectionView.visibility = if (hasSelection) View.VISIBLE else View.GONE
-            binding.btnTvSelectMode.text = "영역 선택 모드"
-            binding.btnClearSelection.visibility = if (hasSelection) View.VISIBLE else View.GONE
-            status(if (hasSelection) "영역 지정됨 · '삭제 요청'을 누르세요" else "")
-        }
-    }
-
-    /** 지정한 영역/그린 사각형/결과를 모두 지운다. (선택 취소 버튼 + 모드 재진입 시) */
-    fun clearSelection(announce: Boolean = true) {
-        bboxNorm = null
+    /** 지금까지의 선택/결과를 모두 지운다. (다른 동작으로 전환하거나 재시작할 때) */
+    fun clearSelection() {
+        pointNorm = null
         wallAnchor?.let { runCatching { it.detach() } }
         wallAnchor = null
         wallPlaneJson = null
         planeIsVertical = false
-
-        selectionMode = false
-        binding.bboxSelectionView.isSelecting = false
-        binding.bboxSelectionView.clear()
-        binding.bboxSelectionView.visibility = View.GONE
-        binding.btnTvSelectMode.text = "영역 선택 모드"
-        binding.btnClearSelection.visibility = View.GONE
-        refreshRequestButton()
         clearResult()
         capturedObjectBitmap = null
         originalObjectPose = null
         onRemovalCleared()   // 이동된 사물도 함께 정리
-        if (announce) status("선택을 취소했습니다")
     }
 
-    private fun onRectSelected(rect: RectF) {
-        val vw = sceneView.width.toFloat().coerceAtLeast(1f)
-        val vh = sceneView.height.toFloat().coerceAtLeast(1f)
-        bboxNorm = floatArrayOf(
-            (rect.left / vw).coerceIn(0f, 1f),
-            (rect.top / vh).coerceIn(0f, 1f),
-            (rect.width() / vw).coerceIn(0f, 1f),
-            (rect.height() / vh).coerceIn(0f, 1f),
-        )
-        clearResult()
-        resolveWall(rect)
-        binding.bboxSelectionView.measurementText = measureSelectionLabel(rect)
-
-        selectionMode = false
-        binding.bboxSelectionView.isSelecting = false
-        binding.bboxSelectionView.visibility = View.VISIBLE   // 그린 사각형은 확인용으로 유지
-        binding.btnTvSelectMode.text = "영역 선택 모드"
-        binding.btnClearSelection.visibility = View.VISIBLE
-        refreshRequestButton()
-        status(
-            if (selectedObjectTypeOrNull() == null)
-                "영역 지정됨 · 위에서 '지울 사물' 종류를 고르면 삭제 요청이 활성화됩니다"
-            else
-                "영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')"
-        )
-
-        // 선택 영역이 화면의 큰 비율을 덮으면 겹친 가구가 포함됐을 수 있다.
-        // 삭제를 막지는 않고 경고만 잠깐 띄운다 (진단 실험: 겹침 시 결과 불안정).
-        val areaFraction = (rect.width() / vw) * (rect.height() / vh)
-        if (areaFraction >= LARGE_SELECTION_FRACTION) {
-            Toast.makeText(
-                activity,
-                "선택 영역이 넓습니다. 다른 가구가 포함되지 않았는지 확인해주세요",
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
+    // -------------------------------------------------------------- 1. 탭 → 즉시 삭제 요청 (D5/D7)
 
     /**
-     * 그린 사각형의 실제 가로/세로를 잰다.
-     * 좌상단-우상단(가로), 좌상단-좌하단(세로) 지점에서 ARCore hitTest 를 하고,
-     * 두 3D 좌표 사이 거리를 cm 로 계산한다.
-     *
-     * 이 수치는 **내가 그린 박스**의 크기이지 가구 자체의 정확한 치수가 아니다.
-     * 문구도 "선택 영역"이라고만 표현한다.
+     * 화면 탭 한 번으로 그 지점의 사물을 지운다. [FurnitureController]가 마커/카탈로그 배치가
+     * 아닌 탭을 이 함수로 넘긴다. 사물 종류는 서버(MobileSAM)가 몰라도 되므로 항상 `other`로
+     * 보낸다 — 예전(D3)엔 사각형 드래그 + 종류 선택 + "삭제 요청" 버튼, 세 단계였다.
      */
-    private fun measureSelectionLabel(rect: RectF): String {
-        val topLeft = space.hitTest(rect.left, rect.top)?.hitPose
-        val topRight = space.hitTest(rect.right, rect.top)?.hitPose
-        val bottomLeft = space.hitTest(rect.left, rect.bottom)?.hitPose
-
-        if (topLeft == null || topRight == null || bottomLeft == null) {
-            return "선택 영역: 정확한 측정 어려움\n(평면이 인식되지 않았어요)"
-        }
-        val widthCm = distance(topLeft, topRight) * 100f
-        val heightCm = distance(topLeft, bottomLeft) * 100f
-        return "선택 영역: 약 %.0fcm × %.0fcm\n(내가 그린 박스 기준 · 가구 실측 아님)"
-            .format(widthCm, heightCm)
+    fun onScreenTapped(xPx: Float, yPx: Float) {
+        if (busy) return
+        clearResult()
+        val vw = sceneView.width.toFloat().coerceAtLeast(1f)
+        val vh = sceneView.height.toFloat().coerceAtLeast(1f)
+        pointNorm = floatArrayOf((xPx / vw).coerceIn(0f, 1f), (yPx / vh).coerceIn(0f, 1f))
+        resolveWallAtPoint(xPx, yPx)
+        requestRemoval()
     }
 
-    /** 사각형 중심/네 변에서 hitTest 해 벽 앵커와 실제 크기(m), 평면 정보를 잡는다. */
-    private fun resolveWall(rect: RectF) {
+    /** 탭 지점에서 hitTest 해 벽 앵커·평면 정보를 잡는다. 패치 크기는 결과를 받은 뒤 다듬는다. */
+    private fun resolveWallAtPoint(xPx: Float, yPx: Float) {
         wallAnchor?.let { runCatching { it.detach() } }
         wallAnchor = null
         wallPlaneJson = null
         planeIsVertical = false
-        patchWidthM = 1.2f
-        patchHeightM = 0.7f
+        patchWidthM = DEFAULT_PATCH_WIDTH_M
+        patchHeightM = DEFAULT_PATCH_HEIGHT_M
 
-        val center = space.hitTest(rect.centerX(), rect.centerY())
-        wallAnchor = center?.createAnchorOrNull()
-        (center?.trackable as? Plane)?.let { plane ->
+        val hit = space.hitTest(xPx, yPx)
+        wallAnchor = hit?.createAnchorOrNull()
+        (hit?.trackable as? Plane)?.let { plane ->
             planeIsVertical = plane.type == Plane.Type.VERTICAL
             wallPlaneJson = planeToJson(plane)
         }
+    }
 
-        val left = space.hitTest(rect.left, rect.centerY())?.hitPose
-        val right = space.hitTest(rect.right, rect.centerY())?.hitPose
-        val top = space.hitTest(rect.centerX(), rect.top)?.hitPose
-        val bottom = space.hitTest(rect.centerX(), rect.bottom)?.hitPose
+    /**
+     * 서버가 실제로 바꾼 범위(`changedRect`, MobileSAM 마스크의 바운딩 박스)로 패치 크기를
+     * 다시 잰다. 탭 지점 하나만으론 사물의 실제 크기를 몰랐는데, 마스크 결과가 오면 그
+     * 사각형의 네 변으로 hitTest 해 실측치에 더 가깝게 만든다.
+     */
+    private fun refinePatchSizeFromResult(rect: FloatArray) {
+        if (rect.size != 4) return
+        val left = space.hitTest(rect[0] * sceneView.width, (rect[1] + rect[3] / 2) * sceneView.height)?.hitPose
+        val right = space.hitTest(
+            (rect[0] + rect[2]) * sceneView.width, (rect[1] + rect[3] / 2) * sceneView.height,
+        )?.hitPose
+        val top = space.hitTest((rect[0] + rect[2] / 2) * sceneView.width, rect[1] * sceneView.height)?.hitPose
+        val bottom = space.hitTest(
+            (rect[0] + rect[2] / 2) * sceneView.width, (rect[1] + rect[3]) * sceneView.height,
+        )?.hitPose
         if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.2f, 4f)
         if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.2f, 4f)
     }
@@ -251,16 +158,17 @@ class RemovalController(
     /** 설정 화면에 저장된 서버 주소를 모든 API 흐름에 공통으로 제공한다. */
     fun serverBaseUrl(): String = ServerSettings.getBaseUrl(activity)
 
+    /** 탭 지점 중심의 근사 정사각형. 서버가 MobileSAM 마스크의 실제 범위를 돌려주기 전까지
+     * 미리보기 크롭/패치 크기에 쓰는 임시값이다(서버의 `mobilesam_fallback_box_frac`과 같은 발상). */
+    private fun approxRectAroundPoint(point: FloatArray): FloatArray {
+        val side = FALLBACK_BOX_FRACTION
+        val x = (point[0] - side / 2).coerceIn(0f, 1f - side)
+        val y = (point[1] - side / 2).coerceIn(0f, 1f - side)
+        return floatArrayOf(x, y, side, side)
+    }
+
     private fun requestRemoval() {
-        if (busy) return
-        val bbox = bboxNorm ?: run {
-            status("먼저 '영역 선택 모드'로 지울 영역을 지정하세요")
-            return
-        }
-        val objectType = selectedObjectTypeOrNull() ?: run {
-            status("지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')")
-            return
-        }
+        val point = pointNorm ?: return
         val client = InteriorApiClient(serverBaseUrl())
         busy = true
         setControlsEnabled(false)
@@ -273,15 +181,17 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
-            // PHASE 4: 삭제 전 사물 모습(키프레임의 bbox 크롭)과 원래 위치를 기억해 둔다.
+            // PHASE 4: 삭제 전 사물 모습(근사 크롭)과 원래 위치를 기억해 둔다. 결과가 오면
+            // 서버가 계산한 실제 마스크 범위(changedRect)로 더 정확하게 다시 크롭한다.
+            val approxRect = approxRectAroundPoint(point)
             capturedObjectBitmap = runCatching {
-                BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, bbox) }
+                BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, approxRect) }
             }.getOrNull()
             originalObjectPose = wallAnchor?.pose
-            val meta = buildMetaJson(imageW, imageH, bbox, objectType)
+            val meta = buildMetaJson(imageW, imageH, point)
             scope.launch {
                 try {
-                    runFlow(client, jpeg, meta, bbox, objectType)
+                    runFlow(client, jpeg, meta, point, approxRect)
                 } catch (e: Exception) {
                     status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
                 } finally {
@@ -296,8 +206,8 @@ class RemovalController(
         client: InteriorApiClient,
         jpeg: ByteArray,
         metaJson: String,
-        bbox: FloatArray,
-        objectType: String,
+        point: FloatArray,
+        approxRect: FloatArray,
     ) {
         status("세션 생성 중…")
         val sceneId = client.createScene()
@@ -305,8 +215,8 @@ class RemovalController(
         status("키프레임 업로드 중…")
         val keyframeId = client.uploadKeyframe(sceneId, jpeg, metaJson)
 
-        status("삭제 요청 전송 중…")
-        val jobId = client.requestRemoveObject(sceneId, keyframeId, bbox, objectType)
+        status("사물 인식 + 삭제 요청 전송 중…")
+        val jobId = client.requestRemoveObjectAtPoint(sceneId, keyframeId, point[0], point[1], OBJECT_TYPE)
 
         var job = client.getJob(sceneId, jobId)
         var tries = 0
@@ -332,12 +242,21 @@ class RemovalController(
                 status("결과 이미지 디코드 실패")
                 return
             }
-        applyResult(bitmap, job.changedRect ?: bbox)
+
+        // 서버가 MobileSAM 마스크의 실제 바운딩 박스를 돌려주면(항상 bbox 타입) 근사 사각형
+        // 대신 그걸로 패치 크기·크롭 미리보기를 다시 맞춘다 — 탭 지점보다 훨씬 정확하다.
+        val actualRect = job.changedRect ?: approxRect
+        refinePatchSizeFromResult(actualRect)
+        capturedObjectBitmap = runCatching {
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, actualRect) }
+        }.getOrNull() ?: capturedObjectBitmap
+
+        applyResult(bitmap, actualRect)
 
         // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
         onRemovalApplied(
-            sceneId, jobId, objectType,
-            capturedObjectBitmap, originalObjectPose, bbox,
+            sceneId, jobId, OBJECT_TYPE,
+            capturedObjectBitmap, originalObjectPose, actualRect,
             patchWidthM, patchHeightM,
         )
     }
@@ -473,7 +392,7 @@ class RemovalController(
         }, 100L)
     }
 
-    private fun buildMetaJson(imageW: Int, imageH: Int, bbox: FloatArray, objectType: String): String {
+    private fun buildMetaJson(imageW: Int, imageH: Int, point: FloatArray): String {
         val meta = JSONObject()
         meta.put("capturedAt", isoNow())
         meta.put("imageSize", JSONObject().put("width", imageW).put("height", imageH))
@@ -517,12 +436,12 @@ class RemovalController(
         meta.put(
             "targetObject",
             JSONObject()
-                .put("objectType", objectType)
+                .put("objectType", OBJECT_TYPE)
                 .put(
                     "region",
                     JSONObject()
-                        .put("type", "bbox")
-                        .put("rect", JSONArray(bbox.map { it.toDouble() })),
+                        .put("type", "point")
+                        .put("point", JSONArray(point.map { it.toDouble() })),
                 ),
         )
         return meta.toString()
@@ -573,35 +492,26 @@ class RemovalController(
     }
 
     private fun setControlsEnabled(enabled: Boolean) {
-        binding.btnTvSelectMode.isEnabled = enabled
-        binding.btnClearSelection.isEnabled = enabled
-        binding.objectTypeSpinner.isEnabled = enabled
-        refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
+        // 서버 주소 입력창은 설정 화면(SettingsActivity)으로 옮겨졌고, 사물 종류/영역
+        // 선택 UI(D8)는 없어졌다 — 이 화면엔 처리 중 막을 입력 위젯이 더 없다.
     }
 
     private companion object {
-        /** 선택 사각형이 화면 면적의 이 비율 이상이면 "넓다" 경고. */
-        const val LARGE_SELECTION_FRACTION = 0.40f
-
-        /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
 
-        /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
-        const val SPINNER_PROMPT = "사물 종류 선택…"
+        /** 탭 지점 하나만으론 실제 사물 크기를 모르므로 쓰는 초기 패치 크기(m). */
+        const val DEFAULT_PATCH_WIDTH_M = 1.2f
+        const val DEFAULT_PATCH_HEIGHT_M = 0.7f
+
+        /** 결과가 오기 전 미리보기 크롭에 쓰는 탭 지점 중심 정사각형 한 변(이미지 짧은 변 비율). */
+        const val FALLBACK_BOX_FRACTION = 0.28f
 
         /**
-         * 서버 키 → 화면 표시 라벨. 앞 5개는 server/catalog/furniture.json 의 category 와 맞춘다.
-         * "other"(기타/소품)는 목록에 없는 작은 물건(컵 등)용이며, 서버는 이 값을 특정 사물
-         * 힌트 없이 범용 배경 복원(_DEFAULT_HINT)으로 처리한다.
+         * MobileSAM은 사물 종류를 몰라도 점 위치로 마스크를 잡으므로, 서버에는 항상 `other`
+         * (범용)로 보낸다 — 서버는 이 값을 특정 사물 힌트 없이 범용 배경 복원(_DEFAULT_HINT)
+         * 으로 처리한다. 예전(D3)엔 스피너로 tv/sofa/table 등을 직접 골라야 했다.
          */
-        val OBJECT_TYPES = listOf(
-            "tv" to "TV",
-            "sofa" to "소파",
-            "table" to "테이블",
-            "chair" to "의자",
-            "shelf" to "선반",
-            "other" to "기타/소품",
-        )
+        const val OBJECT_TYPE = "other"
 
         val IDENTITY_16 = floatArrayOf(
             1f, 0f, 0f, 0f,

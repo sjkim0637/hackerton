@@ -22,9 +22,11 @@ class Settings(BaseSettings):
     catalog_file: Path = SERVER_ROOT / "catalog" / "furniture.json"
     assets_dir: Path = SERVER_ROOT / "catalog" / "assets"
 
-    # 외부 AI 연결 (mock | external)
-    #  - external 은 Google Gemini 이미지 편집 API 를 호출한다.
-    ai_provider: str = "mock"
+    # 외부 AI 연결 (mock | external | lama)
+    #  - external 은 Google Gemini 이미지 편집 API 를 호출한다 (API 키·비용 필요).
+    #  - lama 는 로컬 LaMa ONNX 모델로 인페인팅한다 (키 불필요, 무료, 오프라인).
+    #    mock 은 실사용 품질이 아니라 개발용 임시 대체이므로 기본값을 lama 로 둔다.
+    ai_provider: str = "lama"
     ai_api_key: str = ""  # INTERIOR_AI_API_KEY — Gemini API 키
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_model: str = "gemini-3.1-flash-image"
@@ -63,6 +65,10 @@ class Settings(BaseSettings):
     mobilesam_decoder_path: Path | None = None
     # MobileSAM 입력 없이 점만 왔을 때 대체용 정사각형 한 변 길이 (이미지 짧은 변 대비 비율)
     mobilesam_fallback_box_frac: float = 0.28
+
+    # LaMa 인페인팅(ONNX, 512x512 고정 입력). 경로가 없거나 파일이 없으면 provider 생성 시
+    # 에러를 낸다(mock 처럼 조용히 낮은 품질로 대체하지 않는다 — 품질 저하를 숨기지 않기 위해).
+    lama_model_path: Path | None = None
 
     @property
     def db_path(self) -> Path:

@@ -1,0 +1,9 @@
+# 서버 실행에는 필요 없다. 다음 두 경우에만 설치한다:
+# - scripts/generate_furniture_models.py 재실행(가구 3D 모델 재생성)
+# - tests/test_furniture_models.py (생성된 .glb 크기 검증, trimesh 없으면 자동 skip)
+#
+# 설치: pip install -r requirements.txt -r requirements-dev.txt
+trimesh>=4.0
+scipy>=1.11
+matplotlib>=3.8
+pytest>=8.0

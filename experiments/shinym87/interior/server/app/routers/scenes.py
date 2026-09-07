@@ -197,7 +197,14 @@ def _run_job(
 ) -> None:
     store = get_store()
     settings = get_settings()
-    provider = get_provider()
+    try:
+        provider = get_provider()
+    except ProviderError as exc:
+        # provider 생성 자체가 실패(예: lama 모델 미설정)하면 job 이 영원히 queued 로
+        # 남지 않도록 여기서 명시적으로 failed 처리한다.
+        _log.warning("[job %s] provider 생성 실패: %s", job_id, exc)
+        store.update_job(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
+        return
     store.update_job(job_id, status="running")
 
     source_bytes = Path(image_path).read_bytes()
@@ -332,6 +339,15 @@ def remove_object(
     scene = _require_scene(scene_id)
     store = get_store()
     settings = get_settings()
+
+    # provider 를 미리 확인해 job 을 만들기 전에 바로 503 을 준다(예: lama 모델 미설정).
+    # job 을 만든 뒤 백그라운드에서 실패하면 클라이언트는 폴링해야 알 수 있어 UX 가 나쁘다.
+    try:
+        get_provider()
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=503, detail=f"AI 프로바이더 사용 불가: {exc}"
+        ) from exc
 
     kf = store.get_keyframe(body.keyframe_id)
     if kf is None or kf["scene_id"] != scene_id:

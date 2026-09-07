@@ -16,7 +16,9 @@ import com.hackathon.interior.remove.InteriorApiClient
 import com.hackathon.interior.ui.FurnitureInfoDialog
 import io.github.sceneview.ar.ARSceneView
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.github.sceneview.ar.arcore.createAnchorOrNull
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.material.setColor
@@ -28,7 +30,9 @@ import io.github.sceneview.math.Scale
 import io.github.sceneview.math.Size
 import io.github.sceneview.node.CubeNode
 import io.github.sceneview.node.ImageNode
+import io.github.sceneview.node.ModelNode
 import io.github.sceneview.node.Node
+import java.io.File
 
 /**
  * 가구(현재는 반투명 큐브)의 생성 · 선택 · 이동 · 크기 조절 · 삭제를 담당한다.
@@ -52,6 +56,14 @@ class FurnitureController(
     private val serverBaseUrl: () -> String,
     /** 선택 대상이나 크기가 바뀔 때 호출. null 이면 선택 해제. */
     private val onSelectionChanged: (FurnitureItem?) -> Unit,
+    /**
+     * 마커/카탈로그 배치/선택 해제/테스트 블록, 그 무엇도 아닌 탭(빈 화면 또는 사물 위 탭).
+     * D5/D7: 이 자리에서 예전엔 항상 테스트용 큐브를 만들었지만, 이제는 기본적으로
+     * "이 사물을 지워줘" 로 해석해 [com.hackathon.interior.remove.RemovalController]로 넘긴다.
+     */
+    private val onEmptyTap: (Float, Float) -> Unit = { _, _ -> },
+    /** 테스트 블록 배치가 끝나면(생성됐든 취소됐든) 호출 — 평면 격자를 다시 끄는 데 쓴다. */
+    private val onTestBlockDone: () -> Unit = {},
 ) {
 
     private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
@@ -59,6 +71,9 @@ class FurnitureController(
 
     private val items = mutableListOf<FurnitureItem>()
     private var selected: FurnitureItem? = null
+
+    /** "가구 추가" 카탈로그에서 "직접 만들기"를 고르면 true — 다음 탭 한 번은 테스트 큐브 생성. */
+    private var testBlockPending = false
 
     /** 팝업 입력을 기다리는, 아직 가구가 안 붙은 앵커. */
     private var pendingAnchor: Anchor? = null
@@ -74,6 +89,7 @@ class FurnitureController(
         val thumb: Bitmap?,
         val catalogItemId: String?,
         val objectType: String,
+        val modelUrl: String?,
     )
 
     /** PHASE 5: 카탈로그 가구 배치를 저장할 서버 scene. "가구 추가" 최초에 확보한다. */
@@ -132,10 +148,11 @@ class FurnitureController(
         name: String, widthM: Float, heightM: Float, depthM: Float,
         wantWall: Boolean, thumb: Bitmap?,
         catalogItemId: String? = null, objectType: String = "other",
+        modelUrl: String? = null,
     ) {
         deselect()
         pendingCatalog = PendingCatalog(
-            name, Size(widthM, heightM, depthM), wantWall, thumb, catalogItemId, objectType,
+            name, Size(widthM, heightM, depthM), wantWall, thumb, catalogItemId, objectType, modelUrl,
         )
     }
 
@@ -161,7 +178,7 @@ class FurnitureController(
         pendingCatalog = null
         val item = createFurniture(
             anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit), pc.thumb,
-            catalogItemId = pc.catalogItemId, objectType = pc.objectType,
+            catalogItemId = pc.catalogItemId, objectType = pc.objectType, modelUrl = pc.modelUrl,
         )
         scheduleCatalogSave(item)
     }
@@ -259,7 +276,7 @@ class FurnitureController(
                     anchor, cat.name, Size(cat.widthM, cat.heightM, cat.depthM),
                     PlaneKind.isVerticalHit(hit), thumb,
                     catalogItemId = row.catalogItemId, objectType = cat.category,
-                    autoSelect = false,
+                    autoSelect = false, modelUrl = cat.modelUrl,
                 )
                 item.scaleFactor = row.scale.coerceIn(FurnitureItem.MIN_SCALE, FurnitureItem.MAX_SCALE)
                 item.rotationDeg = row.rotationDeg
@@ -302,8 +319,18 @@ class FurnitureController(
             item != null -> select(item)
             pendingCatalog != null -> placeCatalog(motionEvent.x, motionEvent.y)
             selected != null -> deselect()
-            else -> startCreateFlow(motionEvent.x, motionEvent.y)
+            testBlockPending -> {
+                testBlockPending = false
+                startCreateFlow(motionEvent.x, motionEvent.y)
+            }
+            else -> onEmptyTap(motionEvent.x, motionEvent.y)
         }
+    }
+
+    /** "가구 추가" 카탈로그의 "직접 만들기(테스트 블록)"를 고르면 호출한다. */
+    fun armTestBlockPlacement() {
+        testBlockPending = true
+        Toast.makeText(activity, "놓을 위치를 탭하세요 (테스트 블록)", Toast.LENGTH_SHORT).show()
     }
 
     fun handleLongPress(node: Node?) {
@@ -373,6 +400,7 @@ class FurnitureController(
         val anchor = hit?.createAnchorOrNull()
         if (hit == null || anchor == null) {
             Toast.makeText(activity, "격자가 보이는 평면(바닥/책상/벽) 위를 탭하세요", Toast.LENGTH_SHORT).show()
+            onTestBlockDone()
             return
         }
         pendingAnchor = anchor
@@ -384,10 +412,12 @@ class FurnitureController(
                 val pending = pendingAnchor ?: return@show
                 pendingAnchor = null
                 createFurniture(pending, name, baseSize, pendingIsVertical)
+                onTestBlockDone()
             },
             onCancel = {
                 pendingAnchor?.detach()
                 pendingAnchor = null
+                onTestBlockDone()
             },
         )
     }
@@ -401,6 +431,8 @@ class FurnitureController(
         catalogItemId: String? = null,
         objectType: String = "other",
         autoSelect: Boolean = true,
+        /** D7: 있으면 큐브/썸네일을 임시로 보여준 뒤 비동기로 받아와 실제 3D 모델로 바꾼다. */
+        modelUrl: String? = null,
     ): FurnitureItem {
         val material = sceneView.materialLoader.createColorInstance(color = FurnitureItem.COLOR_NORMAL)
 
@@ -454,7 +486,46 @@ class FurnitureController(
             "가구 생성: '$name' size=${baseSize.x}x${baseSize.y}x${baseSize.z}m " +
                 "vertical=$isVertical thumb=${imageNode != null} catalog=$catalogItemId at ${anchor.pose}",
         )
+        if (modelUrl != null) loadModelAsync(item, modelUrl)
         return item
+    }
+
+    /**
+     * D7: 서버 카탈로그의 실제 3D 모델(.glb)을 비동기로 받아와 큐브/썸네일 대신 보여준다.
+     * 다운로드·로드 중이거나 실패해도 이미 화면에 있는 큐브/이미지가 그대로 남으므로
+     * 사용자에게는 "아직 안 바뀜"으로만 보이고 흐름이 막히지 않는다.
+     */
+    private fun loadModelAsync(item: FurnitureItem, modelUrl: String) {
+        scope.launch {
+            try {
+                val cacheFile = modelCacheFile(modelUrl)
+                if (!cacheFile.exists()) {
+                    val bytes = InteriorApiClient(serverBaseUrl()).downloadBytes(modelUrl)
+                    cacheFile.parentFile?.mkdirs()
+                    cacheFile.writeBytes(bytes)
+                }
+                val instance = withContext(Dispatchers.IO) {
+                    sceneView.modelLoader.createModelInstance(cacheFile.absolutePath)
+                } ?: return@launch
+
+                if (item !in items) return@launch  // 로딩 중 삭제됐으면 좀비 노드를 붙이지 않는다.
+                val modelNode = ModelNode(modelInstance = instance).apply { isShadowCaster = false }
+                item.anchorNode.addChildNode(modelNode)
+                item.modelNode = modelNode
+                item.cubeNode.isVisible = false
+                item.imageNode?.isVisible = false
+                applyPlacement(item)
+                Log.d(TAG, "3D 모델 로드 완료: '${item.name}' ($modelUrl)")
+            } catch (e: Exception) {
+                Log.w(TAG, "3D 모델 로드 실패, 큐브로 유지: $modelUrl (${e.message ?: e.javaClass.simpleName})")
+            }
+        }
+    }
+
+    /** 같은 모델을 반복 배치/복원해도 매번 새로 안 받도록 앱 캐시에 URL 별로 한 번만 저장한다. */
+    private fun modelCacheFile(modelUrl: String): File {
+        val safeName = modelUrl.substringAfterLast('/').ifBlank { modelUrl.hashCode().toString() }
+        return File(activity.cacheDir, "models/$safeName")
     }
 
     /**
@@ -478,6 +549,12 @@ class FurnitureController(
                 it.rotation = Rotation(x = -90f, y = 0f, z = r)
                 it.position = Position(x = 0f, y = h / 2f, z = 0f)
             }
+            // D7: glb 모델은 원점이 이미 뒤판(벽 접촉면) 중심이므로 위치 오프셋 없이 회전만.
+            item.modelNode?.let {
+                it.scale = Scale(f)
+                it.rotation = Rotation(x = -90f, y = 0f, z = r)
+                it.position = Position(0f, 0f, 0f)
+            }
         } else {
             val h = s.y * f
             item.cubeNode.rotation = Rotation(0f, r, 0f)
@@ -488,6 +565,12 @@ class FurnitureController(
                 it.rotation = Rotation(x = 0f, y = r, z = 0f)
                 it.position = Position(x = 0f, y = h / 2f, z = 0f)
             }
+            // D7: glb 모델은 원점이 이미 바닥 중심이므로 위치 오프셋 없이 회전만.
+            item.modelNode?.let {
+                it.scale = Scale(f)
+                it.rotation = Rotation(0f, r, 0f)
+                it.position = Position(0f, 0f, 0f)
+            }
         }
     }
 
@@ -497,7 +580,7 @@ class FurnitureController(
         var current = node
         while (current != null) {
             items.firstOrNull {
-                it.cubeNode == current || it.anchorNode == current ||
+                it.cubeNode == current || it.anchorNode == current || it.modelNode == current ||
                     it.labelNode == current || it.imageNode == current
             }?.let { return it }
             current = current.parent

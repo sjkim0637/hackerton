@@ -60,8 +60,11 @@ class ArSpaceController(
     init {
         sceneView.lifecycle = lifecycle
 
-        // 인식된 평면 위에 격자(그리드)를 그린다.
-        sceneView.planeRenderer.isEnabled = true
+        // 인식된 평면 위에 격자(그리드)를 그린다. 평소엔 꺼 둔다(D5/D7: 화면 탭 = 바로 삭제라
+        // 격자가 늘 보일 필요가 없어졌다) — "가구 추가" 모드에 들어갈 때만 켠다
+        // (MainActivity 의 CatalogController onOpen/onClose 참고, docs/handoffs/
+        // interior-removal-fallback.md 5번 요청과 같은 방향).
+        sceneView.planeRenderer.isEnabled = false
         sceneView.planeRenderer.planeRendererMode = PlaneRenderer.PlaneRendererMode.RENDER_ALL
 
         sceneView.configureSession { session, config ->

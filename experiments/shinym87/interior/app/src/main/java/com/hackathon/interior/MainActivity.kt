@@ -10,7 +10,6 @@ import com.hackathon.interior.databinding.ActivityMainBinding
 import com.hackathon.interior.furniture.CatalogController
 import com.hackathon.interior.furniture.FurnitureController
 import com.hackathon.interior.furniture.FurnitureItem
-import com.hackathon.interior.keyframe.BackgroundKeyframe
 import com.hackathon.interior.remove.MovedObjectController
 import com.hackathon.interior.remove.RemovalController
 
@@ -21,8 +20,7 @@ import com.hackathon.interior.remove.RemovalController
  * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
  * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 회전 · 삭제
  * - [CatalogController]  : "가구 추가" → 서버 카탈로그 목록 → 골라서 배치 (PHASE 5)
- * - [BackgroundKeyframe] : "빈 배경" 대표 이미지 캡처와 반투명 오버레이
- * - [RemovalController]  : TV 영역 지정 → 키프레임 캡처 → 서버 호출 → 결과를 벽에 적용
+ * - [RemovalController]  : 탭 → 키프레임 캡처 → 서버(MobileSAM+LaMa) 호출 → 결과를 벽에 적용 (D5/D7)
  * - [MovedObjectController]: 삭제한 사물을 다른 위치로 이동 + placements 서버 저장/복원
  *
  * MainActivity 는 이 조각들을 레이아웃 위젯과 제스처에 연결만 한다.
@@ -32,7 +30,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var space: ArSpaceController
     private lateinit var furniture: FurnitureController
-    private lateinit var keyframe: BackgroundKeyframe
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
     private lateinit var catalog: CatalogController
@@ -59,6 +56,9 @@ class MainActivity : AppCompatActivity() {
             scope = lifecycleScope,
             serverBaseUrl = { removal.serverBaseUrl() },
             onSelectionChanged = ::renderSelectionPanel,
+            // D5/D7: 마커/카탈로그/선택/테스트블록, 그 무엇도 아닌 탭은 "이 사물 지워줘"로 본다.
+            onEmptyTap = { x, y -> removal.onScreenTapped(x, y) },
+            onTestBlockDone = { space.setPlaneVisualizationEnabled(false) },
         )
 
         // 캡처 직전: 가구 노드 + 평면 격자/특징점 시각화를 끈다 (AI 로 보내는 이미지에 안 찍히게).
@@ -70,17 +70,6 @@ class MainActivity : AppCompatActivity() {
             furniture.setAllVisible(true)
             space.setPlaneVisualizationEnabled(true)
         }
-
-        keyframe = BackgroundKeyframe(
-            activity = this,
-            sceneView = sceneView,
-            overlay = binding.backgroundOverlay,
-            captureButton = binding.btnCaptureBg,
-            toggleButton = binding.btnToggleBg,
-            opacityBar = binding.opacitySeekBar,
-            beforeCapture = beforeCapture,
-            afterCapture = afterCapture,
-        )
 
         removal = RemovalController(
             activity = this,
@@ -114,7 +103,11 @@ class MainActivity : AppCompatActivity() {
             scope = lifecycleScope,
             binding = binding,
             serverBaseUrl = { removal.serverBaseUrl() },
-            onOpen = { furniture.ensureCatalogScene() },  // "가구 추가" 최초에 scene 확보 + 복원
+            onOpen = {
+                furniture.ensureCatalogScene()  // "가구 추가" 최초에 scene 확보 + 복원
+                space.setPlaneVisualizationEnabled(true)  // 배치할 평면을 보여준다
+            },
+            onClose = { space.setPlaneVisualizationEnabled(false) },
             onPick = { item, thumb ->
                 furniture.beginCatalogPlacement(
                     name = item.name,
@@ -122,9 +115,14 @@ class MainActivity : AppCompatActivity() {
                     wantWall = item.anchorHint == "wall",
                     thumb = thumb,
                     catalogItemId = item.id, objectType = item.category,
+                    modelUrl = item.modelUrl,
                 )
                 binding.instructionText.text =
                     "‘${item.name}’ — ${if (item.anchorHint == "wall") "벽" else "바닥"}을 탭해 배치하세요"
+            },
+            onCreateTestBlock = {
+                furniture.armTestBlockPlacement()
+                space.setPlaneVisualizationEnabled(true)  // 배치될 때까지는 격자를 보여준다
             },
         )
 

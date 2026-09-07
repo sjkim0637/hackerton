@@ -7,7 +7,10 @@
 
 ## D1. 아키텍처는 A(외부 AI API) 우선
 
-- Status: Accepted (2026-09-02)
+- Status: Superseded by [[D7]] (2026-09-07) — 일부만 수정: 인페인팅(사물 삭제 후 복원)은
+  로컬 LaMa 로 바뀌었지만, 이 문서의 다른 판단(외부 AI 우선 원칙 자체, 학습/GPU 서버 없이
+  빠르게 만든다는 방향)은 여전히 유효하다. MobileSAM(D5) 도 이미 로컬 모델이었다.
+- Status(원문, 참고용): Accepted (2026-09-02)
 - Context: 사물 삭제 후 빈 공간 복원 품질을 해커톤 기간에 확보해야 한다.
 - Decision: 외부 AI 이미지 편집 API 로 전체 기능을 먼저 완성한다. B(경량 모델),
   C(자체 엔진)는 PHASE 6/7 에서 별도 브랜치로 비교 실험한다.
@@ -130,3 +133,88 @@
   - 기존 `docs/handoffs/interior-removal-fallback.md`(삭제 결과 전체화면 fallback 문제)와
     별개 이슈다 — 그 문서의 "가구 배치 Mode에 들어갈 때만 Plane 격자 표시" 요청은 이번
     변경에 포함하지 않았다(RemovalController 쪽 모드 전환 로직이 필요해 범위를 분리함).
+
+---
+
+## D7. 인페인팅 기본값을 mock → 로컬 LaMa(ONNX) 로 교체
+
+- Status: Accepted (2026-09-07, `agent/goguma-salad/interior-mobilesam` 브랜치)
+- Context: mock 프로바이더(주변 색 평균으로 사각형 덮기)는 PHASE 1 목표("한 번 관통")를
+  위한 임시 대체였을 뿐 실사용 품질이 아니다. Google Gemini(external)는 품질이 좋지만 API
+  키 발급과 호출 비용이 필요한데, 이 환경엔 키가 없다. 사용자가 mock 은 그만 쓰고 Hugging
+  Face 의 로컬 인페인팅 모델을 검토해보라고 요청했다.
+- Decision: `Carve/LaMa-ONNX`(lama_fp32.onnx, ~198MB, 512×512 고정 입력)를 받아 실제로
+  `real_living_room.jpg`(4032×3024)에 돌려 검증한 뒤, `INTERIOR_AI_PROVIDER` 기본값을
+  `mock` → `lama` 로 바꿨다(`app/config.py`). `app/ai/lama.py`가 letterbox 리사이즈 →
+  512×512 추론 → crop → 원본 해상도 복원을 담당한다.
+- Reason: 실측 결과가 Gemini 검증 결과(TV·사운드바·전선 제거, 벽 자연 복원)와 비슷하거나
+  더 깨끗했다(콘센트 자국 정도만 옅게 남음, 스크린샷으로 육안 비교함). API 키·비용·인터넷
+  연결이 전혀 필요 없고, CPU 추론도 이 사진 기준 약 5초로 실사용 가능한 속도다.
+- Alternatives:
+  - mock 유지 — 사용자가 명시적으로 거부("퀄이 너무 안 좋음").
+  - Gemini(external) 우선 — API 키가 없어 지금 당장은 쓸 수 없다. 키가 생기면 `.env`의
+    `INTERIOR_AI_PROVIDER=external` 로 언제든 전환 가능(코드 변경 불필요, provider 추상화가
+    이미 있음).
+  - SDXL/Stable Diffusion Inpainting — CPU 전용인 이 환경에서 훨씬 무겁고 느려 비현실적.
+    LaMa 는 CNN 기반이라 diffusion 계열보다 가볍다.
+- Impact:
+  - `app/ai/lama.py` 신설, `app/ai/__init__.py::build_provider`/`provider_status` 에 `lama`
+    분기 추가.
+  - mock 과 달리 모델 파일이 없으면 조용히 낮은 품질로 대체하지 않고 `ProviderNotConfigured`
+    를 던진다 — 품질 저하를 숨기지 않기 위한 의도적 설계. `remove-object` 엔드포인트가 이걸
+    미리 확인해 job 을 만들기 전에 503 을 준다(`app/routers/scenes.py`). `_run_job` 내부에서도
+    한 번 더 방어해 provider 생성 실패로 job 이 영원히 `queued` 에 멈추지 않게 했다(이 버그는
+    LaMa 도입과 무관하게 external/향후 다른 provider 에도 있었을 잠재 문제라 같이 고쳤다).
+  - 모델 파일(~198MB)은 저장소에 커밋하지 않는다(MobileSAM과 동일 원칙) —
+    `INTERIOR_LAMA_MODEL_PATH` 로 지정, `requirements-mobilesam.txt` 를
+    `requirements-onnx.txt` 로 리네임(MobileSAM 전용이 아니라 onnxruntime 기반 로컬 AI
+    공통 의존성이 됐으므로).
+  - pytest 4개 추가(`tests/test_lama.py`, 실제 모델 파일 있을 때만 도는 추론 테스트 1개 포함).
+  - 이후 3D 가구 카탈로그(사용자 요청, 별도 작업)와는 무관 — 그건 "제거"가 아니라 "추가"
+    쪽 자산 문제라 D7 범위 밖.
+
+---
+
+## D8. AR 화면을 "탭 한 번 삭제" + 실제 3D 가구 모델로 단순화
+
+- Status: Accepted (2026-09-07, `agent/goguma-salad/interior-mobilesam` 브랜치)
+- Context: D5(MobileSAM)/D7(LaMa)로 서버 능력은 갖췄지만 앱 화면(D3 이후 그대로)은 여전히
+  "영역 선택 모드 켜기 → 사각형 드래그 → 사물 종류 선택 → 삭제 요청 버튼"이었다. 사용자
+  피드백: "현재 AR 화면 UI가 너무 지저분함" — 배경 촬영/표시 버튼, 평면 격자 상시 표시,
+  영역 선택 모드가 전부 불필요해졌다고 판단. 또한 "가구 추가"가 여전히 큐브/이미지만
+  보여줘 "실제 모델"이 아니었다.
+- Decision:
+  1. `RemovalController`를 사각형 기반에서 점(탭) 기반으로 재작성. `onScreenTapped(x,y)`
+     하나로 캡처→서버 point 요청→결과 적용까지 이어간다. 사물 종류는 항상 `other`.
+  2. 배경 촬영/표시 UI(`BackgroundKeyframe`)와 사각형 선택 UI(`BboxSelectionView`,
+     스피너, "삭제 요청" 버튼)를 완전히 삭제.
+  3. "탭하면 테스트 큐브 생성"이라는 기존 숨은 동작을 "가구 추가 → 직접 만들기"로 옮겨
+     평소 탭과 분리(`FurnitureController.armTestBlockPlacement`).
+  4. 평면 격자를 상시 표시 대신 "가구 추가" 배치 중에만 표시(`docs/handoffs/
+     interior-removal-fallback.md`의 5번 요청과 같은 방향, 이번엔 격자 조건부 표시만
+     처리하고 그 문서의 "삭제 결과 fallback" 자체는 범위 밖).
+  5. 카탈로그 10개 항목 모두에 절차적 3D 모델(.glb)을 만들어 연결 — `FurnitureController`
+     가 배치 직후 비동기로 모델을 받아와 큐브/썸네일을 실제 모델로 교체한다
+     (`InteriorApiClient.CatalogItem.modelUrl` → `ModelLoader.createModelInstance` →
+     `ModelNode`). 실패해도 큐브가 남아 흐름이 안 막힌다.
+- Reason: 탭 한 번으로 줄이는 게 D5(MobileSAM)를 도입한 애초의 동기(사각형을 정확히
+  그릴 필요 없애기)와 일치한다 — 서버 능력만 바꾸고 앱 UI를 그대로 두면 사용자가
+  누리는 게 없다. 3D 모델은 "실제 모델로"라는 요청을 문자 그대로 받아들였고(질감/조명은
+  필요 없다고 확인받음), SceneView가 이미 `ModelLoader`/`ModelNode`(Filament glTF 로더)를
+  내장하고 있어 새 의존성 없이 가능했다.
+- Alternatives:
+  - 사각형 유지 + 종류 선택만 자동화 — "사각형을 정확히 그려야 하는" 원래 불만이 안
+    풀림.
+  - 3D 모델 대신 썸네일 이미지만 더 예쁘게 — 검토했으나 사용자가 "진짜 3D 지오메트리"를
+    선택함(더 큰 작업임을 인지한 채로).
+- Impact:
+  - `MainActivity`가 `FurnitureController.onEmptyTap`을 `removal.onScreenTapped`에 연결.
+  - 앱 컴파일/빌드 성공 확인(JDK 21, `:app:assembleDebug`). **3D 모델 로딩 자체는
+    이 환경(Android SDK는 있지만 실기기 재검증은 이번 작업 범위 밖)에서 실기기 확인
+    못 함** — `ModelLoader.createModelInstance()`가 실제로 어떤 파일 형식/경로 조합에서
+    성공하는지는 API 문서/바이트코드 추론으로만 확인했다.
+  - 선택 강조(파란색 하이라이트)는 큐브 재질(`item.material`)에만 적용되므로, 3D 모델로
+    바뀐 뒤에는 선택 시 색이 안 바뀐다(하단 조작 패널이 뜨는 것으로만 피드백) — 후속 개선
+    여지로 남긴다.
+  - `docs/handoffs/interior-removal-fallback.md`의 나머지 요청(Anchor 없을 때 전체화면
+    fallback을 전후 비교 Preview로 바꾸는 것)은 이번에 손대지 않았다 — 여전히 열려 있다.

@@ -224,7 +224,7 @@ def test_catalog_endpoints(client):
 def test_catalog_thumbnails_are_served(client):
     """모든 카탈로그 항목의 thumbnail 이 /assets 정적 서빙으로 실제 이미지를 준다."""
     items = client.get("/catalog").json()
-    assert len(items) == 5
+    assert len(items) == 10  # D7: 절차적 3D 모델 5개 추가로 10개
     for it in items:
         url = it["thumbnail"]
         assert url.startswith("/assets/furniture/")
