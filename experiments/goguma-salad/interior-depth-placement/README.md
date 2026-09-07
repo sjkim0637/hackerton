@@ -28,6 +28,21 @@ APK:
 test-app/build/outputs/apk/debug/test-app-debug.apk
 ```
 
+## VS Code Tasks
+
+Repository root를 VS Code로 연 뒤 `Terminal > Run Task...`에서 다음 task를 실행할 수 있다.
+
+- `Depth: Verify All`: unit test → Android Lint → release AAR → debug APK 순차 검증. 기본 build task이므로 `Ctrl+Shift+B`로도 실행된다.
+- `Depth: Core Unit Test`: core synthetic test만 실행
+- `Depth: Android Lint`: 테스트 앱과 의존 모듈 정적 검사
+- `Depth: Build Release AARs`: ARCore/debug module release AAR 생성
+- `Depth: Build Debug APK`: 테스트 앱 debug APK 생성
+- `Depth: Install Debug APK`: 연결된 Android 기기에 APK build 및 설치
+- `Depth: Run Test App`: 설치 후 `Depth Placement Lab` 실행
+- `Depth: Clean`: 실험 프로젝트 build 산출물 정리
+
+Task는 현재 검증된 `C:\Program Files\Java\jdk-21.0.12`를 `JAVA_HOME`으로 사용한다. 설치·실행 task에는 `ANDROID_HOME`과 USB debugging이 설정된 Android 기기가 필요하다.
+
 ## Main App Import
 
 Host의 `settings.gradle`:
