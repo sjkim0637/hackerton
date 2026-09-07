@@ -2,8 +2,6 @@ package com.hackathon.interior.furniture
 
 import android.app.Activity
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -26,19 +24,18 @@ import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Scale
 import io.github.sceneview.math.Size
-import io.github.sceneview.node.CubeNode
 import io.github.sceneview.node.ImageNode
 import io.github.sceneview.node.Node
 
 /**
- * 가구(현재는 반투명 큐브)의 생성 · 선택 · 이동 · 크기 조절 · 삭제를 담당한다.
+ * 샘플 가구의 저폴리 3D 모델 생성 · 선택 · 이동 · 크기 조절 · 삭제를 담당한다.
  *
  * 설계서 "사용자 1 — 공간 / AR" 작업 흐름 중
  * - 임시 가구 배치 (탭 + 이름/크기 입력, 또는 PHASE 5 서버 카탈로그에서 선택)
  * - 가구 이동 (드래그) · 크기 조절 (핀치 / ＋－) · 회전 (회전 버튼)
  *
- * 카탈로그 가구도 같은 [FurnitureItem]/제스처 로직을 그대로 쓴다. 표시만 썸네일이 있으면
- * 큐브 대신 이미지 quad 이고, 없으면 기존처럼 이름표 붙은 반투명 큐브다.
+ * 카탈로그 가구는 [ProceduralFurnitureFactory]가 종류별 3D Geometry를 만들며,
+ * 모든 Part를 하나의 Root 아래 묶어 기존 Placement/제스처 로직을 그대로 사용한다.
  */
 class FurnitureController(
     private val activity: Activity,
@@ -71,7 +68,6 @@ class FurnitureController(
         val name: String,
         val size: Size,
         val wantWall: Boolean,
-        val thumb: Bitmap?,
         val catalogItemId: String?,
         val objectType: String,
     )
@@ -125,17 +121,17 @@ class FurnitureController(
 
     /**
      * 카탈로그에서 한 항목을 골랐다. 이제 [wantWall] 이면 벽, 아니면 바닥을 탭하면
-     * 그 자리에 이 가구를 배치한다. [thumb] 가 있으면 이미지로, 없으면 큐브+이름표로.
+     * 그 자리에 이 가구를 배치한다. 카탈로그 종류에 맞는 저폴리 3D 모델이 생성된다.
      * [catalogItemId]/[objectType] 는 배치 후 서버 저장(source="catalog")에 쓴다.
      */
     fun beginCatalogPlacement(
         name: String, widthM: Float, heightM: Float, depthM: Float,
-        wantWall: Boolean, thumb: Bitmap?,
+        wantWall: Boolean,
         catalogItemId: String? = null, objectType: String = "other",
     ) {
         deselect()
         pendingCatalog = PendingCatalog(
-            name, Size(widthM, heightM, depthM), wantWall, thumb, catalogItemId, objectType,
+            name, Size(widthM, heightM, depthM), wantWall, catalogItemId, objectType,
         )
     }
 
@@ -160,7 +156,7 @@ class FurnitureController(
         }
         pendingCatalog = null
         val item = createFurniture(
-            anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit), pc.thumb,
+            anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit),
             catalogItemId = pc.catalogItemId, objectType = pc.objectType,
         )
         scheduleCatalogSave(item)
@@ -234,14 +230,6 @@ class FurnitureController(
                 } catch (_: Exception) {
                     null
                 } ?: continue
-                val thumb: Bitmap? = cat.thumbnailUrl?.let { url ->
-                    try {
-                        val b = client.downloadBytes(url)
-                        BitmapFactory.decodeByteArray(b, 0, b.size)
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
                 val wantWall = when (row.plane) {
                     "wall" -> true
                     "floor" -> false
@@ -257,13 +245,13 @@ class FurnitureController(
                     ?: continue
                 val item = createFurniture(
                     anchor, cat.name, Size(cat.widthM, cat.heightM, cat.depthM),
-                    PlaneKind.isVerticalHit(hit), thumb,
+                    PlaneKind.isVerticalHit(hit),
                     catalogItemId = row.catalogItemId, objectType = cat.category,
                     autoSelect = false,
                 )
                 item.scaleFactor = row.scale.coerceIn(FurnitureItem.MIN_SCALE, FurnitureItem.MAX_SCALE)
                 item.rotationDeg = row.rotationDeg
-                item.cubeNode.scale = Scale(item.scaleFactor)
+                item.modelRoot.scale = Scale(item.scaleFactor)
                 applyPlacement(item)
                 placed++
             }
@@ -274,7 +262,7 @@ class FurnitureController(
         }
     }
 
-    /** 지금 선택된 큐브가 있는지. (제스처를 큐브 vs 이동된 사물 중 누구에게 줄지 판단용) */
+    /** 지금 선택된 가구가 있는지. (제스처를 가구 vs 이동된 사물 중 누구에게 줄지 판단용) */
     fun hasSelection(): Boolean = selected != null
 
     /** 이름표가 항상 카메라를 향하도록(빌보드) 매 프레임 갱신한다. */
@@ -294,7 +282,7 @@ class FurnitureController(
      * - 가구를 탭하면 선택
      * - 카탈로그 배치 대기 중이면(빈 곳 탭) 그 자리에 카탈로그 가구 배치
      * - 선택된 게 있으면 선택 해제
-     * - 그 외 빈 곳 탭이면 이름/크기 입력 다이얼로그로 큐브 생성
+     * - 그 외 빈 곳 탭이면 이름/크기 입력 다이얼로그로 기본 가구 생성
      */
     fun handleTap(motionEvent: MotionEvent, node: Node?) {
         val item = markerOf(node)
@@ -340,13 +328,13 @@ class FurnitureController(
         if (draggingSelected) return
         item.scaleFactor = (item.scaleFactor * factor)
             .coerceIn(FurnitureItem.MIN_SCALE, FurnitureItem.MAX_SCALE)
-        item.cubeNode.scale = Scale(item.scaleFactor)
+        item.modelRoot.scale = Scale(item.scaleFactor)
         applyPlacement(item)
         onSelectionChanged(item)
         scheduleCatalogSave(item)
     }
 
-    /** "회전" 버튼에서 호출. 평면 안에서 [deg] 만큼 누적 회전 (큐브·이미지 공통). */
+    /** "회전" 버튼에서 호출. 평면 안에서 [deg] 만큼 누적 회전. */
     fun rotateSelectedBy(deg: Float) {
         val item = selected ?: return
         if (draggingSelected) return
@@ -397,20 +385,11 @@ class FurnitureController(
         name: String,
         baseSize: Size,
         isVertical: Boolean,
-        thumb: Bitmap? = null,
         catalogItemId: String? = null,
         objectType: String = "other",
         autoSelect: Boolean = true,
     ): FurnitureItem {
-        val material = sceneView.materialLoader.createColorInstance(color = FurnitureItem.COLOR_NORMAL)
-
-        // 오프셋/회전은 노드에서 처리하므로 지오메트리는 원점 중심으로 만든다.
-        val cubeNode = CubeNode(
-            engine = sceneView.engine,
-            size = baseSize,
-            center = Position(0f),
-            materialInstance = material,
-        )
+        val model = ProceduralFurnitureFactory.create(sceneView, objectType, baseSize)
 
         val labelBitmap = LabelRenderer.make(name)
         val labelNode = ImageNode(
@@ -422,27 +401,16 @@ class FurnitureController(
             ),
         ).apply { isTouchable = false }
 
-        // 카탈로그 썸네일이 있으면 이미지 quad 로 표시하고 큐브는 숨긴다(형태 프록시로만 유지).
-        val imageNode: ImageNode? = thumb?.let {
-            ImageNode(
-                materialLoader = sceneView.materialLoader,
-                bitmap = it,
-                size = Size(baseSize.x, baseSize.y),
-            ).apply { isTouchable = false }
-        }
-        cubeNode.isVisible = imageNode == null
-
         val anchorNode = AnchorNode(sceneView.engine, anchor).apply {
             isPositionEditable = false // 이동은 직접 제어한다.
-            addChildNode(cubeNode)
+            addChildNode(model.root)
             addChildNode(labelNode)
-            imageNode?.let { addChildNode(it) }
         }
         sceneView.addChildNode(anchorNode)
 
         val item = FurnitureItem(
-            anchorNode, cubeNode, labelNode, baseSize, 1f, name, material, isVertical,
-            imageNode = imageNode,
+            anchorNode, model.root, labelNode, baseSize, 1f, name, isVertical,
+            primaryMaterial = model.primaryMaterial,
             catalogItemId = catalogItemId,
             objectType = objectType,
         )
@@ -452,16 +420,16 @@ class FurnitureController(
         Log.d(
             TAG,
             "가구 생성: '$name' size=${baseSize.x}x${baseSize.y}x${baseSize.z}m " +
-                "vertical=$isVertical thumb=${imageNode != null} catalog=$catalogItemId at ${anchor.pose}",
+                "vertical=$isVertical model=$objectType catalog=$catalogItemId at ${anchor.pose}",
         )
         return item
     }
 
     /**
-     * 큐브/이름표의 로컬 위치·회전을 평면 종류와 현재 배율에 맞춰 다시 잡는다.
+     * 3D 모델/이름표의 로컬 위치·회전을 평면 종류와 현재 배율에 맞춰 다시 잡는다.
      *
-     * - 수평면: 큐브 아랫면이 평면에 닿도록 +Y 로 절반 높이만큼 올린다.
-     * - 수직면(벽): 앵커 로컬 +Y 가 벽 바깥 방향이므로, 큐브를 X축 -90° 회전해서
+     * - 수평면: 모델 아랫면이 평면에 닿도록 +Y 로 절반 높이만큼 올린다.
+     * - 수직면(벽): 앵커 로컬 +Y 가 벽 바깥 방향이므로, 모델을 X축 -90° 회전해서
      *   "높이"가 벽을 따라 서게 하고, +Y 로 절반 깊이만큼 밀어 뒷면을 벽에 붙인다.
      */
     private fun applyPlacement(item: FurnitureItem) {
@@ -470,24 +438,14 @@ class FurnitureController(
         val r = item.rotationDeg
         if (item.onVerticalPlane) {
             val h = s.z * f
-            item.cubeNode.rotation = Rotation(x = -90f, y = 0f, z = r)
-            item.cubeNode.position = Position(x = 0f, y = h / 2f, z = 0f)
+            item.modelRoot.rotation = Rotation(x = -90f, y = 0f, z = r)
+            item.modelRoot.position = Position(x = 0f, y = h / 2f, z = 0f)
             item.labelNode.position = Position(x = 0f, y = h + FurnitureItem.LABEL_GAP_METERS, z = 0f)
-            item.imageNode?.let {
-                it.scale = Scale(f)
-                it.rotation = Rotation(x = -90f, y = 0f, z = r)
-                it.position = Position(x = 0f, y = h / 2f, z = 0f)
-            }
         } else {
             val h = s.y * f
-            item.cubeNode.rotation = Rotation(0f, r, 0f)
-            item.cubeNode.position = Position(x = 0f, y = h / 2f, z = 0f)
+            item.modelRoot.rotation = Rotation(0f, r, 0f)
+            item.modelRoot.position = Position(x = 0f, y = h / 2f, z = 0f)
             item.labelNode.position = Position(x = 0f, y = h + FurnitureItem.LABEL_GAP_METERS, z = 0f)
-            item.imageNode?.let {
-                it.scale = Scale(f)
-                it.rotation = Rotation(x = 0f, y = r, z = 0f)
-                it.position = Position(x = 0f, y = h / 2f, z = 0f)
-            }
         }
     }
 
@@ -497,8 +455,7 @@ class FurnitureController(
         var current = node
         while (current != null) {
             items.firstOrNull {
-                it.cubeNode == current || it.anchorNode == current ||
-                    it.labelNode == current || it.imageNode == current
+                it.modelRoot == current || it.anchorNode == current || it.labelNode == current
             }?.let { return it }
             current = current.parent
         }
@@ -509,17 +466,17 @@ class FurnitureController(
         if (selected == item) return
         deselect()
         selected = item
-        item.material.setColor(FurnitureItem.COLOR_SELECTED)
-        item.material.setRoughness(0.1f)
-        item.material.setReflectance(1.0f)
+        item.primaryMaterial.setColor(FurnitureItem.COLOR_SELECTED)
+        item.primaryMaterial.setRoughness(0.1f)
+        item.primaryMaterial.setReflectance(1.0f)
         onSelectionChanged(item)
     }
 
     fun deselect() {
         selected?.let {
-            it.material.setColor(FurnitureItem.COLOR_NORMAL)
-            it.material.setRoughness(0.4f)
-            it.material.setReflectance(0.5f)
+            it.primaryMaterial.setColor(FurnitureItem.colorFor(it.objectType))
+            it.primaryMaterial.setRoughness(0.55f)
+            it.primaryMaterial.setReflectance(0.35f)
         }
         selected = null
         onSelectionChanged(null)

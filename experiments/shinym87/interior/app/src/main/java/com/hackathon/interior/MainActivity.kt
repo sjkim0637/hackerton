@@ -19,7 +19,7 @@ import com.hackathon.interior.remove.RemovalController
  * 화면 구성은 네 조각으로 나뉜다.
  * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
  * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 회전 · 삭제
- * - [CatalogController]  : "가구 추가" → 서버 카탈로그 목록 → 골라서 배치 (PHASE 5)
+ * - [CatalogController]  : 첫 화면 브로셔 → "우리 집에 적용" → 3D 배치 (PHASE 5)
  * - [BackgroundKeyframe] : "빈 배경" 대표 이미지 캡처와 반투명 오버레이
  * - [RemovalController]  : TV 영역 지정 → 키프레임 캡처 → 서버 호출 → 결과를 벽에 적용
  * - [MovedObjectController]: 삭제한 사물을 다른 위치로 이동 + placements 서버 저장/복원
@@ -109,12 +109,11 @@ class MainActivity : AppCompatActivity() {
             binding = binding,
             serverBaseUrl = { removal.serverBaseUrl() },
             onOpen = { furniture.ensureCatalogScene() },  // "가구 추가" 최초에 scene 확보 + 복원
-            onPick = { item, thumb ->
+            onPick = { item ->
                 furniture.beginCatalogPlacement(
                     name = item.name,
                     widthM = item.widthM, heightM = item.heightM, depthM = item.depthM,
                     wantWall = item.anchorHint == "wall",
-                    thumb = thumb,
                     catalogItemId = item.id, objectType = item.category,
                 )
                 binding.instructionText.text =

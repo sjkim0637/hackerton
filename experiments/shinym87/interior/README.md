@@ -4,7 +4,7 @@
 앱(사용자 1) → 서버(사용자 3) → 외부 AI 순으로 진행한다.
 
 - **`app/`** — Android 앱 (사용자 1, 공간 / AR). 카메라로 실제 공간을 보면서
-  가구(현재는 반투명 큐브)를 배치·이동·크기 조절하고, "빈 배경" 대표 이미지를
+  브로셔에서 고른 저폴리 3D 가구를 배치·이동·회전·크기 조절하고, "빈 배경" 대표 이미지를
   캡처해 비교한다.
 - **[`server/`](server/README.md)** — FastAPI 서버 (사용자 3, 서버 / 통합).
   작업 세션, 키프레임 업로드/저장, 사물 정보 저장(형식만), 외부 AI 연결 구조
@@ -35,8 +35,11 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 벽 / 바닥 평면 탐지 (수평 + 수직) | `ar/ArSpaceController.kt`, `ar/PlaneKind.kt` |
 | 화면 터치 위치 획득 (hitTest) | `ar/ArSpaceController.hitTest()` |
 | 임시 가구 배치 (탭 → 이름/실물 크기 입력) | `furniture/FurnitureController.kt`, `ui/FurnitureInfoDialog.kt` |
+| 첫 화면 샘플 브로셔 → `우리 집에 적용` | `furniture/CatalogController.kt` |
+| TV·소파·테이블·의자·선반 저폴리 3D 모델 | `furniture/ProceduralFurnitureFactory.kt` |
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
+| 가구 회전 (`회전 ⟳`) | `furniture/FurnitureController.rotateSelectedBy()` |
 | 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` |
 | 제거할 물체 영역 드래그 지정 (bbox) + 선택 취소 | `remove/BboxSelectionView.kt`, `RemovalController.clearSelection()` |
 | 지울 사물 종류 선택 (TV/소파/테이블/의자/선반) → 요청 `objectType` 반영 | `objectTypeSpinner`, `RemovalController.selectedObjectType()` |
@@ -47,7 +50,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 `localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,
 서버는 `uvicorn app.main:app --host 0.0.0.0` 로 띄운다.
 
-미구현: 가구 회전, 실제 3D 모델(glTF), 결과 정합 다듬기(PHASE 3).
+미구현: 외부 고해상도 glTF/GLB 에셋, 결과 정합 다듬기, 가림(occlusion).
 
 ## 프로젝트 구조
 
@@ -63,8 +66,10 @@ experiments/shinym87/interior/
 │     │  │  ├─ ArSpaceController.kt      # 카메라·AR 세션·평면 인식·hitTest
 │     │  │  └─ PlaneKind.kt              # 평면 타입 집합 + 수직/수평 판별
 │     │  ├─ furniture/
+│     │  │  ├─ CatalogController.kt      # 첫 화면 샘플 가구 브로셔
 │     │  │  ├─ FurnitureController.kt    # 생성·선택·이동·크기 조절·삭제
 │     │  │  ├─ FurnitureItem.kt          # 노드/상태 묶음 + 상수
+│     │  │  ├─ ProceduralFurnitureFactory.kt # 종류별 저폴리 3D 모델
 │     │  │  └─ LabelRenderer.kt          # 이름표 비트맵
 │     │  ├─ keyframe/
 │     │  │  └─ BackgroundKeyframe.kt     # 빈 배경 캡처 + 반투명 오버레이
@@ -116,12 +121,13 @@ Play 스토어 설치 안내를 따른다.
 
 ## 사용 방법
 
-1. 바닥·책상·벽을 천천히 비춰 격자가 나타나게 한다.
-2. 평면을 **탭** → 이름과 실물 크기(cm)를 입력하면 반투명 가구가 생긴다.
+1. 첫 화면 브로셔에서 샘플 가구를 고르고 **우리 집에 적용**을 누른다.
+2. 바닥·책상·벽을 천천히 비춰 격자가 나타나면 안내된 평면을 탭해 3D 가구를 배치한다.
 3. 가구를 **탭/길게 누르기** 로 선택(밝게 강조) → 하단 조작 패널 표시.
 4. 선택 상태에서 **드래그** 하면 평면을 따라 이동, 떼면 그 자리에 고정된다.
-5. **두 손가락 핀치** 또는 패널의 `＋`/`－` 로 크기를 조절한다. `삭제` 로 제거.
-6. `배경 촬영` 으로 가구가 없는 현재 화면을 저장하고, `배경 표시` + 불투명도
+5. **두 손가락 핀치** 또는 패널의 `＋`/`－` 로 크기를 조절하고 `회전 ⟳`로 방향을 바꾼다.
+6. `삭제`로 가구를 제거하거나 `가구 추가`로 브로셔를 다시 연다.
+7. `배경 촬영` 으로 가구가 없는 현재 화면을 저장하고, `배경 표시` + 불투명도
    슬라이더로 "가구가 사라진 것처럼" 겹쳐 본다.
 
 ## 알려진 제약
@@ -131,7 +137,8 @@ Play 스토어 설치 안내를 따른다.
 - 저장소 경로에 한글(`신유민`)이 포함되어 `gradle.properties` 에
   `android.overridePathCheck=true` 와 UTF-8 인코딩 플래그를 넣었다. 그래도 빌드가
   경로 문제로 실패하면 ASCII 경로로 복사해서 빌드한다.
-- 조명 추정만 적용하고 그림자는 없다. 가구는 단색 반투명 재질이다.
+- 조명 추정만 적용하고 그림자·가림 처리는 없다. 샘플 가구는 외부 에셋이 아닌
+  절차형 저폴리 모델이라 실제 상품의 재질·곡면과는 차이가 있다.
 - 핀치와 드래그가 드물게 겹칠 수 있다. SceneView 제스처 detector 가 한 번에 하나의
   제스처만 처리하도록 되어 있어 실사용에는 문제되지 않지만, 필요하면
   `onMoveBegin` 에서 포인터 수를 확인하도록 보강한다.

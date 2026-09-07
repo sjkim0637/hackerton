@@ -196,7 +196,8 @@ class FurnitureSize(BaseModel):
 class FurnitureModel(BaseModel):
     type: str = "glb"
     url: str | None = None
-    placeholder: str = "cube"
+    placeholder: str | None = None
+    style: str | None = None
 
 
 class FurnitureData(BaseModel):

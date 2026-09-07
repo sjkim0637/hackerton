@@ -362,8 +362,8 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- PHASE 5: "가구 추가" 를 누르면 뜨는 서버 카탈로그 목록. 한 항목을 고르면
-         해당 종류에 맞는 평면(벽/바닥)을 탭해 배치한다. -->
+    <!-- 첫 화면 가구 브로셔. 항목을 선택하고 "우리 집에 적용"을 누른 뒤
+         해당 종류에 맞는 평면(벽/바닥)을 탭하면 저폴리 3D 가구가 배치된다. -->
     <LinearLayout
         android:id="@+id/catalogPanel"
         android:layout_width="match_parent"
@@ -380,14 +380,28 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="가구 카탈로그 (서버)"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:textSize="15sp" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="우리 집을 위한 가구 브로셔"
+                    android:textColor="@android:color/white"
+                    android:textStyle="bold"
+                    android:textSize="18sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="샘플 가구를 선택해 실제 크기의 3D 모델로 배치해 보세요"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/btnCatalogClose"
@@ -396,17 +410,37 @@
                 android:text="닫기" />
         </LinearLayout>
 
-        <ScrollView
+        <HorizontalScrollView
             android:layout_width="match_parent"
-            android:layout_height="260dp"
-            android:layout_marginTop="6dp">
+            android:layout_height="190dp"
+            android:layout_marginTop="10dp"
+            android:fillViewport="false"
+            android:scrollbars="none">
 
             <LinearLayout
                 android:id="@+id/catalogList"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-        </ScrollView>
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/catalogSelectedText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="가구를 선택해 크기와 배치 위치를 확인하세요"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnCatalogApply"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:enabled="false"
+            android:text="우리 집에 적용" />
     </LinearLayout>
 
 </FrameLayout>

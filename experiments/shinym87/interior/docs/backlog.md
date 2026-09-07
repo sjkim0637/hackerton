@@ -95,6 +95,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 
 ## PHASE 5 (진행 중)
 
+- [DONE] 사용자 1: 첫 화면에 샘플 가구 브로셔를 자동 노출하고, 항목 선택 →
+  `우리 집에 적용` → 벽/바닥 탭 배치 흐름을 연결. TV·소파·테이블·의자·선반을
+  `ProceduralFurnitureFactory`의 저폴리 3D 모델로 표현하며 기존 드래그·핀치·회전·삭제와
+  placements 저장/복원을 모델 Root 단위로 재사용. 서버가 꺼져도 내장 샘플 5종 제공.
+
 - [DONE] 사용자 1: 서버 카탈로그에서 새 가구 배치. "가구 추가" → `GET /catalog` 목록 패널
   (`furniture/CatalogController.kt`) → 골라서 종류별 벽/바닥 평면에 탭 배치
   (`FurnitureController.beginCatalogPlacement` + `hitTestPreferring` 재사용). 썸네일 있으면
