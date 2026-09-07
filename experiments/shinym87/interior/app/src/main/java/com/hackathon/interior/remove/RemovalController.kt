@@ -268,7 +268,7 @@ class RemovalController(
             return
         }
         hideMaskPreview()
-        val client = InteriorApiClient(currentBaseUrl())
+        val client = InteriorApiClient(serverBaseUrl())
         // PHASE 4: 삭제 전 사물 모습(근사 크롭)을 기억해 둔다. 결과가 오면 서버가 계산한
         // 실제 마스크 범위(changedRect)로 더 정확하게 다시 크롭한다.
         val approxRect = approxRectAroundPoint(point)
