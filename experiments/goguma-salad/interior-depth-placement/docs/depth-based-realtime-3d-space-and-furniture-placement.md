@@ -174,7 +174,9 @@ t = clamp(t, 0, 1)
 
 Test App의 `공 던지기`는 실제 공간 Geometry가 올바르게 생성되는지 확인하기 위한 경량 Debug 기능이다. 화면을 앵그리버드처럼 뒤로 당겼다가 놓으면 ARCore Camera Pose의 `-zAxis`를 기본 전방으로 사용하고, Drag 방향을 camera `right/up` 축의 yaw·pitch offset으로 더한다. 당긴 거리는 초기 속도의 세기가 된다.
 
-공은 world-space에서 중력의 영향을 받아 이동한다. 최신 IR Point Cloud에서 공 주변점을 찾고 PCA로 국소 평면과 normal을 추정한 뒤, 공 반지름이 평면에 닿으면 restitution을 적용해 속도를 반사한다. 충돌 normal이 위쪽을 향하면 `GROUND HIT`, 그 외에는 `SURFACE HIT`로 표시하고 충돌 world 좌표를 남긴다.
+발사 순간 조준선 주변의 가장 가까운 유효 Point를 찾아 목표 IR Depth를 고정한다. 첫 충돌은 공의 누적 이동 거리가 목표 Depth의 표면 직전까지 도달한 뒤에만 활성화하므로 카메라 앞 노이즈에 즉시 튕기지 않는다. 이후에는 이전 위치와 다음 위치 사이의 이동 선분이 Point Cloud 국소 평면과 실제로 교차하는 경우만 충돌로 인정한다.
+
+공은 world-space에서 중력과 공기 저항의 영향을 받아 이동한다. 최신 IR Point Cloud에서 이동 선분 주변점을 찾고 PCA로 국소 평면과 normal을 추정한 뒤, 낮은 restitution과 접선 감쇠를 적용해 무거운 쇠공처럼 속도를 잃으며 최대 3회 반동한다. 충돌 normal이 위쪽을 향하면 `GROUND HIT`, 그 외에는 `SURFACE HIT`로 표시하고 충돌 world 좌표를 남긴다. 화면에는 공의 원근 크기와 `누적 이동 거리 / 목표 IR Depth`를 함께 표시한다.
 
 이 기능은 Depth 윤곽의 위치와 반동 방향을 눈으로 확인하는 Probe이며, 마찰·회전 관성·연속 mesh collider를 포함하는 완전한 rigid-body 물리엔진은 아니다.
 

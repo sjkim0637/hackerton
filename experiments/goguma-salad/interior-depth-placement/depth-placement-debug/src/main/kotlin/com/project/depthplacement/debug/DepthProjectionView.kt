@@ -31,8 +31,10 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         strokeWidth = 3f * resources.displayMetrics.density
         style = Paint.Style.STROKE
     }
-    private val projectilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 152, 32); style = Paint.Style.FILL }
-    private val projectileOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = 2f * resources.displayMetrics.density; style = Paint.Style.STROKE }
+    private val projectilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(58, 64, 72); style = Paint.Style.FILL }
+    private val projectileMidPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(126, 136, 148); style = Paint.Style.FILL }
+    private val projectileHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(226, 232, 238); style = Paint.Style.FILL }
+    private val projectileOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(22, 26, 31); strokeWidth = 2.5f * resources.displayMetrics.density; style = Paint.Style.STROKE }
     private val slingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(120, 72, 38); strokeWidth = 5f * resources.displayMetrics.density; style = Paint.Style.STROKE }
     private val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 18f * resources.displayMetrics.density * resources.configuration.fontScale }
     @Volatile private var cameraBitmap: Bitmap? = null
@@ -45,7 +47,7 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     private var smoothedNearDepth = Float.NaN
     private var smoothedFarDepth = Float.NaN
     private var measurementPoints: FloatArray? = null
-    private data class ProjectileOverlay(val u: Float, val v: Float, val radiusDepthPx: Float, val hitU: Float?, val hitV: Float?, val hitLabel: String)
+    private data class ProjectileOverlay(val u: Float, val v: Float, val radiusDepthPx: Float, val ballLabel: String, val hitU: Float?, val hitV: Float?, val hitLabel: String)
     private var projectile: ProjectileOverlay? = null
     private var slingshotEnabled = false
     private var slingDragging = false
@@ -85,8 +87,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
     }
     fun clearMeasurement() { measurementPoints = null; invalidate() }
     fun setSlingshotEnabled(value: Boolean) { slingshotEnabled = value; slingDragging = false; invalidate() }
-    fun showProjectile(u: Float, v: Float, radiusDepthPx: Float, hitU: Float? = null, hitV: Float? = null, hitLabel: String = "HIT") {
-        projectile = ProjectileOverlay(u, v, radiusDepthPx, hitU, hitV, hitLabel)
+    fun showProjectile(u: Float, v: Float, radiusDepthPx: Float, ballLabel: String = "", hitU: Float? = null, hitV: Float? = null, hitLabel: String = "HIT") {
+        projectile = ProjectileOverlay(u, v, radiusDepthPx, ballLabel, hitU, hitV, hitLabel)
         postInvalidateOnAnimation()
     }
     fun clearProjectile() { projectile = null; invalidate() }
@@ -200,6 +202,8 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         canvas.drawLine(slingAnchorX - fork, slingAnchorY, slingBallX, slingBallY, slingPaint)
         canvas.drawLine(slingAnchorX + fork, slingAnchorY, slingBallX, slingBallY, slingPaint)
         canvas.drawCircle(slingBallX, slingBallY, 15f * resources.displayMetrics.density, projectilePaint)
+        canvas.drawCircle(slingBallX - 4f * resources.displayMetrics.density, slingBallY - 4f * resources.displayMetrics.density, 6f * resources.displayMetrics.density, projectileMidPaint)
+        canvas.drawCircle(slingBallX - 6f * resources.displayMetrics.density, slingBallY - 6f * resources.displayMetrics.density, 2f * resources.displayMetrics.density, projectileHighlightPaint)
         canvas.drawCircle(slingBallX, slingBallY, 15f * resources.displayMetrics.density, projectileOutlinePaint)
     }
 
@@ -216,8 +220,10 @@ class DepthProjectionView @JvmOverloads constructor(context: Context, attrs: Att
         val depthToViewScale = bitmapHeight / data.sourceWidth.coerceAtLeast(1) * scale
         val radius = (ball.radiusDepthPx * depthToViewScale).coerceIn(5f * resources.displayMetrics.density, 44f * resources.displayMetrics.density)
         canvas.drawCircle(center.x, center.y, radius, projectilePaint)
+        canvas.drawCircle(center.x - radius * 0.22f, center.y - radius * 0.22f, radius * 0.55f, projectileMidPaint)
+        canvas.drawCircle(center.x - radius * 0.38f, center.y - radius * 0.38f, radius * 0.17f, projectileHighlightPaint)
         canvas.drawCircle(center.x, center.y, radius, projectileOutlinePaint)
-        canvas.drawCircle(center.x - radius * 0.3f, center.y - radius * 0.3f, radius * 0.18f, projectileOutlinePaint)
+        if (ball.ballLabel.isNotEmpty()) canvas.drawText(ball.ballLabel, center.x + radius + 8f * resources.displayMetrics.density, center.y, messagePaint)
     }
 
     private fun drawMeasurement(canvas: Canvas, data: Projection, bitmapWidth: Float, bitmapHeight: Float, scale: Float, left: Float, top: Float) {

@@ -49,7 +49,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 
 ## Verification
 
-- `depth-placement-core` synthetic unit test 9개 통과: 평면 normal, 20° 경사, 바닥 배치, 장애물 검출, sampling 밀도 분리, 실제 길이, Pose 발사 방향, slingshot offset, IR 바닥 반동
+- `depth-placement-core` synthetic unit test 10개 통과: 평면 normal, 20° 경사, 바닥 배치, 장애물 검출, sampling 밀도 분리, 실제 길이, Pose 발사 방향, slingshot offset, IR 바닥 반동, 목표 Depth 도달 전 충돌 방지
 - `depth-placement-arcore` release AAR build 성공
 - `depth-placement-debug` release AAR build 성공
 - `test-app` debug APK build 성공
@@ -59,7 +59,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - 정확도 판별을 위해 테스트 앱 기본 화면을 분리된 3D viewer에서 RGB camera 위 Depth pixel 직접 투영 방식으로 변경했다.
 - 근거리 구분을 위해 5~95 percentile inverse-depth 상대 색상을 적용하고, 분석 부하와 분리된 고밀도 투영 sample을 추가했다.
 - 두 Depth 지점을 선택해 3D Euclidean length와 양 끝점의 Z 깊이를 계산하는 측정 기능을 추가했다.
-- ARCore camera 축과 slingshot gesture로 공을 발사하고 IR Point Cloud 평면 충돌·반동·ground/surface hit 좌표를 표시하는 Geometry Probe를 추가했다.
+- ARCore camera 축과 slingshot gesture로 쇠공을 발사하고, 조준 IR Depth에 도달한 뒤 이동 선분과 Point Cloud 평면이 교차할 때만 최대 3회 반동하도록 Geometry Probe를 보정했다.
 - Depth 입력부터 3D 좌표, 상대 색상 투영, 국소 평면·장애물·가구 배치 판정까지 현재 구현을 실험 기술 문서로 정리했다.
 
 ## Next

@@ -169,7 +169,8 @@ class MainActivity : AppCompatActivity() {
             } else {
                 projectileSimulator.updateGeometry(engine.getLatestPointCloud())
                 val launched = projectileSimulator.launch(depthFrame.cameraPose, yawOffset, pitchOffset, power)
-                throwText.text = "발사 yaw=${f(launched.launchYawDegrees.toDouble())}° pitch=${f(launched.launchPitchDegrees.toDouble())}° power=${f(power.toDouble() * 100.0)}%"
+                val target = launched.targetDepthMeters?.let { "${f(it.toDouble())}m" } ?: "없음"
+                throwText.text = "쇠공 발사 · IR target=$target · yaw=${f(launched.launchYawDegrees.toDouble())}° pitch=${f(launched.launchPitchDegrees.toDouble())}° power=${f(power.toDouble() * 100.0)}%"
             }
         }
         projected.onDepthTap = { u, v ->
@@ -258,10 +259,20 @@ class MainActivity : AppCompatActivity() {
                 if (visible != null && depthFrame != null) {
                     val radiusDepthPx = depthFrame.intrinsics.fx * projectile.radiusMeters / visible.depthMeters.coerceAtLeast(0.05f)
                     val kind = if ((projectile.lastCollisionNormal?.y ?: 0f) > 0.65f) "GROUND" else "SURFACE"
-                    projected.showProjectile(visible.x, visible.y, radiusDepthPx, hit?.x, hit?.y, "$kind HIT ${projectile.bounceCount}")
+                    val target = projectile.targetDepthMeters?.let { f(it.toDouble()) } ?: "?"
+                    projected.showProjectile(
+                        u = visible.x,
+                        v = visible.y,
+                        radiusDepthPx = radiusDepthPx,
+                        ballLabel = "${f(projectile.distanceTraveledMeters.toDouble())}/$target m",
+                        hitU = hit?.x,
+                        hitV = hit?.y,
+                        hitLabel = "$kind HIT ${projectile.bounceCount}/3",
+                    )
                 } else projected.clearProjectile()
                 val hitWorld = projectile.lastCollisionPoint
-                throwText.text = "공 ${if (projectile.active) "비행" else "정지"} · bounce=${projectile.bounceCount} · world=(${f(projectile.position.x.toDouble())}, ${f(projectile.position.y.toDouble())}, ${f(projectile.position.z.toDouble())})" +
+                val target = projectile.targetDepthMeters?.let { f(it.toDouble()) } ?: "?"
+                throwText.text = "쇠공 ${if (projectile.active) "비행" else "정지"} · 이동=${f(projectile.distanceTraveledMeters.toDouble())}/$target m · bounce=${projectile.bounceCount}/3\nworld=(${f(projectile.position.x.toDouble())}, ${f(projectile.position.y.toDouble())}, ${f(projectile.position.z.toDouble())})" +
                     if (hitWorld != null) "\n충돌=(${f(hitWorld.x.toDouble())}, ${f(hitWorld.y.toDouble())}, ${f(hitWorld.z.toDouble())})" else ""
             }
             metricsText.text = "Depth FPS ${f(metrics.depthFps)}  ·  분석 ${metrics.pointCount} / 투영 ${snapshot?.imagePointCount ?: 0}\nPC ${f(metrics.pointGenerationMillis)} ms  ·  Placement ${f(metrics.placementEvaluationMillis)} ms"

@@ -94,7 +94,7 @@ if (length.isValid) {
 - 색상은 화면 내 유효 Depth의 5~95 percentile을 inverse-depth 상대 척도로 펼쳐 근거리 물체의 작은 깊이 차이를 강조
 - 화면 투영점은 분석용 3D point보다 최대 4배 촘촘하게 생성하며, 분석용 point 수와 투영점 수를 HUD에 별도로 표시
 - `길이 측정` 모드에서 두 지점을 탭하면 각각의 Depth Z를 3D로 역투영해 두 world point 사이의 실제 길이를 cm/m로 표시
-- `공 던지기`는 화면을 뒤로 당겼다 놓는 slingshot UX로 현재 ARCore camera pitch/yaw 방향에 공을 발사하고, IR Point Cloud 국소 평면과 충돌하면 반동과 `GROUND/SURFACE HIT` world 위치를 표시
+- `공 던지기`는 화면을 뒤로 당겼다 놓는 slingshot UX로 ARCore camera pitch/yaw 방향에 쇠공을 발사한다. 조준선에서 얻은 IR Depth까지 실제 이동한 뒤에만 충돌을 시작하며, 최대 3회 반동과 `GROUND/SURFACE HIT` world 위치를 표시한다.
 - RGB 윤곽과 Depth 점의 정합을 즉시 비교하며 `Freeze`, `Points ON/OFF`, 객체 preset과 placement 결과를 확인
 - Settings: 첫 화면은 `안정 / 균형 / 디테일` preset만 제공하며 전문 threshold는 접힌 `세부 설정`에서 조절
 - 설정은 `SharedPreferences`에 로컬 저장되며 `Reset to Default`로 복원된다.
