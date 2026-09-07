@@ -49,7 +49,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 
 ## Verification
 
-- `depth-placement-core` synthetic unit test 5개 통과: 평면 normal, 20° 경사, 바닥 배치, 장애물 검출, 분석/투영 sampling 밀도 분리
+- `depth-placement-core` synthetic unit test 6개 통과: 평면 normal, 20° 경사, 바닥 배치, 장애물 검출, 분석/투영 sampling 밀도 분리, 두 점 사이 실제 길이
 - `depth-placement-arcore` release AAR build 성공
 - `depth-placement-debug` release AAR build 성공
 - `test-app` debug APK build 성공
@@ -58,6 +58,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 - `SM-S908N` 설치 및 ARCore camera/IMU/VIO tracking 초기화 로그 확인. 잠금 화면 상태여서 시각 결과 측정은 대기 중.
 - 정확도 판별을 위해 테스트 앱 기본 화면을 분리된 3D viewer에서 RGB camera 위 Depth pixel 직접 투영 방식으로 변경했다.
 - 근거리 구분을 위해 5~95 percentile inverse-depth 상대 색상을 적용하고, 분석 부하와 분리된 고밀도 투영 sample을 추가했다.
+- 두 Depth 지점을 선택해 3D Euclidean length와 양 끝점의 Z 깊이를 계산하는 측정 기능을 추가했다.
 - Depth 입력부터 3D 좌표, 상대 색상 투영, 국소 평면·장애물·가구 배치 판정까지 현재 구현을 실험 기술 문서로 정리했다.
 
 ## Next

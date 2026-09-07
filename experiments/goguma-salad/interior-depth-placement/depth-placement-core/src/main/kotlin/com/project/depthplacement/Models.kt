@@ -64,6 +64,25 @@ enum class PlacementFailureReason {
     OBSTACLE_DETECTED,
 }
 
+enum class LengthMeasurementFailureReason { NO_DEPTH_FRAME, OUTSIDE_DEPTH_IMAGE, NO_VALID_DEPTH }
+
+data class MeasuredDepthPoint(
+    val position: Vec3,
+    val depthMeters: Float,
+    val imageX: Float,
+    val imageY: Float,
+)
+
+data class LengthMeasurementResult(
+    val isValid: Boolean,
+    val lengthMeters: Float,
+    val startPoint: Vec3?,
+    val endPoint: Vec3?,
+    val startDepthMeters: Float,
+    val endDepthMeters: Float,
+    val failureReason: LengthMeasurementFailureReason?,
+)
+
 data class PlacementPose(
     val position: Vec3,
     /** Quaternion in x, y, z, w order. */

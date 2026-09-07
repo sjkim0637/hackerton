@@ -52,6 +52,16 @@ class DepthPlacementEngineTest {
         }
     }
 
+    @Test fun `two depth pixels produce metric 3D length`() {
+        engine.start()
+        engine.updateDepthFrame(floorFrame())
+        val result = engine.measureLength(10f, 20f, 30f, 20f)
+        assertTrue(result.isValid, result.toString())
+        assertEquals(0.2f, result.lengthMeters, 0.0001f)
+        assertEquals(1f, result.startDepthMeters, 0.0001f)
+        assertEquals(1f, result.endDepthMeters, 0.0001f)
+    }
+
     private fun floorFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(
         width = 40,
         height = 40,

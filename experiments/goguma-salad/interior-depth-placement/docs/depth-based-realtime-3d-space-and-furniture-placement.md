@@ -90,6 +90,17 @@ worldPoint = cameraPose × cameraPoint
 
 결과 좌표계는 ARCore world coordinate이며 거리 단위는 meter이다. Point마다 원본 Depth 좌표와 confidence도 함께 유지한다.
 
+### 5.1 두 지점 사이의 실제 길이
+
+길이 측정에서는 사용자가 고른 두 Depth pixel을 각각 위 공식으로 3D world point `P1`, `P2`로 변환한다. 이후 `Z`값의 차이만 사용하는 것이 아니라 세 축의 차이를 모두 포함한 Euclidean distance를 계산한다.
+
+```text
+length = |P2 - P1|
+       = sqrt((x2-x1)² + (y2-y1)² + (z2-z1)²)
+```
+
+따라서 같은 깊이에 놓인 두 지점의 가로·세로 길이도 계산할 수 있다. 선택 pixel에 유효 Depth가 없을 때는 주변 `5×5` 영역에서 가장 가까운 유효 pixel을 사용하며, 두 지점의 `Z`와 최종 길이를 각각 meter와 centimeter로 표시한다.
+
 ## 6. Filter와 시간 안정화
 
 기본 처리 순서는 다음과 같다.

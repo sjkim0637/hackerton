@@ -29,6 +29,7 @@ import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.project.depthplacement.DepthPlacementEngine
 import com.project.depthplacement.DepthPlacementEngineFactory
+import com.project.depthplacement.MeasuredDepthPoint
 import com.project.depthplacement.PlacementConfig
 import com.project.depthplacement.PlacementObjectSize
 import com.project.depthplacement.PlacementResult
@@ -133,9 +134,6 @@ class MainActivity : AppCompatActivity() {
         val frame = FrameLayout(this)
         val projected = DepthProjectionView(this).apply {
             setPointSize(renderConfig.pointSize)
-            onDepthTap = { u, v ->
-                lastResult = engine.evaluatePlacement(u, v, objectSize)
-            }
         }
         projectionView = projected
         frame.addView(projected, FrameLayout.LayoutParams(-1, -1))
@@ -143,7 +141,8 @@ class MainActivity : AppCompatActivity() {
         val metricsText = text("Waiting for depth…")
         val resultText = text("화면을 탭하면 배치를 평가합니다.")
         val rangeText = text("상대 깊이 범위를 계산하는 중…")
-        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText)
+        val measurementText = text("길이 측정: 대기")
+        hud.addView(metricsText); hud.addView(text("RGB + 상대 Depth  가까움 ■ 빨강 → 초록 → 파랑 ■ 멀리")); hud.addView(rangeText); hud.addView(resultText); hud.addView(measurementText)
         val preset = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Chair 0.6×0.6×1.0m", "Small 0.2×0.2×0.2m", "Trash Can 0.4×0.4×0.7m", "Custom…"))
             setSelection(0)
@@ -155,9 +154,47 @@ class MainActivity : AppCompatActivity() {
             } }
         }
         hud.addView(preset)
+        var measuring = false
+        var measurementStart: MeasuredDepthPoint? = null
+        val measureButton = button("길이 측정") { }
+        projected.onDepthTap = { u, v ->
+            if (!measuring) {
+                lastResult = engine.evaluatePlacement(u, v, objectSize)
+            } else {
+                val start = measurementStart
+                if (start == null) {
+                    val point = engine.samplePoint(u, v)
+                    if (point == null) {
+                        measurementText.text = "길이 측정 실패: 선택 위치에 유효 Depth가 없습니다."
+                    } else {
+                        measurementStart = point
+                        projected.showMeasurement(point.imageX, point.imageY)
+                        measurementText.text = "길이 측정: 끝점을 탭하세요."
+                    }
+                } else {
+                    val end = engine.samplePoint(u, v)
+                    measurementText.text = if (end != null) {
+                        val measurement = engine.measureLength(start, end)
+                        projected.showMeasurement(start.imageX, start.imageY, end.imageX, end.imageY)
+                        "길이 ${f(measurement.lengthMeters.toDouble() * 100.0)}cm (${f(measurement.lengthMeters.toDouble())}m) · Z ${f(measurement.startDepthMeters.toDouble())}m → ${f(measurement.endDepthMeters.toDouble())}m"
+                    } else {
+                        "길이 측정 실패: 끝점에 유효 Depth가 없습니다."
+                    }
+                    measurementStart = null
+                }
+            }
+        }
+        measureButton.setOnClickListener {
+            measuring = !measuring
+            measurementStart = null
+            projected.clearMeasurement()
+            measureButton.text = if (measuring) "측정 종료" else "길이 측정"
+            measurementText.text = if (measuring) "길이 측정: 첫 지점을 탭하세요." else "길이 측정: 대기"
+        }
         hud.addView(buttonRow(
             button("Freeze") { projected.setFrozen(!projected.isFrozen()) },
             button("Points ON/OFF") { projected.setOverlayEnabled(!projected.isOverlayEnabled()) },
+            measureButton,
         ))
         frame.addView(hud, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         content.removeAllViews(); content.addView(frame)

@@ -13,6 +13,9 @@ interface DepthPlacementEngine {
     fun updateDepthFrame(frame: DepthFrameInput)
     fun evaluatePlacement(screenX: Float, screenY: Float, objectSize: PlacementObjectSize): PlacementResult
     fun evaluatePlacementAsync(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, callback: (PlacementResult) -> Unit)
+    fun samplePoint(screenX: Float, screenY: Float): MeasuredDepthPoint?
+    fun measureLength(startX: Float, startY: Float, endX: Float, endY: Float): LengthMeasurementResult
+    fun measureLength(start: MeasuredDepthPoint, end: MeasuredDepthPoint): LengthMeasurementResult
     fun getLatestPointCloud(): PointCloudSnapshot?
     fun getMetrics(): ProcessingMetrics
     fun updateConfig(config: PlacementConfig)
@@ -170,6 +173,78 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
     override fun evaluatePlacementAsync(screenX: Float, screenY: Float, objectSize: PlacementObjectSize, callback: (PlacementResult) -> Unit) {
         executor.execute { callback(evaluatePlacement(screenX, screenY, objectSize)) }
     }
+
+    override fun measureLength(startX: Float, startY: Float, endX: Float, endY: Float): LengthMeasurementResult {
+        val state = latest.get() ?: return failedLength(LengthMeasurementFailureReason.NO_DEPTH_FRAME)
+        val frame = state.input
+        if (!inside(frame, startX, startY) || !inside(frame, endX, endY)) {
+            return failedLength(LengthMeasurementFailureReason.OUTSIDE_DEPTH_IMAGE)
+        }
+        val cfg = config.get()
+        val start = measurementPoint(frame, startX, startY, cfg) ?: return failedLength(LengthMeasurementFailureReason.NO_VALID_DEPTH)
+        val end = measurementPoint(frame, endX, endY, cfg) ?: return failedLength(LengthMeasurementFailureReason.NO_VALID_DEPTH)
+        return lengthResult(start.toMeasuredPoint(), end.toMeasuredPoint())
+    }
+
+    override fun samplePoint(screenX: Float, screenY: Float): MeasuredDepthPoint? {
+        val state = latest.get() ?: return null
+        if (!inside(state.input, screenX, screenY)) return null
+        return measurementPoint(state.input, screenX, screenY, config.get())?.toMeasuredPoint()
+    }
+
+    override fun measureLength(start: MeasuredDepthPoint, end: MeasuredDepthPoint): LengthMeasurementResult =
+        lengthResult(start, end)
+
+    private fun lengthResult(start: MeasuredDepthPoint, end: MeasuredDepthPoint) =
+        LengthMeasurementResult(
+            isValid = true,
+            lengthMeters = (end.position - start.position).length(),
+            startPoint = start.position,
+            endPoint = end.position,
+            startDepthMeters = start.depthMeters,
+            endDepthMeters = end.depthMeters,
+            failureReason = null,
+        )
+
+    private fun PointSample.toMeasuredPoint() = MeasuredDepthPoint(position, depthMeters, u.toFloat(), v.toFloat())
+
+    private fun inside(frame: DepthFrameInput, x: Float, y: Float): Boolean =
+        x >= 0f && x < frame.width && y >= 0f && y < frame.height
+
+    /** Uses the nearest valid sample in a 5x5 neighborhood to tolerate sparse Depth holes. */
+    private fun measurementPoint(frame: DepthFrameInput, x: Float, y: Float, cfg: PlacementConfig): PointSample? {
+        val centerU = x.toInt().coerceIn(0, frame.width - 1)
+        val centerV = y.toInt().coerceIn(0, frame.height - 1)
+        var best: PointSample? = null
+        var bestDistance = Int.MAX_VALUE
+        var bestConfidence = -1f
+        for (v in (centerV - 2).coerceAtLeast(0)..(centerV + 2).coerceAtMost(frame.height - 1)) {
+            for (u in (centerU - 2).coerceAtLeast(0)..(centerU + 2).coerceAtMost(frame.width - 1)) {
+                val index = v * frame.width + u
+                val depth = (frame.depthMillimeters[index].toInt() and 0xffff) / 1000f
+                val confidence = frame.confidence?.get(index) ?: if (depth > 0f) 1f else 0f
+                if (depth <= 0f || depth !in cfg.minDepthMeters..cfg.maxDepthMeters || confidence < cfg.depthConfidenceThreshold) continue
+                val pixelDistance = (u - centerU) * (u - centerU) + (v - centerV) * (v - centerV)
+                if (pixelDistance > bestDistance || (pixelDistance == bestDistance && confidence <= bestConfidence)) continue
+                val cameraX = (u - frame.intrinsics.cx) * depth / frame.intrinsics.fx
+                val cameraY = (frame.intrinsics.cy - v) * depth / frame.intrinsics.fy
+                best = PointSample(frame.cameraPose.transform(cameraX, cameraY, -depth), u, v, confidence, depth)
+                bestDistance = pixelDistance
+                bestConfidence = confidence
+            }
+        }
+        return best
+    }
+
+    private fun failedLength(reason: LengthMeasurementFailureReason) = LengthMeasurementResult(
+        isValid = false,
+        lengthMeters = 0f,
+        startPoint = null,
+        endPoint = null,
+        startDepthMeters = 0f,
+        endDepthMeters = 0f,
+        failureReason = reason,
+    )
 
     private fun failed(reason: PlacementFailureReason, started: Long, fit: PlaneFit? = null, surface: SurfaceType = SurfaceType.UNKNOWN, points: Int = 0, slope: Float = 0f, obstacles: Int = 0, confidence: Float = 0f): PlacementResult {
         val elapsed = (System.nanoTime() - started) / 1e6
