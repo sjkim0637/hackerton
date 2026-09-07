@@ -5,6 +5,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.hackathon.interior.ar.ArSpaceController
+import com.hackathon.interior.ar.DepthPlacementController
 import com.hackathon.interior.databinding.ActivityMainBinding
 import com.hackathon.interior.furniture.CatalogController
 import com.hackathon.interior.furniture.FurnitureController
@@ -31,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var space: ArSpaceController
     private lateinit var furniture: FurnitureController
+    private lateinit var depthPlacement: DepthPlacementController
     private lateinit var keyframe: BackgroundKeyframe
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
@@ -44,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         val sceneView = binding.sceneView
 
         space = ArSpaceController(sceneView, lifecycle, binding.instructionText)
+        depthPlacement = DepthPlacementController()
 
         furniture = FurnitureController(
             activity = this,
@@ -52,6 +55,9 @@ class MainActivity : AppCompatActivity() {
             hitTestPreferring = space::hitTestPreferring,
             scope = lifecycleScope,
             serverBaseUrl = { removal.serverBaseUrl() },
+            validatePlacement = { x, y, size, wall, callback ->
+                depthPlacement.validate(space.latestFrame, x, y, size, wall, callback)
+            },
             onSelectionChanged = ::renderSelectionPanel,
         )
 
@@ -122,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         space.onFrame = {
+            space.latestFrame?.let(depthPlacement::onFrame)
             furniture.billboard()
             removal.onFrame()   // 결과 quad 를 벽 앵커에 스무딩해서 고정
             moved.onFrame()     // 평면 인식되면 이동 마커를 띄운다
@@ -134,7 +141,7 @@ class MainActivity : AppCompatActivity() {
             onLongPress = { _, node -> furniture.handleLongPress(node) },
             onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
             onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },
-            onMoveEnd = { _, _, _ -> if (!moved.onDragEnd()) furniture.endDrag() },
+            onMoveEnd = { _, me, _ -> if (!moved.onDragEnd()) furniture.endDrag(me) },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },
@@ -142,9 +149,15 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnGrow.setOnClickListener { furniture.scaleSelectedBy(FurnitureItem.SCALE_STEP) }
         binding.btnShrink.setOnClickListener { furniture.scaleSelectedBy(1f / FurnitureItem.SCALE_STEP) }
-        binding.btnRotate.setOnClickListener { furniture.rotateSelectedBy(15f) }
+        binding.btnRotateLeft.setOnClickListener { furniture.rotateSelectedBy(-15f) }
+        binding.btnRotateRight.setOnClickListener { furniture.rotateSelectedBy(15f) }
         binding.btnDeselect.setOnClickListener { furniture.deselect() }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
+    }
+
+    override fun onDestroy() {
+        if (::depthPlacement.isInitialized) depthPlacement.release()
+        super.onDestroy()
     }
 
     /** 선택된 가구가 있으면 하단 조작 패널을 채우고, 없으면 숨긴다. */
@@ -159,6 +172,8 @@ class MainActivity : AppCompatActivity() {
         val h = item.baseSize.y * 100f * f
         val d = item.baseSize.z * 100f * f
         binding.selectedNameText.text =
-            "%s  ·  %.0f×%.0f×%.0f cm  (x%.2f)".format(item.name, w, h, d, f)
+            "%s  ·  %.0f×%.0f×%.0f cm  (x%.2f · %.0f°)".format(
+                item.name, w, h, d, f, item.rotationDeg,
+            )
     }
 }

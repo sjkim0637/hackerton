@@ -15,3 +15,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Interior AR"
 include ':app'
+include ':depth-placement-core', ':depth-placement-arcore'
+project(':depth-placement-core').projectDir = file('../../goguma-salad/interior-depth-placement/depth-placement-core')
+project(':depth-placement-arcore').projectDir = file('../../goguma-salad/interior-depth-placement/depth-placement-arcore')

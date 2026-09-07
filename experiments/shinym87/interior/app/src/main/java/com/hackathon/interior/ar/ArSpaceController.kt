@@ -9,6 +9,7 @@ import com.google.ar.core.HitResult
 import com.google.ar.core.Plane
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
+import com.project.depthplacement.arcore.ArCoreDepthAdapter
 import io.github.sceneview.ar.ARSceneView
 import io.github.sceneview.ar.scene.PlaneRenderer
 
@@ -50,11 +51,13 @@ class ArSpaceController(
         sceneView.planeRenderer.isEnabled = true
         sceneView.planeRenderer.planeRendererMode = PlaneRenderer.PlaneRendererMode.RENDER_ALL
 
-        sceneView.configureSession { _, config ->
+        sceneView.configureSession { session, config ->
             // 바닥/책상 같은 수평면 + 벽 같은 수직면 모두 인식.
             config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
             // 실내 조명에 맞춰 오브젝트 밝기를 자동 조정 (없으면 Filament 오브젝트가 새까맣게 보임).
             config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            // 지원 기기에서는 가구 footprint 검증에 사용할 dense Depth를 함께 활성화한다.
+            ArCoreDepthAdapter.prepareConfig(session, config)
         }
 
         sceneView.onSessionFailed = { exception ->
@@ -76,14 +79,13 @@ class ArSpaceController(
     /**
      * 원하는 평면 종류를 우선해서 hitTest 한다.
      * TV/선반은 벽(수직), 소파/테이블 등은 바닥(수평)에 붙이려고 쓴다.
-     * 원하는 종류가 없으면 아무 평면이나(그마저 없으면 null) 돌려준다.
+     * 원하는 종류가 없으면 null을 반환한다. 벽 물체가 바닥에 놓이는 식의 fallback은 하지 않는다.
      */
     fun hitTestPreferring(xPx: Float, yPx: Float, wantVertical: Boolean): HitResult? {
         val preferred: Set<Plane.Type> =
             if (wantVertical) setOf(Plane.Type.VERTICAL)
             else setOf(Plane.Type.HORIZONTAL_UPWARD_FACING, Plane.Type.HORIZONTAL_DOWNWARD_FACING)
         return sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = preferred)
-            ?: sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
     }
 
     /**

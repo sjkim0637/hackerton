@@ -3,7 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ARCore needs the camera and OpenGL ES 3.0 -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 이 앱은 camera.ar 필수 앱이므로 ChromeOS 비카메라 호환 경고를 의도적으로 제외한다. -->
+    <uses-permission
+        android:name="android.permission.CAMERA"
+        tools:ignore="PermissionImpliesUnsupportedChromeOsHardware" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
 
     <!-- 키프레임 업로드 / 결과 폴링을 위해 로컬 서버(http://localhost:8000)에 접속 -->

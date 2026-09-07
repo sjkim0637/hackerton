@@ -334,11 +334,20 @@
                 android:text="＋" />
 
             <Button
-                android:id="@+id/btnRotate"
+                android:id="@+id/btnRotateLeft"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="회전 ⟳" />
+                android:minWidth="56dp"
+                android:text="↶ 15°" />
+
+            <Button
+                android:id="@+id/btnRotateRight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="56dp"
+                android:text="15° ↷" />
         </LinearLayout>
 
         <LinearLayout
