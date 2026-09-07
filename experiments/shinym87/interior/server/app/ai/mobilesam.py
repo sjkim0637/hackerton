@@ -12,13 +12,21 @@ MobileSAM(Segment Anything의 경량 증류 모델)을 쓴다.
 (`app/routers/scenes.py`)가 점 중심 정사각형 bbox 근사로 대체한다(품질은 떨어지지만
 항상 동작은 한다).
 
-인터페이스는 공식 SAM ONNX export(`segment-anything`/`MobileSAM` 저장소의
-`scripts/export_onnx_model.py` 산출물)와 동일한 decoder 입출력을 가정한다:
+인터페이스는 실제로 받은 모델 파일(`akbartus/MobileSAM-in-the-Browser`, SAMExporter로
+변환된 ONNX)의 입출력을 그대로 검증해서 맞춘 것이다 — 공식 SAM 저장소의
+`scripts/export_onnx_model.py` 산출물과는 입력 형태가 다르다:
 
-- encoder 입력: `(1, 3, 1024, 1024)` float32, SAM 픽셀 정규화
+- encoder 입력: `input_image`, `(H, W, 3)` float32 — **배치 차원 없음, HWC(NCHW 아님),
+  0~255 원본 픽셀 값**(SAMExporter가 정규화를 그래프 안에 이미 포함). 정사각형 1024×1024로
+  패딩하지 않고 긴 변만 1024로 리사이즈한 실제 크기를 그대로 넣는다(가로세로 비율 유지).
 - decoder 입력: `image_embeddings, point_coords, point_labels, mask_input,
-  has_mask_input, orig_im_size`
-- decoder 출력: `masks (1, 1, H, W)` 로짓, `iou_predictions`
+  has_mask_input, orig_im_size`. `point_coords`/`point_labels`는 실제 점 1개 + 더미 패딩
+  점 `(0, 0)`/레이블 `-1`을 항상 같이 보내야 한다(레이블 1개만 보내도 에러는 안 나지만,
+  `real_living_room.jpg`로 직접 비교해보니 패딩 점을 포함했을 때 사물 전체(예: TV 받침대·
+  케이블까지)를 더 안정적으로 잡았다). `orig_im_size`는 **리사이즈 전 원본** `[height, width]`
+  로 주면 decoder가 그래프 안의 Resize 로 마스크를 원본 해상도로 직접 돌려준다(우리가 따로
+  후처리로 리사이즈할 필요 없음).
+- decoder 출력: `masks (1, N, orig_h, orig_w)` 로짓, `iou_predictions (1, N)`.
 """
 from __future__ import annotations
 
@@ -34,8 +42,6 @@ from PIL import Image
 _log = logging.getLogger("interior.ai.mobilesam")
 
 _TARGET_LONG_SIDE = 1024
-_SAM_MEAN = np.array([123.675, 116.28, 103.53], dtype=np.float32)
-_SAM_STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
 
 
 @dataclass
@@ -51,19 +57,14 @@ def _resize_longest_side(im: Image.Image, target: int) -> tuple[Image.Image, flo
     return im.resize((new_w, new_h), Image.BILINEAR), scale
 
 
-def _preprocess(image_bytes: bytes) -> tuple[np.ndarray, float, tuple[int, int], tuple[int, int]]:
-    """SAM encoder 입력 텐서, 스케일, 리사이즈 후 크기, 원본 크기를 만든다."""
+def _preprocess(image_bytes: bytes) -> tuple[np.ndarray, float, tuple[int, int]]:
+    """encoder 입력 텐서(H,W,3 float32, 0~255), 리사이즈 배율, 원본 (w,h) 를 만든다."""
     with Image.open(io.BytesIO(image_bytes)) as im:
         im = im.convert("RGB")
         orig_size = im.size  # (w, h)
         resized, scale = _resize_longest_side(im, _TARGET_LONG_SIDE)
-        arr = np.asarray(resized, dtype=np.float32)
-
-    arr = (arr - _SAM_MEAN) / _SAM_STD
-    padded = np.zeros((_TARGET_LONG_SIDE, _TARGET_LONG_SIDE, 3), dtype=np.float32)
-    padded[: arr.shape[0], : arr.shape[1], :] = arr
-    tensor = padded.transpose(2, 0, 1)[None, :, :, :]  # (1, 3, 1024, 1024)
-    return tensor, scale, (resized.size[0], resized.size[1]), orig_size
+        arr = np.asarray(resized, dtype=np.float32)  # (h, w, 3), 0~255 그대로
+    return arr, scale, orig_size
 
 
 class MobileSamSegmenter:
@@ -96,28 +97,33 @@ class MobileSamSegmenter:
         self._ensure_loaded()
         assert self._encoder is not None and self._decoder is not None
 
-        tensor, scale, _resized_size, orig_size = _preprocess(image_bytes)
-        (embedding,) = self._encoder.run(None, {self._encoder.get_inputs()[0].name: tensor})
+        image_hwc, scale, orig_size = _preprocess(image_bytes)
+        (embedding,) = self._encoder.run(None, {"input_image": image_hwc})
 
         orig_w, orig_h = orig_size
-        point = np.array([[x_norm * orig_w * scale, y_norm * orig_h * scale]], dtype=np.float32)
-        point = point[None, :, :]  # (1, 1, 2)
-        label = np.array([[1]], dtype=np.float32)  # 1 = 전경(포함) 점
+        # 리사이즈된 이미지 픽셀 좌표계로 변환 (encoder 에 넣은 이미지 기준).
+        px, py = x_norm * orig_w * scale, y_norm * orig_h * scale
+        # 실제 점 + 더미 패딩 점(0,0)/레이블 -1. 패딩 없이 점 1개만 보내도 에러는
+        # 안 나지만, 사물의 받침대/케이블처럼 딸린 부분까지 포함한 마스크를 얻으려면
+        # 이 패딩 점 조합이 더 안정적이었다(모듈 docstring 참고).
+        point_coords = np.array([[[px, py], [0.0, 0.0]]], dtype=np.float32)
+        point_labels = np.array([[1, -1]], dtype=np.float32)
         mask_input = np.zeros((1, 1, 256, 256), dtype=np.float32)
         has_mask_input = np.zeros(1, dtype=np.float32)
+        # 리사이즈 전 원본 크기를 줘야 decoder 가 원본 해상도 마스크를 바로 돌려준다.
         orig_im_size = np.array([orig_h, orig_w], dtype=np.float32)
 
-        decoder_inputs = {
-            "image_embeddings": embedding,
-            "point_coords": point,
-            "point_labels": label,
-            "mask_input": mask_input,
-            "has_mask_input": has_mask_input,
-            "orig_im_size": orig_im_size,
-        }
-        names = {i.name for i in self._decoder.get_inputs()}
-        decoder_inputs = {k: v for k, v in decoder_inputs.items() if k in names}
-        outputs = self._decoder.run(None, decoder_inputs)
+        outputs = self._decoder.run(
+            None,
+            {
+                "image_embeddings": embedding,
+                "point_coords": point_coords,
+                "point_labels": point_labels,
+                "mask_input": mask_input,
+                "has_mask_input": has_mask_input,
+                "orig_im_size": orig_im_size,
+            },
+        )
         masks, iou_predictions = outputs[0], outputs[1]
 
         best = int(np.argmax(iou_predictions[0]))

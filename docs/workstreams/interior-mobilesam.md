@@ -60,24 +60,37 @@ IN_PROGRESS
 - `RemovalController`/`InteriorApiClient`/`MainActivity`를 실제로 `onPointSelected`에 연결해
   서버로 `PointRegion`을 보내는 앱 쪽 배선. AR 상태 기계(`RemovalController.kt`, 641줄)를
   깊이 이해하지 못한 채 blind edit 하는 위험을 피하려고 이번 Branch에서는 보류했다.
-- MobileSAM 모델 파일 자체(다운로드/커밋).
+- 모델 파일을 저장소에 커밋하는 것(로컬에 받아 실제로 돌려보긴 했다 — 아래 참고).
 - 앱 실기기 빌드 검증(이 환경엔 Android SDK/실기기가 없어 서버만 pytest로 검증했다).
 
 ## MobileSAM 모델 준비 (수동, 저장소에 커밋 안 함)
 
-1. 아래 중 하나에서 encoder/decoder ONNX를 받는다.
-   - 공식 저장소에서 직접 export: `ChaoningZhang/MobileSAM`의
-     `scripts/export_onnx_model.py --checkpoint mobile_sam.pt --model-type vit_t`
-   - 사전 export된 파일: `akbartus/MobileSAM-in-the-Browser` 저장소의 `models/` 폴더
-     (encoder 원본 + decoder 원본/양자화 버전 제공).
+이 Branch를 만들면서 실제로 아래 파일을 받아 `server/models/`(gitignore됨)에 두고
+`real_living_room.jpg`로 직접 돌려서 검증했다 — 문서만 보고 가정한 게 아니다.
+
+1. encoder/decoder ONNX 다운로드:
+   - encoder(약 28MB): `https://huggingface.co/spaces/Akbartus/projects/resolve/main/mobilesam.encoder.onnx`
+   - decoder(약 16.5MB, 일반 버전 — 양자화된 8.8MB 버전도 있음):
+     `https://raw.githubusercontent.com/akbartus/MobileSAM-in-the-Browser/main/models/mobilesam.decoder.onnx`
+   - 출처: `akbartus/MobileSAM-in-the-Browser` 저장소(`SAMExporter`로 변환, `ChaoningZhang/MobileSAM`
+     원 모델). 직접 export하려면 `ChaoningZhang/MobileSAM`의
+     `scripts/export_onnx_model.py --checkpoint mobile_sam.pt --model-type vit_t`.
 2. `.env`(gitignore됨) 또는 환경변수로 경로 지정:
    ```
-   INTERIOR_MOBILESAM_ENCODER_PATH=/path/to/mobilesam_encoder.onnx
-   INTERIOR_MOBILESAM_DECODER_PATH=/path/to/mobilesam_decoder.onnx
+   INTERIOR_MOBILESAM_ENCODER_PATH=/path/to/mobilesam.encoder.onnx
+   INTERIOR_MOBILESAM_DECODER_PATH=/path/to/mobilesam.decoder.onnx
    ```
 3. `pip install -r requirements.txt -r requirements-mobilesam.txt` (onnxruntime 추가 설치).
 4. 둘 중 하나라도 없거나 로드 실패하면 자동으로 bbox 근사로 대체되므로, 모델 없이도
    서버는 정상 동작한다(품질만 낮다) — 팀원 각자 환경에서 안전하게 개발 가능.
+
+**주의 — 이 모델은 "공식" SAM ONNX export와 입력 형태가 다르다.** 처음엔 공식 export
+스크립트 문서만 보고 `(1,3,1024,1024)` NCHW + SAM 평균/표준편차 정규화 + 정사각형 패딩으로
+짰는데, 실제로 받은 파일을 `onnxruntime`으로 열어 `get_inputs()`를 찍어보니 전혀 달랐다:
+encoder 입력은 `input_image` 이름의 `(H, W, 3)` — 배치 차원도 없고 HWC이고 정규화 없이
+0~255 원본 픽셀 그대로(정규화가 그래프 안에 있음). 실제 파일로 검증하지 않았다면 이
+버그를 그대로 커밋할 뻔했다 — `app/ai/mobilesam.py` 상단 docstring에 실측한 정확한
+계약을 적어뒀다.
 
 ## API 변경
 
@@ -92,10 +105,21 @@ IN_PROGRESS
 
 ## Verification
 
-- `experiments/shinym87/interior/server`에서 `pytest` 58개 통과(기존 47개 + 이번에 추가한
-  11개: `tests/test_mask.py`, `tests/test_mobilesam.py`, `test_api.py`의 point region 흐름).
-  MobileSAM 모델 파일 없이(테스트 기본 환경) bbox 근사 대체 경로로 검증했다 — 실제 ONNX
-  추론 정확도는 모델을 받아야 확인 가능(다음 단계).
+- **실제 MobileSAM 모델로 검증 완료** (위 "모델 준비" 절차대로 받은 진짜 encoder/decoder
+  ONNX, 목업 아님):
+  - `tests/test_mobilesam_real_model.py`: 모델 파일이 있으면 실행되고 없으면 자동
+    skip — `real_living_room.jpg`에 점을 찍어 원본 해상도(4032×3024) 마스크가 나오는지,
+    크기가 합리적인지(전체도 빈 것도 아님), IoU 점수가 높은지 확인.
+  - 수동 확인(테스트로 안 남김): 실제 `.env` 설정으로 서버를 띄우고
+    `POST /remove-object`에 `{"type":"point","point":[0.49,0.53]}`를 보내 job이 `done`까지
+    가고, `GET /objects`에 저장된 region이 실제 마스크(전체 화면의 약 5.3%, 640,402px)인
+    것까지 확인했다. 시각적으로도(마스크 PNG를 직접 열어봄) TV+받침대+케이블 모양의
+    깔끔한 실루엣이 나왔다 — 사각형 근사보다 명백히 낫다.
+  - 이 과정에서 처음 짠 전처리 가정(공식 SAM export 기준)이 실제 파일과 달라 버그였다는
+    걸 발견해 고쳤다(위 "주의" 참고) — 실제 파일로 검증하지 않았다면 몰랐을 문제.
+- `experiments/shinym87/interior/server`에서 `pytest` 60개 통과(기존 47개 + 13개: 위
+  실모델 테스트 2개 포함 `tests/test_mask.py`, `tests/test_mobilesam.py`,
+  `tests/test_mobilesam_real_model.py`, `test_api.py`의 point region 흐름).
 - `ruff check`: 이번에 건드린 파일 기준 통과(사전에 있던 `scenes.py`의 `File(...)` 기본값
   경고 1개는 이번 변경과 무관한 기존 항목이라 그대로 둠).
 - 앱(`BboxSelectionView.kt`) 변경은 컴파일/실기기 확인 못 함 — Android SDK 없는 환경에서
@@ -103,11 +127,14 @@ IN_PROGRESS
 
 ## Known Issues
 
-- MobileSAM 실제 추론 정확도/속도를 실사진으로 검증하지 못했다(모델 파일 미보유).
 - 앱이 아직 점을 서버로 안 보낸다 — 이 Branch는 서버 능력만 갖췄다.
 - `PointRegion` 하나만으로 여러 개 겹친 사물 중 무엇을 고를지는 MobileSAM의 판단에 맡긴다
   (SAM은 점 위치에서 가장 그럴듯한 사물 하나를 고르는데, 겹친 물체가 많으면 여전히 실패할
   수 있다 — 기존 PHASE 2 백로그의 "겹침" 이슈와 동일선상).
+- 추론 속도(지연시간)를 재지 않았다 — CPU 전용 onnxruntime, encoder 28MB/decoder 16.5MB
+  모델이라 실기기 요구 응답시간 안에 들어오는지는 실측이 필요하다.
+- 테스트용으로 받은 모델은 저장소에 없다 — 다른 개발자/CI는 위 "모델 준비" 절차를 직접
+  거쳐야 `test_mobilesam_real_model.py`가 skip 되지 않고 돈다.
 
 ## Next
 
@@ -118,9 +145,9 @@ IN_PROGRESS
    단, 기존 `resolveWall(rect)`(벽 hitTest로 실측 크기 표시)는 사각형의 네 변에 의존하므로,
    점 하나로는 그대로 못 쓴다 — 점 주변에 작은 hitTest 사각형을 합성하거나, 정밀 마스크가
    서버에서 오기 전까지는 실측 표시를 생략하는 방향을 검토해야 한다.
-2. MobileSAM 모델을 실제로 받아 실사진으로 정확도 확인(위 "모델 준비" 절차).
-3. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
+2. 겹친 사물 처리(여러 후보 마스크 중 선택 UI) 여부 결정 — SAM decoder는 여러 후보를
    `iou_predictions`로 함께 주므로, 상위 1개 대신 상위 N개를 앱에 보여줄 수도 있다.
+3. 추론 속도 실측, 필요하면 양자화 decoder(`mobilesam.decoder.quant.onnx`, 8.8MB)로 교체.
 4. 실기기에서 앱 빌드 확인 (`:app:assembleDebug`, 이 환경엔 Android SDK 없음).
 
 ## Integration Candidate
