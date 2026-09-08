@@ -18,7 +18,7 @@ goguma-salad + Codex
 
 ## Status
 
-REVIEW
+INTEGRATION
 
 ## Goal
 
@@ -97,6 +97,10 @@ REVIEW
 
 - `bb038c4` — 제공 Asset 기반 초기 제품 홈과 설정 분리
 - 다음 UI commit — 화보 기반 객체 직접 선택과 통합 AR 작업 화면
+
+## Handoff
+
+[interior-assets-ui-magazine-ar](../handoffs/interior-assets-ui-magazine-ar.md) — 화면 흐름, 화보 추가 방법, Depth 판정 조사 결과, 남은 일
 
 ## Updated
 
