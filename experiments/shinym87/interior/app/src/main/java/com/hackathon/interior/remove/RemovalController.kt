@@ -1,7 +1,6 @@
 package com.hackathon.interior.remove
 
 import android.app.Activity
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.RectF
@@ -49,6 +48,7 @@ class RemovalController(
     private val sceneView: ARSceneView,
     private val space: ArSpaceController,
     private val binding: ActivityMainBinding,
+    private val serverBaseUrl: () -> String,
     private val onBeforeCapture: () -> Unit = {},
     private val onAfterCapture: () -> Unit = {},
     /**
@@ -63,8 +63,6 @@ class RemovalController(
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val prefs = activity.getSharedPreferences("interior", Context.MODE_PRIVATE)
-
     private var selectionMode = false
     private var bboxNorm: FloatArray? = null          // [x, y, w, h] — sceneView 대비 정규화
     private var wallAnchor: Anchor? = null
@@ -85,8 +83,6 @@ class RemovalController(
     private var smoothedPos: FloatArray? = null
 
     init {
-        binding.serverUrlInput.setText(prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL))
-
         // 0번은 "선택 안 함" 안내 항목. 사용자가 실제 종류를 고르기 전엔 삭제 요청을 막는다.
         binding.objectTypeSpinner.adapter = ArrayAdapter(
             activity,
@@ -252,29 +248,6 @@ class RemovalController(
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
 
-    /** 스킴 보정 + 끝 슬래시 제거만 (부수효과 없음). */
-    private fun normalizeServerUrl(input: String): String {
-        var url = input.trim()
-        if (url.isEmpty()) url = DEFAULT_SERVER_URL
-        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
-        return url.trimEnd('/')
-    }
-
-    /** 입력창의 서버 주소를 정규화하고 입력창/prefs 에 반영한다. (삭제 요청 시) */
-    private fun currentBaseUrl(): String {
-        val url = normalizeServerUrl(binding.serverUrlInput.text?.toString().orEmpty())
-        prefs.edit().putString(KEY_SERVER_URL, url).apply()
-        binding.serverUrlInput.setText(url)
-        return url
-    }
-
-    /** 지금 저장된 서버 주소를 부수효과 없이 돌려준다. (이동 배치 저장/복원 API 용) */
-    fun serverBaseUrl(): String {
-        val raw = binding.serverUrlInput.text?.toString()?.trim().orEmpty()
-            .ifEmpty { prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL }
-        return normalizeServerUrl(raw)
-    }
-
     private fun requestRemoval() {
         if (busy) return
         val bbox = bboxNorm ?: run {
@@ -285,7 +258,7 @@ class RemovalController(
             status("지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')")
             return
         }
-        val client = InteriorApiClient(currentBaseUrl())
+        val client = InteriorApiClient(serverBaseUrl())
         busy = true
         setControlsEnabled(false)
         status("현재 화면 캡처 중…")
@@ -599,14 +572,11 @@ class RemovalController(
     private fun setControlsEnabled(enabled: Boolean) {
         binding.btnTvSelectMode.isEnabled = enabled
         binding.btnClearSelection.isEnabled = enabled
-        binding.serverUrlInput.isEnabled = enabled
         binding.objectTypeSpinner.isEnabled = enabled
         refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
     }
 
     private companion object {
-        const val DEFAULT_SERVER_URL = "http://192.168.0.2:8000"
-        const val KEY_SERVER_URL = "server_url"
 
         /** 선택 사각형이 화면 면적의 이 비율 이상이면 "넓다" 경고. */
         const val LARGE_SELECTION_FRACTION = 0.40f

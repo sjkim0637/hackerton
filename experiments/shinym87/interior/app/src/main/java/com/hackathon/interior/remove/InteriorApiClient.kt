@@ -14,14 +14,10 @@ import java.net.URL
  * PHASE 1 목표(흐름 연결)에 맞춰 최소 구현이다. OkHttp 같은 의존성 없이
  * `HttpURLConnection` + `org.json` 만 쓴다.
  *
- * `baseUrl` 은 [RemovalController] 가 화면 상단 입력창 값을 정규화해서 넘긴다
- * (실기기에서는 서버 PC 의 LAN IP). [DEFAULT_BASE_URL] 은 입력이 비었을 때의 예비값.
+ * `baseUrl`은 앱 설정 화면의 단일 저장소가 정규화해서 넘긴다.
+ * 실기기에서는 서버 PC의 LAN IP를 사용한다.
  */
-class InteriorApiClient(private val baseUrl: String = DEFAULT_BASE_URL) {
-
-    companion object {
-        const val DEFAULT_BASE_URL = "http://192.168.0.2:8000"
-    }
+class InteriorApiClient(private val baseUrl: String) {
 
     data class JobStatus(
         val jobId: String,

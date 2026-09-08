@@ -2,6 +2,8 @@ package com.hackathon.interior
 
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.hackathon.interior.ar.ArSpaceController
@@ -13,6 +15,7 @@ import com.hackathon.interior.furniture.FurnitureItem
 import com.hackathon.interior.keyframe.BackgroundKeyframe
 import com.hackathon.interior.remove.MovedObjectController
 import com.hackathon.interior.remove.RemovalController
+import com.hackathon.interior.settings.AppSettings
 
 /**
  * 카메라 기반 공간 편집 / AR 가구 재배치 시뮬레이터 — 공간·AR 작업 흐름의 진입점.
@@ -37,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
     private lateinit var catalog: CatalogController
+    private lateinit var settings: AppSettings
+    private var settingsOpenedFromHome = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         val sceneView = binding.sceneView
+        settings = AppSettings(this)
 
         space = ArSpaceController(sceneView, lifecycle, binding.instructionText)
         depthPlacement = DepthPlacementController()
@@ -54,7 +60,7 @@ class MainActivity : AppCompatActivity() {
             hitTest = space::hitTest,
             hitTestPreferring = space::hitTestPreferring,
             scope = lifecycleScope,
-            serverBaseUrl = { removal.serverBaseUrl() },
+            serverBaseUrl = { settings.serverBaseUrl },
             validatePlacement = { x, y, size, wall, callback ->
                 depthPlacement.validate(space.latestFrame, x, y, size, wall, callback)
             },
@@ -88,6 +94,7 @@ class MainActivity : AppCompatActivity() {
             sceneView = sceneView,
             space = space,
             binding = binding,
+            serverBaseUrl = { settings.serverBaseUrl },
             onBeforeCapture = beforeCapture,
             onAfterCapture = afterCapture,
             onRemovalApplied = { sid, jid, type, bmp, pose, src, w, h ->
@@ -102,7 +109,7 @@ class MainActivity : AppCompatActivity() {
             space = space,
             binding = binding,
             scope = lifecycleScope,
-            serverBaseUrl = { removal.serverBaseUrl() },
+            serverBaseUrl = { settings.serverBaseUrl },
             furnitureHasSelection = furniture::hasSelection,
             status = { binding.removalStatusText.text = it },
             onAlsoRestore = { furniture.restoreCatalogFromServer() },  // "서버 배치 복원" 이 카탈로그도 복원
@@ -113,7 +120,7 @@ class MainActivity : AppCompatActivity() {
             activity = this,
             scope = lifecycleScope,
             binding = binding,
-            serverBaseUrl = { removal.serverBaseUrl() },
+            serverBaseUrl = { settings.serverBaseUrl },
             onOpen = { furniture.ensureCatalogScene() },  // "가구 추가" 최초에 scene 확보 + 복원
             onPick = { item ->
                 furniture.beginCatalogPlacement(
@@ -153,6 +160,85 @@ class MainActivity : AppCompatActivity() {
         binding.btnRotateRight.setOnClickListener { furniture.rotateSelectedBy(15f) }
         binding.btnDeselect.setOnClickListener { furniture.deselect() }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
+
+        setupProductNavigation()
+    }
+
+    private fun setupProductNavigation() {
+        binding.homeHeroImage.setAssetCrop("interior_asset_BG.png", 0.013f, 0.016f, 0.343f, 0.409f, 58)
+        binding.homeCategoryLiving.setAssetCrop("interior_asset_BG.png", 0.013f, 0.428f, 0.096f, 0.586f)
+        binding.homeCategoryDining.setAssetCrop("interior_asset_BG.png", 0.194f, 0.428f, 0.277f, 0.586f)
+        binding.homeCategoryDecor.setAssetCrop("interior_asset_BG.png", 0.376f, 0.428f, 0.461f, 0.586f)
+
+        binding.serverUrlInput.setText(settings.serverBaseUrl)
+        binding.btnHomeArPlacement.setOnClickListener { showWorkspace(WorkspaceMode.PLACEMENT) }
+        binding.btnHomeSpaceEdit.setOnClickListener { showWorkspace(WorkspaceMode.REMOVAL) }
+        binding.btnHomeCatalog.setOnClickListener {
+            showWorkspace(WorkspaceMode.PLACEMENT)
+            catalog.show()
+        }
+        binding.btnWorkspaceHome.setOnClickListener { showHome() }
+        binding.btnHomeSettings.setOnClickListener { showSettings(fromHome = true) }
+        binding.btnWorkspaceSettings.setOnClickListener { showSettings(fromHome = false) }
+        binding.btnSettingsSave.setOnClickListener {
+            settings.serverBaseUrl = binding.serverUrlInput.text?.toString().orEmpty()
+            binding.serverUrlInput.setText(settings.serverBaseUrl)
+            Toast.makeText(this, "서버 주소를 저장했습니다", Toast.LENGTH_SHORT).show()
+            closeSettings()
+        }
+        binding.btnSettingsCancel.setOnClickListener {
+            binding.serverUrlInput.setText(settings.serverBaseUrl)
+            closeSettings()
+        }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    binding.settingsScreen.visibility == View.VISIBLE -> closeSettings()
+                    binding.homeScreen.visibility != View.VISIBLE -> showHome()
+                    else -> finish()
+                }
+            }
+        })
+        showHome()
+    }
+
+    private fun showWorkspace(mode: WorkspaceMode) {
+        binding.homeScreen.visibility = View.GONE
+        binding.settingsScreen.visibility = View.GONE
+        binding.arTopPanel.visibility = View.VISIBLE
+        val removalVisible = if (mode == WorkspaceMode.REMOVAL) View.VISIBLE else View.GONE
+        binding.arPrimaryActions.visibility = if (mode == WorkspaceMode.PLACEMENT) View.VISIBLE else View.GONE
+        binding.removalTypeRow.visibility = removalVisible
+        binding.removalSelectionRow.visibility = removalVisible
+        binding.removalRequestRow.visibility = removalVisible
+        binding.removalStatusText.visibility = removalVisible
+        binding.instructionText.text = if (mode == WorkspaceMode.REMOVAL) {
+            "지울 사물을 선택하고 화면에서 영역을 그리세요"
+        } else {
+            "Depth 직접 배치 · 원하는 바닥이나 벽을 탭하세요"
+        }
+    }
+
+    private fun showHome() {
+        furniture.cancelCatalogPlacement()
+        furniture.deselect()
+        binding.catalogPanel.visibility = View.GONE
+        binding.settingsScreen.visibility = View.GONE
+        binding.arTopPanel.visibility = View.GONE
+        binding.selectionPanel.visibility = View.GONE
+        binding.movedObjectPanel.visibility = View.GONE
+        binding.homeScreen.visibility = View.VISIBLE
+    }
+
+    private fun showSettings(fromHome: Boolean) {
+        settingsOpenedFromHome = fromHome
+        binding.serverUrlInput.setText(settings.serverBaseUrl)
+        binding.settingsScreen.visibility = View.VISIBLE
+    }
+
+    private fun closeSettings() {
+        binding.settingsScreen.visibility = View.GONE
+        if (settingsOpenedFromHome) showHome()
     }
 
     override fun onDestroy() {
@@ -176,4 +262,6 @@ class MainActivity : AppCompatActivity() {
                 item.name, w, h, d, f, item.rotationDeg,
             )
     }
+
+    private enum class WorkspaceMode { PLACEMENT, REMOVAL }
 }

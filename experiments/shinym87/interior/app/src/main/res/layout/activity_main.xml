@@ -42,12 +42,43 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/arTopPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:orientation="vertical"
         android:paddingTop="40dp"
         android:paddingHorizontal="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnWorkspaceHome"
+                android:layout_width="52dp"
+                android:layout_height="44dp"
+                android:backgroundTint="#D91D1B19"
+                android:text="⌂"
+                android:textColor="@android:color/white"
+                android:textSize="20sp" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <Button
+                android:id="@+id/btnWorkspaceSettings"
+                android:layout_width="52dp"
+                android:layout_height="44dp"
+                android:backgroundTint="#D91D1B19"
+                android:text="⚙"
+                android:textColor="@android:color/white"
+                android:textSize="18sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/instructionText"
@@ -61,6 +92,7 @@
             android:shadowRadius="6" />
 
         <LinearLayout
+            android:id="@+id/arPrimaryActions"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -101,26 +133,9 @@
 
         <!-- 사물 제거 흐름 (P1-2/P1-3/P1-8/P1-9) -->
 
-        <!-- 서버 주소. 실기기에서는 localhost 가 아니라 서버 PC 의 LAN IP 를 넣어야 한다.
-             입력값은 저장되어 다음 실행에도 유지된다. -->
-        <EditText
-            android:id="@+id/serverUrlInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#33FFFFFF"
-            android:textColor="@android:color/white"
-            android:textColorHint="#99FFFFFF"
-            android:textSize="13sp"
-            android:padding="8dp"
-            android:singleLine="true"
-            android:inputType="textUri"
-            android:imeOptions="actionDone"
-            android:hint="서버 주소 (예: http://192.168.0.10:8000)"
-            android:importantForAutofill="no" />
-
         <!-- 지울 사물 종류. 서버 요청의 objectType 이 이 선택값을 따라간다. -->
         <LinearLayout
+            android:id="@+id/removalTypeRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -148,6 +163,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/removalSelectionRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -170,6 +186,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/removalRequestRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
@@ -451,5 +468,296 @@
             android:enabled="false"
             android:text="우리 집에 적용" />
     </LinearLayout>
+
+    <!-- 제공 Asset 디자인을 적용한 제품 진입 화면. AR 기능은 선택 후에만 노출한다. -->
+    <ScrollView
+        android:id="@+id/homeScreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F3EEE7"
+        android:fillViewport="true"
+        android:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="720dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="42dp"
+            android:paddingBottom="26dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-light"
+                        android:letterSpacing="0.22"
+                        android:text="MY HOME"
+                        android:textColor="#211E1B"
+                        android:textSize="24sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:letterSpacing="0.32"
+                        android:text="INTERIOR"
+                        android:textColor="#8B7256"
+                        android:textSize="10sp" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btnHomeSettings"
+                    android:layout_width="54dp"
+                    android:layout_height="48dp"
+                    android:backgroundTint="#211E1B"
+                    android:contentDescription="설정"
+                    android:text="⚙"
+                    android:textColor="@android:color/white"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="330dp"
+                android:layout_marginTop="22dp">
+
+                <com.hackathon.interior.ui.AtlasCropView
+                    android:id="@+id/homeHeroImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="따뜻한 거실 인테리어" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom"
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:letterSpacing="0.12"
+                        android:text="CREATE YOUR SPACE"
+                        android:textColor="#E5BD7D"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="7dp"
+                        android:text="새로운 공간,\n새로운 일상"
+                        android:textColor="@android:color/white"
+                        android:textSize="30sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="카메라로 공간을 읽고 가구를 직접 배치해 보세요."
+                        android:textColor="#D9FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="어떤 작업을 시작할까요?"
+                android:textColor="#211E1B"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="기능별 화면은 필요할 때만 열립니다."
+                android:textColor="#7C746C"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnHomeArPlacement"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="18dp"
+                android:backgroundTint="#211E1B"
+                android:text="▣   내 집에 AR로 배치하기   ›"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnHomeSpaceEdit"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="#DAB476"
+                android:text="✦   사진에서 사물 지우기   ›"
+                android:textAllCaps="false"
+                android:textColor="#211E1B"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnHomeCatalog"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="#FFFFFF"
+                android:text="▤   가구 카탈로그 둘러보기   ›"
+                android:textAllCaps="false"
+                android:textColor="#211E1B"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:letterSpacing="0.1"
+                android:text="CURATED FOR YOU"
+                android:textColor="#8B7256"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <com.hackathon.interior.ui.AtlasCropView
+                    android:id="@+id/homeCategoryLiving"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="5dp"
+                    android:layout_weight="1"
+                    android:contentDescription="거실 가구" />
+
+                <com.hackathon.interior.ui.AtlasCropView
+                    android:id="@+id/homeCategoryDining"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="5dp"
+                    android:layout_weight="1"
+                    android:contentDescription="주방 식탁" />
+
+                <com.hackathon.interior.ui.AtlasCropView
+                    android:id="@+id/homeCategoryDecor"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:contentDescription="데코 소품" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 서버 주소 등 기술 설정은 작업 화면에서 분리한다. -->
+    <FrameLayout
+        android:id="@+id/settingsScreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F3EEE7"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#FFFFFFFF"
+            android:elevation="10dp"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.08"
+                android:text="SETTINGS"
+                android:textColor="#A17B45"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="앱 설정"
+                android:textColor="#211E1B"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Interior API 서버 주소"
+                android:textColor="#403A34"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/serverUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#A17B45"
+                android:hint="http://192.168.0.10:8000"
+                android:importantForAutofill="no"
+                android:imeOptions="actionDone"
+                android:inputType="textUri"
+                android:singleLine="true"
+                android:textColor="#211E1B"
+                android:textColorHint="#887E75" />
+
+            <TextView
+                android:id="@+id/settingsServerHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="휴대폰과 서버 PC가 같은 Wi-Fi에 있어야 합니다."
+                android:textColor="#7C746C"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnSettingsSave"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="24dp"
+                android:backgroundTint="#DAB476"
+                android:text="저장"
+                android:textColor="#211E1B"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnSettingsCancel"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#211E1B"
+                android:text="닫기"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+    </FrameLayout>
 
 </FrameLayout>

@@ -35,15 +35,14 @@ class CatalogController(
         binding.btnCatalogClose.setOnClickListener { hide() }
         binding.btnCatalogApply.setOnClickListener { applySelected() }
 
-        // 첫 화면의 핵심 진입점: 카메라 위에 브로셔를 바로 보여 준다.
-        show()
+        // 제품 홈에서 사용자가 카탈로그를 선택했을 때만 연다.
     }
 
     private fun toggle() {
         if (binding.catalogPanel.visibility == View.VISIBLE) hide() else show()
     }
 
-    private fun show() {
+    fun show() {
         binding.catalogPanel.visibility = View.VISIBLE
         onOpen()
         fetchAndRender()
