@@ -37,6 +37,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.sqrt
 
 /**
@@ -88,6 +90,10 @@ class RemovalController(
     private var awaitingCoverAnchor = false
     private var pendingCoverPatch: Bitmap? = null
     private var pendingCoverRegion: FloatArray? = null
+
+    /** TEMP-DIAG(B): 커버 quad 를 만든 시점의 카메라 pose. 지금 카메라와의 차이를 로그로 본다. */
+    private var coverCamPoseAtBuild: Pose? = null
+    private var coverFrameLog = 0L
 
     private var busy = false
 
@@ -455,7 +461,16 @@ class RemovalController(
         val cx = (region[0] + region[2] / 2f) * sceneView.width
         val cy = (region[1] + region[3] / 2f) * sceneView.height
         // planeIsVertical 은 선택 시점 값이라 힌트로만 쓰고, 없으면 아무 평면이나.
-        return space.hitTestPreferring(cx, cy, planeIsVertical)
+        val hit = space.hitTestPreferring(cx, cy, planeIsVertical)
+        // TEMP-DIAG(B): 이 화면 좌표는 "선택 시점" 기준이다. 결과가 온 지금 카메라가 그때와
+        // 다르면, 같은 픽셀이 다른 월드 지점을 가리켜 커버 quad 앵커가 엉뚱한 곳에 박힌다.
+        Log.d(
+            TAG,
+            "hitTestSourceRegion: 화면(%.0f,%.0f)px → hitPose=%s · 현재 camPose=%s".format(
+                cx, cy, poseStr(hit?.hitPose), poseStr(space.latestFrame?.camera?.pose),
+            ),
+        )
+        return hit
     }
 
     /** 커버 quad(AnchorNode + ImageNode)를 만들어 씬에 붙인다. */
@@ -481,6 +496,14 @@ class RemovalController(
         awaitingCoverAnchor = false
         pendingCoverPatch = null
         pendingCoverRegion = null
+        coverCamPoseAtBuild = space.latestFrame?.camera?.pose
+        Log.d(
+            TAG,
+            "buildResultNode: node#%d anchorPose=%s vertical=%b patch=%.2fx%.2fm camAtBuild=%s".format(
+                node.hashCode(), poseStr(anchor.pose), isVertical,
+                patchWidthM, patchHeightM, poseStr(coverCamPoseAtBuild),
+            ),
+        )
     }
 
     /**
@@ -539,7 +562,39 @@ class RemovalController(
         p.getRotationQuaternion(quat, 0)
         node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
         node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
+
+        // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
+        // 카메라의 위치·회전 차이가 클수록, 평면 이미지 1장으론 시차(parallax)를 못 살려
+        // 실제 사물과 quad 가 어긋나 보인다(반투명 잔상). anchorΔ 는 앵커 자체 표류.
+        if (++coverFrameLog % 60L == 0L) {
+            val camNow = space.latestFrame?.camera?.pose
+            val built = coverCamPoseAtBuild
+            if (camNow != null && built != null) {
+                Log.d(
+                    TAG,
+                    ("[cover B] 커버 생성시점 대비 카메라 Δ이동=%.2fm Δ회전=%.1f° · " +
+                        "현재 카메라→커버앵커=%.2fm · anchorΔ(pose vs 스무딩)=%.3fm · track=%s").format(
+                        distance(camNow, built), quatAngleDeg(camNow, built),
+                        distance(camNow, anchor.pose),
+                        distance(anchor.pose, Pose(floatArrayOf(nx, ny, nz), quat)),
+                        ts,
+                    ),
+                )
+            }
+        }
     }
+
+    /** 두 pose 회전의 각도 차(도). 커버 quad 재투영 어긋남 진단용. */
+    private fun quatAngleDeg(a: Pose, b: Pose): Float {
+        val qa = FloatArray(4).also { a.getRotationQuaternion(it, 0) }
+        val qb = FloatArray(4).also { b.getRotationQuaternion(it, 0) }
+        var dot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]
+        dot = abs(dot).coerceIn(0f, 1f)
+        return Math.toDegrees(2.0 * acos(dot.toDouble())).toFloat()
+    }
+
+    private fun poseStr(p: Pose?): String =
+        if (p == null) "null" else "t=(%.2f,%.2f,%.2f)".format(p.tx(), p.ty(), p.tz())
 
     // ---------------------------------------------- 전체화면 결과 프리뷰 (P1-9)
 
@@ -559,6 +614,7 @@ class RemovalController(
 
     private fun clearResult() {
         resultNode?.let { node ->
+            Log.d(TAG, "clearResult: 커버 quad node#${node.hashCode()} 제거")
             sceneView.removeChildNode(node)
             runCatching { node.destroy() }
         }
@@ -567,6 +623,7 @@ class RemovalController(
         awaitingCoverAnchor = false
         pendingCoverPatch = null
         pendingCoverRegion = null
+        coverCamPoseAtBuild = null
         binding.btnToggleRemoval.visibility = View.GONE
         binding.resultOverlay.visibility = View.GONE
         binding.resultOverlay.setImageDrawable(null)

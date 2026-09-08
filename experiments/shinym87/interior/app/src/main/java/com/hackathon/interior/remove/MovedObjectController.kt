@@ -25,6 +25,9 @@ import io.github.sceneview.math.Size
 import io.github.sceneview.node.ImageNode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.acos
+import kotlin.math.sqrt
 
 /**
  * PHASE 4/5 사용자 1 — 삭제한 사물을 **바로 드래그해서 다른 위치로 이동**, 서버에 저장/복원.
@@ -77,6 +80,10 @@ class MovedObjectController(
     private var imageNode: ImageNode? = null
     private var labelNode: ImageNode? = null
     private var onVertical = false
+
+    /** TEMP-DIAG(A/B): 마커 생성 시점 카메라 pose + onFrame 로그 스로틀. */
+    private var markerCamPoseAtCreate: Pose? = null
+    private var frameLog = 0
 
     init {
         binding.btnMovedHome.setOnClickListener { placeAtOriginal() }
@@ -182,6 +189,23 @@ class MovedObjectController(
 
     /** 매 프레임(MainActivity space.onFrame). 마커를 아직 못 띄웠으면 평면 인식되는 대로 띄운다. */
     fun onFrame() {
+        // TEMP-DIAG(A): 이동 마커가 하나만 존재하고, 드래그 후에도 원래 자리에 새 노드가
+        // 안 남는지 확인. node# 가 계속 같고 worldPos 가 "새 위치" 면 A 는 아니다.
+        node?.let { n ->
+            if (++frameLog % 60 == 0) {
+                val camNow = space.latestFrame?.camera?.pose
+                val atCreate = markerCamPoseAtCreate
+                val dPos = if (camNow != null && atCreate != null) distancePose(camNow, atCreate) else -1f
+                val dAng = if (camNow != null && atCreate != null) quatAngleDeg(camNow, atCreate) else -1f
+                Log.d(
+                    TAG,
+                    "[moved A] node#%d anchorPos=%s track=%s dragging=%b · 생성 후 카메라 Δ이동=%.2fm Δ회전=%.1f°".format(
+                        n.hashCode(), poseStr(n.anchor.pose),
+                        runCatching { n.anchor.trackingState }.getOrNull(), dragging, dPos, dAng,
+                    ),
+                )
+            }
+        }
         if (!armed || node != null || !awaitingPlane) return
         if (placeMarkerNow()) {
             awaitingPlane = false
@@ -296,12 +320,19 @@ class MovedObjectController(
         dragging = false
         val n = node ?: return true
         // 손을 뗀 위치에 최종 고정: 새 앵커로 재고정 (큐브 finalizeDrag 와 동일).
+        // ※ 노드는 그대로 두고 anchor 만 교체한다 — 원래 자리에 노드/마커를 새로 안 남긴다.
         val fresh = runCatching { sceneView.session?.createAnchor(n.pose) }.getOrNull()
         if (fresh != null) {
             runCatching { n.anchor.detach() }
             n.anchor = fresh
         }
         n.updateAnchorPose = true
+        Log.d(
+            TAG,
+            "onDragEnd: node#%d 같은 노드 재고정(새 노드/마커 생성 안 함) newAnchorPose=%s freshAnchor=%b".format(
+                n.hashCode(), poseStr(n.anchor.pose), fresh != null,
+            ),
+        )
         scheduleSave()   // 제스처 완료 → 최신 상태 저장
         return true
     }
@@ -483,9 +514,35 @@ class MovedObjectController(
         imageNode = img
         labelNode = lbl
         awaitingPlane = false
+        markerCamPoseAtCreate = space.latestFrame?.camera?.pose
         enableButtons(home = originalPose != null, adjust = true, restore = true, undo = true, clear = true)
         applyChildTransforms()
-        Log.d(TAG, "이동 마커: type=$objectType vertical=$onVertical pose=${anchor.pose}")
+        Log.d(
+            TAG,
+            "setNode: 이동 마커 node#%d type=%s vertical=%b anchorPose=%s camAtCreate=%s".format(
+                n.hashCode(), objectType, onVertical, poseStr(anchor.pose), poseStr(markerCamPoseAtCreate),
+            ),
+        )
+    }
+
+    // ------------------------------------------------------- TEMP-DIAG 헬퍼
+
+    private fun poseStr(p: Pose?): String =
+        if (p == null) "null" else "t=(%.2f,%.2f,%.2f)".format(p.tx(), p.ty(), p.tz())
+
+    private fun distancePose(a: Pose, b: Pose): Float {
+        val dx = a.tx() - b.tx()
+        val dy = a.ty() - b.ty()
+        val dz = a.tz() - b.tz()
+        return sqrt(dx * dx + dy * dy + dz * dz)
+    }
+
+    private fun quatAngleDeg(a: Pose, b: Pose): Float {
+        val qa = FloatArray(4).also { a.getRotationQuaternion(it, 0) }
+        val qb = FloatArray(4).also { b.getRotationQuaternion(it, 0) }
+        var dot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]
+        dot = abs(dot).coerceIn(0f, 1f)
+        return Math.toDegrees(2.0 * acos(dot.toDouble())).toFloat()
     }
 
     /** 자식(이미지/라벨)의 회전·배율·오프셋을 잡는다. */
@@ -507,6 +564,7 @@ class MovedObjectController(
     /** 화면의 이동된 노드만 제거한다. scene/job/복원 정보는 유지. */
     private fun clearMovedNode() {
         node?.let {
+            Log.d(TAG, "clearMovedNode: node#${it.hashCode()} 제거 (remove + anchor.detach + destroy)")
             sceneView.removeChildNode(it)
             runCatching { it.anchor.detach() }
             runCatching { it.destroy() }

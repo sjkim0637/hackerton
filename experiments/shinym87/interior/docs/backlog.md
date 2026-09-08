@@ -132,6 +132,11 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   마지막 fallback 추가(평면 미인식이어도 마커가 떠서 바로 끌 수 있음). 제스처/hitTest/onFrame
   임시 진단 로그(tag `InteriorAR`) 추가. `docs/handoffs/user2.md`,
   루트 `docs/handoffs/interior-removal-fallback.md`(goguma-salad 보고서)와 동일 건.
+- [진행] 진단 로그: 이동 후 원래 자리에 반투명 "잔상"(실제 사물 + 커버 quad 어긋나 겹침).
+  A(드래그 잔여 노드) / B(평면 이미지 재투영 시야각 어긋남 · 스테일 화면좌표 앵커) 를
+  로그로 구분. 코드상 A 는 아님(이동 마커 node 1개, onDragEnd 는 anchor 만 교체).
+  `[cover B]`/`[moved A]`/`hitTestSourceRegion`/`buildResultNode`/`setNode` 로그 추가
+  (tag `InteriorAR`, `TEMP-DIAG`). 실기기 재현으로 원인 확정 후 수정 예정. `docs/handoffs/user2.md`.
 - [DONE] 진단/수정: "결과 닫기 (라이브로)" 시 삭제 자리 커버 quad 도 같이 꺼져 실제
   사물 + 이동 사물이 겹쳐 2개로 보임. 원인: 전체화면 프리뷰 표시와 앵커 고정 결과
   quad(`resultNode`) 표시를 `showingAfter` 하나로 묶어서 토글. 수정: 둘을 분리 —

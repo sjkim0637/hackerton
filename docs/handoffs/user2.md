@@ -13,6 +13,69 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 진단 로그 추가 — 이동 후 원래 자리에 남는 "반투명 잔상" (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: 모니터 삭제→이동 후 화면에 3개가 동시에
+보인다 — (1) 실제 모니터, (2) 원래 자리 근처 반투명 잔상, (3) 새 자리의 이동된 모니터.
+(2)의 정체를 A/B 로 나눠 로그를 넣었다. **아직 수정은 안 함** — 실기기 재현으로 원인
+확정 후 대응.
+
+### (2)는 `RemovalController.resultNode`(커버 quad)일 가능성이 높다
+
+직전 커밋에서 커버 quad 는 "결과가 있는 한 항상 렌더링" 하도록 바꿨다. 즉 원래 자리에
+반투명(EdgeFade 알파 램프) 패치가 계속 떠 있는 건 **의도된 동작**이다. 문제는 그게
+실제 모니터와 **어긋나** 둘 다 보인다는 것. 두 원인 후보:
+
+**A) 드래그 노드 정리 누락?** — 코드상으로는 아님.
+- `MovedObjectController` 의 이동 마커는 `node` **하나뿐**이다. `onDrag` 는 같은 `node`
+  의 `pose` 만 바꾸고, `onDragEnd` 는 **노드는 그대로 두고 `anchor` 만 교체**한다
+  (새 노드/마커 생성 없음). 원래 자리에 남을 임시 노드가 없다.
+- 새 노드는 `setNode()` 에서만 생기고, `setNode` 는 맨 앞에서 `clearMovedNode()`
+  (remove + `anchor.detach()` + `destroy()`) 를 부른다. `arm`/`disarm`/`undo`/"치우기"
+  도 `clearMovedNode`.
+- 로그로 확인: `setNode: … node#<id>`, `clearMovedNode: node#<id> 제거`,
+  `onDragEnd: node#<id> 같은 노드 재고정(새 노드/마커 생성 안 함)`,
+  `[moved A] node#<id> anchorPos=… dragging=…`(60프레임마다). **node# 가 계속 하나로
+  유지되고 drag 후 anchorPos 가 "새 위치" 면 A 아님.**
+
+**B) 평면 이미지 재투영 한계 (시야각 어긋남)** — 유력.
+- 커버 quad 는 한 시점에서 찍은 **평면 텍스처 1장**을 한 앵커에 붙인 것이다. 생성 때와
+  다른 각도/위치에서 보면 실제 3D 장면의 시차(parallax)를 못 살려 실물과 어긋난다.
+- 로그: `[cover B] 커버 생성시점 대비 카메라 Δ이동=…m Δ회전=…° · 현재 카메라→커버앵커=…m
+  · anchorΔ … · track=…`(60프레임마다). **Δ이동/Δ회전이 크고 그때 잔상이 심해지면 B.**
+- `buildResultNode: node#… anchorPose=… camAtBuild=…` — 커버 quad 앵커·생성 시점 카메라.
+
+**B의 하위 원인 — 앵커가 애초에 엉뚱한 곳:** 선택 시점에 `wallAnchor` 를 못 잡았으면
+`applyResult`/`onFrame` 이 `hitTestSourceRegion` 으로 **선택 시점의 화면 좌표(정규화
+bbox 중심)** 를 지금 다시 hitTest 한다. 그 사이 카메라가 움직였으면 같은 픽셀이 다른
+월드 지점을 가리켜 커버 quad 가 실제 모니터에서 벗어난 곳에 박힌다.
+- 로그: `hitTestSourceRegion: 화면(x,y)px → hitPose=… · 현재 camPose=…`. **선택할 때와
+  결과 왔을 때 camPose 가 크게 다르면 이 경로가 범인.**
+
+### 추가한 로그 (tag `InteriorAR`, 모두 `TEMP-DIAG` 주석)
+
+| 위치 | 로그 | 무엇을 보나 |
+|---|---|---|
+| `RemovalController.buildResultNode` | `buildResultNode: node#… anchorPose=… camAtBuild=…` | 커버 quad 생성 위치·시점 카메라 |
+| `RemovalController.hitTestSourceRegion` | `hitTestSourceRegion: 화면(x,y)px → hitPose=… camPose=…` | 스테일 화면좌표 재투영 여부 |
+| `RemovalController.onFrame` (60f) | `[cover B] … Δ이동 Δ회전 … 카메라→커버앵커 … anchorΔ … track=…` | 시야각 어긋남(B) 정량 |
+| `RemovalController.clearResult` | `clearResult: 커버 quad node#… 제거` | 커버 quad 소멸 시점 |
+| `MovedObjectController.setNode` | `setNode: 이동 마커 node#… anchorPose=… camAtCreate=…` | 마커 생성(개수/위치) |
+| `MovedObjectController.clearMovedNode` | `clearMovedNode: node#… 제거` | 마커 소멸 |
+| `MovedObjectController.onDragEnd` | `onDragEnd: node#… 같은 노드 재고정(새 노드 안 만듦) …` | A(드래그 잔여 노드) 배제 |
+| `MovedObjectController.onFrame` (60f) | `[moved A] node#… anchorPos=… track=… dragging=… · 생성 후 카메라 Δ…` | 마커가 하나로 유지되는지 |
+
+빌드 `:app:assembleDebug` 성공.
+
+### 재현 시 볼 것
+
+1. `setNode` 로그가 이동 1회당 몇 번 찍히나 (1번이어야 A 아님). `[moved A]` 의 node# 가
+   계속 같은지, `clearMovedNode` 없이 `[moved A]` 가 두 줄씩 안 나오는지.
+2. 삭제 영역 선택할 때 vs 결과 왔을 때 `camPose` 차이 (`hitTestSourceRegion` 로그) —
+   크면 커버 앵커가 잘못 박힌 것(B 하위).
+3. 잔상이 심한 순간 `[cover B]` 의 Δ이동/Δ회전 값 — 클수록 재투영 한계(B).
+4. `anchorΔ` 가 계속 튀면 앵커 표류(ARCore 재추적).
+
 ## 진단 + 수정 — "결과 닫기 (라이브로)" 시 커버 quad 도 같이 꺼져 사물이 2개로 보임 (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 증상: "삭제 결과 보기" → "결과 닫기 (라이브로)"
