@@ -13,6 +13,75 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 진단 + 수정 — "결과 닫기 (라이브로)" 시 커버 quad 도 같이 꺼져 사물이 2개로 보임 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: "삭제 결과 보기" → "결과 닫기 (라이브로)"
+로 전환하면 삭제 자리를 가려주던 결과 오버레이가 사라지고 실제 모니터가 다시 보인다.
+거기에 이동시킨 모니터 이미지까지 새 자리에 있어 모니터가 2개.
+
+### 1. "결과 닫기 (라이브로)" 핸들러
+
+`RemovalController.toggleBeforeAfter()` (init 에서 `btnToggleRemoval` 클릭에 연결).
+**정지 화면 on/off 와 앵커 고정 결과 quad 의 표시/숨김을 하나의 `showingAfter`
+불리언으로 같이 건드리고 있었다:**
+
+```kotlin
+fun toggleBeforeAfter() {
+    showingAfter = !showingAfter
+    resultNode?.isVisible = showingAfter          // ← 월드 앵커 커버 quad 까지 껐다
+    if (resultOverlay.drawable != null) resultOverlay.visibility = if (showingAfter) VISIBLE else GONE
+    ...
+}
+```
+
+`onFrame()` 도 `if (!node.isVisible && showingAfter) node.isVisible = true` 라, 한 번
+끄면 다시 안 켜졌다.
+
+### 2. 원인 확인 → 맞음. 게다가 사용자 케이스엔 커버 quad 가 아예 없었다.
+
+- 두 관심사(전체화면 프리뷰 / 월드 커버 quad)가 `showingAfter` 하나에 묶여 있었다. ✅
+- 추가로: "삭제 결과 보기" / "결과 닫기 (라이브로)" **버튼 텍스트는 `resultNode == null`
+  일 때만** 나오는 분기였다. 즉 사용자 세션에선 선택 시점에 `wallAnchor` 를 못 잡아
+  **커버 quad(`resultNode`) 가 처음부터 만들어지지 않았고**, 2D 전체화면 이미지만
+  있었다. 그걸 닫으면 실제 모니터가 그대로 → 이동 마커와 합쳐 2개.
+
+### 3. 수정 — "정지화면 표시"와 "커버 quad 표시"를 분리
+
+`RemovalController`:
+
+- **커버 quad (`resultNode`) 는 결과가 있는 한 항상 렌더링.**
+  `onFrame()` 이 추적 상태만 보고(`STOPPED` 면 숨김, 아니면 `isVisible = true`)
+  관리한다. `toggleBeforeAfter` 는 이제 이 노드를 **건드리지 않는다**.
+- **선택 시점에 평면이 없어도 커버 quad 를 만든다.** `applyResult` 에서 `wallAnchor`
+  가 null 이면 그 자리에서 사물 영역(`hitTestSourceRegion`, 정규화 bbox 중심)을
+  hitTest 해 앵커를 잡는다(결과가 도착한 이 무렵엔 대개 평면이 잡혀 있음). 그래도
+  없으면 `awaitingCoverAnchor=true` → `onFrame` 이 매 프레임 재시도해 잡히는 즉시
+  `buildResultNode`. (전체화면으로 덮지 않고 라이브 유지 — 이전 fallback 수정과 일관.)
+- **`toggleBeforeAfter()` 는 전체화면 프리뷰(`resultOverlay`)만** on/off.
+  버튼 텍스트도 항상 "삭제 결과 보기" ↔ "결과 닫기 (라이브로)" 하나로 통일.
+  (앵커 유무로 갈라지던 "삭제 전(원본)/삭제 후(보임)" 텍스트·동작 제거 — 커버는 늘
+  떠 있어야 하므로 "패치를 숨겨 원본과 비교" 기능은 의도적으로 없앴다.)
+- `applyResult`: 전체화면 프리뷰용 `full` 비트맵은 앵커 유무와 무관하게 항상
+  `resultOverlay` 에 세팅(기본 `GONE`).
+- `captureSceneJpeg`: 캡처 후 복구를 `resultNode?.isVisible = showingAfter` →
+  `= true` 로.
+- 새 헬퍼: `hitTestSourceRegion(region)`, `buildResultNode(anchor, isVertical, patch)`.
+  새 상태: `awaitingCoverAnchor`, `pendingCoverPatch`, `pendingCoverRegion`
+  (`clearResult` 에서 함께 정리).
+
+### 4. 이동 기능과의 상호작용 → 정상 (동시 표시)
+
+`RemovalController.resultNode`(원래 자리 커버)와 `MovedObjectController.node`(새 자리
+이동 마커)는 **서로 독립된 노드**다. 한쪽이 생겨도 다른 쪽을 지우는 코드 경로가 없다.
+- 삭제 → 커버 quad 가 원래 자리에 고정(실제 모니터 가림).
+- `moved.arm()` → 이동 마커가 (originalPose 있으면 그 자리, 없으면 사물 영역) 에 생성.
+  처음엔 커버와 같은 자리에 겹쳐 뜨고, 드래그해서 새 자리로 옮기면 커버는 원래 자리에
+  그대로 남는다 → **지운 자리는 가려지고, 새 자리엔 사물이 보이는** 그림.
+- 둘을 함께 지우는 건 `clearSelection()`(명시적 "선택 취소") → `clearResult()` +
+  `onRemovalCleared()` → `moved.disarm()` 뿐.
+
+빌드 `:app:assembleDebug` 성공.
+
 ## 진단 + 수정 — 이동된 사물이 원본보다 ~1.5배 크게 표시 (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 텀블러(=objectType `other`)를 삭제 후 이동하니

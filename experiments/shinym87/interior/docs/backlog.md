@@ -132,6 +132,14 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   마지막 fallback 추가(평면 미인식이어도 마커가 떠서 바로 끌 수 있음). 제스처/hitTest/onFrame
   임시 진단 로그(tag `InteriorAR`) 추가. `docs/handoffs/user2.md`,
   루트 `docs/handoffs/interior-removal-fallback.md`(goguma-salad 보고서)와 동일 건.
+- [DONE] 진단/수정: "결과 닫기 (라이브로)" 시 삭제 자리 커버 quad 도 같이 꺼져 실제
+  사물 + 이동 사물이 겹쳐 2개로 보임. 원인: 전체화면 프리뷰 표시와 앵커 고정 결과
+  quad(`resultNode`) 표시를 `showingAfter` 하나로 묶어서 토글. 수정: 둘을 분리 —
+  커버 quad 는 결과가 있는 한 항상 렌더링(`onFrame` 이 추적 상태만 관리), 선택 시점에
+  평면이 없었으면 사물 영역 hitTest 로 재확보(`hitTestSourceRegion`/`awaitingCoverAnchor`,
+  `onFrame` 재시도). `toggleBeforeAfter` 는 전체화면 프리뷰만 on/off. 이동 마커
+  (`MovedObjectController.node`)와 커버 quad 는 독립 → 지운 자리 가림 + 새 자리 사물
+  동시 표시 정상. `docs/handoffs/user2.md`.
 - [DONE] 진단/수정: 이동된 사물이 원본보다 ~1.5배 크게 표시. 주원인은 `MARKER_SCALE=1.35`
   (터치 편의 목적이었으나 마커 `isTouchable=false` + 드래그가 화면 좌표 기반이라 이득 0)
   → `1.0`. 부수: `patchWidthM/HeightM`·`baseW/baseH` 하한을 0.2/0.15m → 0.05m (텀블러가
