@@ -39,7 +39,7 @@ class MockMagazineFeedProvider : MagazineFeedProvider {
             id = "warm-reading-room",
             issue = "SEPTEMBER · LIVING",
             title = "빛이 머무는 독서 공간",
-            description = "사진 속 + 표시가 있는 가구를 눌러 내 공간에서 확인해 보세요.",
+            description = "사진 속 은은한 점을 눌러 이 가구를 내 공간에서 확인해 보세요.",
             crop = AtlasCrop(0.013f, 0.016f, 0.343f, 0.409f),
             objects = listOf(
                 MagazineObject("lounge-chair-01", "라운지 체어", "chair", 0.82f, 0.88f, 0.78f, "floor", 0.31f, 0.72f),
@@ -63,7 +63,7 @@ class MockMagazineFeedProvider : MagazineFeedProvider {
             id = "night-lounge",
             issue = "EDITOR'S PICK · NIGHT LOUNGE",
             title = "짙은 톤으로 만든 휴식",
-            description = "가구를 누르면 별도 버튼 없이 바로 AR 작업 화면으로 연결됩니다.",
+            description = "점을 누르면 이름이 떠오르고, 한 번 더 누르면 AR 작업 화면으로 이동합니다.",
             crop = AtlasCrop(0.639f, 0.224f, 0.885f, 0.400f),
             objects = listOf(
                 MagazineObject("accent-chair-01", "월넛 암체어", "chair", 0.76f, 0.86f, 0.80f, "floor", 0.69f, 0.68f),

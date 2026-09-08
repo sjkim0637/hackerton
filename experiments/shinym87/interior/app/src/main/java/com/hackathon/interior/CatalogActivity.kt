@@ -1,13 +1,17 @@
 package com.hackathon.interior
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.GestureDetector
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import android.widget.Button
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -27,6 +31,8 @@ class CatalogActivity : AppCompatActivity() {
     private val provider: MagazineFeedProvider = MockMagazineFeedProvider()
     private var pages: List<MagazinePage> = emptyList()
     private var pageIndex = 0
+    private var openTag: View? = null
+    private val pulseAnimators = mutableListOf<AnimatorSet>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +74,12 @@ class CatalogActivity : AppCompatActivity() {
                 changePage(if (distance < 0) 1 else -1)
                 return true
             }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // 마커나 태그가 아닌 화보 여백을 눌렀을 때는 열려 있던 태그만 닫는다.
+                closeOpenTag()
+                return false
+            }
         })
         val listener = View.OnTouchListener { _, event -> detector.onTouchEvent(event) }
         binding.magazineImage.setOnTouchListener(listener)
@@ -87,11 +99,22 @@ class CatalogActivity : AppCompatActivity() {
 
     private fun renderPage() {
         val page = pages[pageIndex]
-        with(page.crop) {
+        val customPhoto = findCustomPhotoAsset(page.id)
+        if (customPhoto != null) {
+            // 화보 전용 세로 사진이 준비되면 atlas crop 대신 이 원본을 화면 전체에 꽉 채운다.
             binding.magazineImage.setAssetCrop(
-                "interior_asset_BG.png", left, top, right, bottom,
-                scrimAlpha = 20, fitCenter = true,
+                customPhoto, 0f, 0f, 1f, 1f,
+                scrimAlpha = 20, fitCenter = false,
             )
+        } else {
+            with(page.crop) {
+                // 실제 화보 사진이 준비되기 전까지 쓰는 임시 Mock. 세로 화면을 빈 여백 없이 채우도록
+                // 잘라 채우기(cover)로 표시한다. Known Issues에 실제 콘텐츠 공급 필요성을 기록해 둔다.
+                binding.magazineImage.setAssetCrop(
+                    "interior_asset_BG.png", left, top, right, bottom,
+                    scrimAlpha = 20, fitCenter = false,
+                )
+            }
         }
         binding.issueText.text = page.issue
         binding.pageTitleText.text = page.title
@@ -100,26 +123,114 @@ class CatalogActivity : AppCompatActivity() {
         binding.hotspotLayer.post { renderHotspots(page) }
     }
 
+    /**
+     * 화보 위에는 텍스트 버튼을 바로 노출하지 않는다. 대신 은은하게 숨쉬는 점 마커만 두고,
+     * 마커를 누르면 그 옆에 가구 이름과 "AR로 보기" 태그가 떠오른다. 태그를 다시 누르면 AR로 이동한다.
+     */
     private fun renderHotspots(page: MagazinePage) {
         binding.hotspotLayer.removeAllViews()
+        pulseAnimators.forEach { it.cancel() }
+        pulseAnimators.clear()
+        openTag = null
+
         page.objects.forEach { item ->
-            val button = Button(this).apply {
-                text = "+  ${item.name}"
-                textSize = 11f
+            val markerSize = dp(42f).toInt()
+            val dotSize = dp(9f).toInt()
+            val ringSize = dp(20f).toInt()
+
+            val marker = FrameLayout(this).apply {
+                isClickable = true
+                isFocusable = true
+            }
+
+            val ring = View(this).apply {
+                setBackgroundResource(com.hackathon.interior.R.drawable.bg_hotspot_ring)
+            }
+            marker.addView(ring, FrameLayout.LayoutParams(ringSize, ringSize, android.view.Gravity.CENTER))
+
+            val dot = View(this).apply {
+                setBackgroundResource(com.hackathon.interior.R.drawable.bg_hotspot_dot)
+            }
+            marker.addView(dot, FrameLayout.LayoutParams(dotSize, dotSize, android.view.Gravity.CENTER))
+
+            val tag = TextView(this).apply {
+                text = "${item.name}  ·  AR로 보기 ›"
+                textSize = 12f
                 setTextColor(Color.WHITE)
-                isAllCaps = false
-                setPadding(dp(10f).toInt(), 0, dp(10f).toInt(), 0)
+                setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(14f).toInt(), dp(10f).toInt())
                 setBackgroundResource(com.hackathon.interior.R.drawable.bg_magazine_hotspot)
+                alpha = 0f
+                visibility = View.GONE
                 setOnClickListener { openObjectInAr(item) }
             }
-            val size = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(42f).toInt())
-            binding.hotspotLayer.addView(button, size)
-            button.post {
+
+            binding.hotspotLayer.addView(
+                tag,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT),
+            )
+            binding.hotspotLayer.addView(marker, FrameLayout.LayoutParams(markerSize, markerSize))
+
+            marker.setOnClickListener {
+                marker.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                if (openTag === tag && tag.visibility == View.VISIBLE) {
+                    closeOpenTag()
+                } else {
+                    closeOpenTag()
+                    showTag(tag)
+                }
+            }
+
+            marker.post {
                 val point = binding.magazineImage.mapCropPoint(item.x, item.y)
-                button.x = (point.x - button.width / 2f).coerceIn(0f, binding.hotspotLayer.width - button.width.toFloat())
-                button.y = (point.y - button.height / 2f).coerceIn(0f, binding.hotspotLayer.height - button.height.toFloat())
+                marker.x = (point.x - marker.width / 2f)
+                    .coerceIn(0f, (binding.hotspotLayer.width - marker.width).coerceAtLeast(0).toFloat())
+                marker.y = (point.y - marker.height / 2f)
+                    .coerceIn(0f, (binding.hotspotLayer.height - marker.height).coerceAtLeast(0).toFloat())
+                startPulse(ring)
+
+                tag.post {
+                    val tagX = (marker.x + marker.width / 2f - tag.width / 2f)
+                        .coerceIn(0f, (binding.hotspotLayer.width - tag.width).coerceAtLeast(0).toFloat())
+                    val spaceAbove = marker.y
+                    val tagY = if (spaceAbove > tag.height + dp(12f)) {
+                        marker.y - tag.height - dp(10f)
+                    } else {
+                        marker.y + marker.height + dp(10f)
+                    }
+                    tag.x = tagX
+                    tag.y = tagY.coerceIn(0f, (binding.hotspotLayer.height - tag.height).coerceAtLeast(0).toFloat())
+                }
             }
         }
+    }
+
+    private fun showTag(tag: View) {
+        tag.visibility = View.VISIBLE
+        tag.alpha = 0f
+        tag.scaleX = 0.9f
+        tag.scaleY = 0.9f
+        tag.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start()
+        openTag = tag
+    }
+
+    private fun closeOpenTag() {
+        val tag = openTag ?: return
+        tag.animate().alpha(0f).setDuration(120).withEndAction { tag.visibility = View.GONE }.start()
+        openTag = null
+    }
+
+    private fun startPulse(ring: View) {
+        val scaleX = ObjectAnimator.ofFloat(ring, View.SCALE_X, 1f, 1.9f).apply { repeatCount = ObjectAnimator.INFINITE }
+        val scaleY = ObjectAnimator.ofFloat(ring, View.SCALE_Y, 1f, 1.9f).apply { repeatCount = ObjectAnimator.INFINITE }
+        val alpha = ObjectAnimator.ofFloat(ring, View.ALPHA, 0.75f, 0f).apply { repeatCount = ObjectAnimator.INFINITE }
+        val set = AnimatorSet().apply {
+            playTogether(scaleX, scaleY, alpha)
+            duration = 1500
+            interpolator = LinearInterpolator()
+            startDelay = (200..900).random().toLong()
+        }
+        set.start()
+        pulseAnimators.add(set)
     }
 
     private fun openObjectInAr(item: MagazineObject) {
@@ -147,6 +258,23 @@ class CatalogActivity : AppCompatActivity() {
         binding.btnCatalogSettingsClose.setOnClickListener {
             binding.catalogSettingsScreen.visibility = View.GONE
         }
+    }
+
+    override fun onDestroy() {
+        pulseAnimators.forEach { it.cancel() }
+        pulseAnimators.clear()
+        super.onDestroy()
+    }
+
+    /**
+     * `assets/magazine/<page.id>.jpg|png`가 있으면 그 세로 사진을 그대로 쓴다.
+     * ImageGen이나 sjkim0637이 실제 화보 사진을 넣어 주면 코드 변경 없이 바로 반영된다.
+     */
+    private fun findCustomPhotoAsset(pageId: String): String? {
+        return listOf("jpg", "png", "webp").map { "magazine/$pageId.$it" }
+            .firstOrNull { name ->
+                runCatching { assets.open(name).use { } }.isSuccess
+            }
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
