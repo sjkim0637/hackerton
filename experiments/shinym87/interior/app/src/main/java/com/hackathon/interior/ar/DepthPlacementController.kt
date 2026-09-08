@@ -5,6 +5,7 @@ import android.os.Looper
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.project.depthplacement.DepthPlacementEngineFactory
+import com.project.depthplacement.PlacementConfig
 import com.project.depthplacement.PlacementFailureReason
 import com.project.depthplacement.PlacementObjectSize
 import com.project.depthplacement.PlacementTarget
@@ -28,7 +29,7 @@ data class DepthPlacementDecision(
  * ARCore plane 배치를 허용하고, 실제 Depth 결과가 있을 때만 품질 gate로 사용한다.
  */
 class DepthPlacementController {
-    private val engine = DepthPlacementEngineFactory.create().also { it.start() }
+    private val engine = DepthPlacementEngineFactory.create(ROOM_CONFIG).also { it.start() }
     private val frameExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastCaptureNanos = 0L
@@ -123,11 +124,29 @@ class DepthPlacementController {
         PlacementFailureReason.INSUFFICIENT_SURFACE -> "가구 크기만큼 평평한 공간이 부족해요"
         PlacementFailureReason.OBSTACLE_DETECTED -> "놓을 자리에 다른 물체가 있어요"
         PlacementFailureReason.OUTSIDE_DEPTH_IMAGE -> "화면 안쪽의 표면을 다시 탭하세요"
-        PlacementFailureReason.INSUFFICIENT_POINTS -> "표면을 천천히 비춰 Depth를 더 모아 주세요"
+        PlacementFailureReason.INSUFFICIENT_POINTS -> "조금 더 가까운 바닥이나 벽을 비추고 탭하세요"
         PlacementFailureReason.NO_DEPTH_FRAME, null -> "Depth 준비 중입니다. 잠시 후 다시 시도하세요"
     }
 
     private companion object {
         const val FRAME_INTERVAL_NANOS = 66_000_000L // 최대 약 15 FPS
+
+        /**
+         * 손에 든 휴대폰으로 실제 방을 비추는 조건에 맞춘 설정이다.
+         *
+         * 기본값은 합성 Depth처럼 깨끗한 입력을 가정한다. 실제 기기에서는 두 가지가 걸렸다.
+         * 첫째, 5m 상한 때문에 서서 조금 먼 바닥을 탭하면 판정에 쓸 점이 하나도 남지 않았다.
+         * 둘째, 평면 허용 오차 2.5cm와 장애물 기준 5cm가 실제 Depth 노이즈보다 좁아
+         * 빈 바닥을 물체로 잘못 봤다. 두 기준을 실제 노이즈 폭에 맞춰 넓혔다.
+         */
+        val ROOM_CONFIG = PlacementConfig.default().copy(
+            maxDepthMeters = 8f,
+            depthConfidenceThreshold = 0.3f,
+            minValidPointCount = 12,
+            planeDistanceThresholdMeters = 0.045f,
+            obstacleHeightThresholdMeters = 0.10f,
+            placementDepthContinuityMeters = 0.20f,
+            minimumSurfaceConfidence = 0.40f,
+        )
     }
 }

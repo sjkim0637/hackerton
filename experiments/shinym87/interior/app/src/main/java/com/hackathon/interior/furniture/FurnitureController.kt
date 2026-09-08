@@ -148,7 +148,10 @@ class FurnitureController(
 
     private fun placeCatalog(xPx: Float, yPx: Float) {
         val pc = pendingCatalog ?: return
-        withValidatedPlacement(xPx, yPx, pc.size, pc.wantWall) { decision ->
+        withValidatedPlacement(
+            xPx, yPx, pc.size, pc.wantWall,
+            planeFallback = { hitTestPreferring(xPx, yPx, pc.wantWall) },
+        ) { decision ->
             if (pendingCatalog !== pc) return@withValidatedPlacement
             val fallbackHit = if (decision.depthAvailable) null
             else hitTestPreferring(xPx, yPx, pc.wantWall)
@@ -401,6 +404,7 @@ class FurnitureController(
                 createDialogPending = false
                 withValidatedPlacement(
                     xPx, yPx, baseSize, wantWall = null,
+                    planeFallback = { fallbackHit },
                     onAccepted = { decision ->
                         val anchor = decision.pose?.let { pose ->
                             runCatching { sceneView.session?.createAnchor(pose) }.getOrNull()
@@ -422,13 +426,19 @@ class FurnitureController(
         )
     }
 
-    /** Depth 미지원/준비 전에는 기존 AR plane 흐름을 유지하고, 판정 결과가 있을 때만 배치를 막는다. */
+    /**
+     * Depth 미지원/준비 전에는 기존 AR plane 흐름을 유지하고, 판정 결과가 있을 때만 배치를 막는다.
+     *
+     * [planeFallback] 을 주면 Depth 판정이 막았을 때 ARCore가 이미 인식한 평면을 한 번 더 확인한다.
+     * 평면이 있으면 그 위에 놓는다. Depth 노이즈나 거리 때문에 아무것도 놓이지 않는 상황을 막는다.
+     */
     private fun withValidatedPlacement(
         xPx: Float,
         yPx: Float,
         size: Size,
         wantWall: Boolean?,
         onRejected: () -> Unit = {},
+        planeFallback: (() -> HitResult?)? = null,
         onAccepted: (DepthPlacementDecision) -> Unit,
     ) {
         val validator = validatePlacement
@@ -444,11 +454,14 @@ class FurnitureController(
         placementValidationPending = true
         validator(xPx, yPx, size, wantWall) { decision ->
             placementValidationPending = false
-            if (decision.accepted) {
-                onAccepted(decision)
-            } else {
-                onRejected()
-                Toast.makeText(activity, decision.message ?: "이 위치에는 놓기 어려워요", Toast.LENGTH_SHORT).show()
+            when {
+                decision.accepted -> onAccepted(decision)
+                planeFallback?.invoke() != null ->
+                    onAccepted(DepthPlacementDecision(depthAvailable = false, accepted = true))
+                else -> {
+                    onRejected()
+                    Toast.makeText(activity, decision.message ?: "이 위치에는 놓기 어려워요", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
