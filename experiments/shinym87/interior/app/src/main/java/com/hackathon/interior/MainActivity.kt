@@ -139,7 +139,14 @@ class MainActivity : AppCompatActivity() {
 
         binding.serverUrlInput.setText(settings.serverBaseUrl)
         binding.btnWorkspaceHome.setOnClickListener { finish() }
-        binding.btnAddFurniture.text = "잡지"
+        binding.btnAddFurniture.text = "다른 가구"
+        binding.btnRemovalTools.setOnClickListener {
+            val expanded = binding.removalTools.visibility != View.VISIBLE
+            if (!expanded && binding.bboxSelectionView.isSelecting) removal.toggleSelectionMode()
+            binding.removalTools.visibility = if (expanded) View.VISIBLE else View.GONE
+            binding.btnRemovalTools.text = if (expanded) "사물 지우기 ▴" else "사물 지우기 ▾"
+            binding.btnRemovalTools.contentDescription = if (expanded) "사물 지우기 도구 접기" else "사물 지우기 도구 펼치기"
+        }
         binding.btnAddFurniture.setOnClickListener { finish() }
         binding.btnWorkspaceSettings.setOnClickListener {
             binding.serverUrlInput.setText(settings.serverBaseUrl)
@@ -183,7 +190,7 @@ class MainActivity : AppCompatActivity() {
             objectType = intent.getStringExtra(CatalogActivity.EXTRA_OBJECT_CATEGORY) ?: "other",
         )
         binding.instructionText.text =
-            "$name 선택됨 · ${if (anchor == "wall") "벽" else "바닥"}을 눌러 배치하세요. 사물 지우기도 바로 사용할 수 있습니다."
+            "$name\n${if (anchor == "wall") "벽" else "바닥"}을 넓게 비춘 뒤 놓을 곳을 탭하세요"
     }
 
     override fun onDestroy() {
@@ -198,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.selectionPanel.visibility = View.VISIBLE
         val scale = item.scaleFactor
-        binding.selectedNameText.text = "%s · %.0f×%.0f×%.0f cm (x%.2f · %.0f°)".format(
+        binding.selectedNameText.text = "%s\n%.0f × %.0f × %.0f cm  ·  배율 %.2f  ·  %.0f°".format(
             item.name,
             item.baseSize.x * 100f * scale,
             item.baseSize.y * 100f * scale,

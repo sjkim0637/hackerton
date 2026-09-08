@@ -1,5 +1,16 @@
 # Handoff
 
+## 현재 Branch의 후속 개선 — 사용자 확인 대기
+
+- `7c5c1dd` 이후 Depth 면적 검사와 화보·AR UI 가독성을 개선했다. 아래 기존 Completed·Verification은 이전 전달 시점의 기록이다.
+- 이번 변경은 `agent/goguma-salad/interior-assets-ui`에만 있으며 `integration-interior-demo`에 병합하지 않았다.
+- Depth: 4×4 지지 구역 중 75% 이상, 각 행·열 최소 절반의 지지가 필요하다. 면적 부족·장애물 판정은 평면 대체 배치로 우회하지 않는다.
+- UI: 상단 안내와 하단 스크롤 도구, 접을 수 있는 사물 지우기, 48dp 가구 선택 영역, 큰 이름 태그를 적용했다.
+- Depth 테스트 19개 통과. 실제 기기 연결이 없어 이번 UI와 면적 검사의 실기기 검증은 사용자 확인이 필요하다.
+- 확인 순서: 화보 태그 → AR 배치 → 좁은 면적 거절 → 도구 펼치기·접기 → 큰 글꼴과 편집 패널 스크롤.
+- 서버 저장·복원 문제와 상세 3D 모델은 이번 수정에 포함하지 않았다.
+- 현재 상태의 기준은 [Workstream](../workstreams/interior-assets-ui.md)을 참고한다.
+
 ## From
 
 goguma-salad (Claude)

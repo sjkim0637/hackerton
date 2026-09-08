@@ -121,13 +121,14 @@ class CatalogActivity : AppCompatActivity() {
         openTag = null
 
         page.objects.forEach { item ->
-            val markerSize = dp(42f).toInt()
-            val dotSize = dp(9f).toInt()
-            val ringSize = dp(20f).toInt()
+            val markerSize = dp(48f).toInt()
+            val dotSize = dp(13f).toInt()
+            val ringSize = dp(26f).toInt()
 
             val marker = FrameLayout(this).apply {
                 isClickable = true
                 isFocusable = true
+                contentDescription = "${item.name}, 가구 정보 보기"
             }
 
             val ring = View(this).apply {
@@ -142,12 +143,14 @@ class CatalogActivity : AppCompatActivity() {
 
             val tag = TextView(this).apply {
                 text = "${item.name}  ·  AR로 보기 ›"
-                textSize = 12f
+                textSize = 15f
+                minHeight = dp(48f).toInt()
+                maxWidth = (binding.hotspotLayer.width - dp(24f)).toInt().coerceAtLeast(1)
                 setTextColor(Color.WHITE)
                 setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(14f).toInt(), dp(10f).toInt())
                 setBackgroundResource(com.hackathon.interior.R.drawable.bg_magazine_hotspot)
                 alpha = 0f
-                visibility = View.GONE
+                visibility = View.INVISIBLE
                 setOnClickListener { openObjectInAr(item) }
             }
 
@@ -157,6 +160,13 @@ class CatalogActivity : AppCompatActivity() {
             )
             binding.hotspotLayer.addView(marker, FrameLayout.LayoutParams(markerSize, markerSize))
 
+            tag.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                tag.x = (marker.x + marker.width / 2f - tag.width / 2f)
+                    .coerceIn(0f, (binding.hotspotLayer.width - tag.width).coerceAtLeast(0).toFloat())
+                val preferredY = if (marker.y > tag.height + dp(12f)) marker.y - tag.height - dp(10f)
+                    else marker.y + marker.height + dp(10f)
+                tag.y = preferredY.coerceIn(0f, (binding.hotspotLayer.height - tag.height).coerceAtLeast(0).toFloat())
+            }
             marker.setOnClickListener {
                 marker.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 if (openTag === tag && tag.visibility == View.VISIBLE) {
@@ -192,6 +202,8 @@ class CatalogActivity : AppCompatActivity() {
     }
 
     private fun showTag(tag: View) {
+        tag.animate().cancel()
+        tag.animate().withEndAction(null)
         tag.visibility = View.VISIBLE
         tag.alpha = 0f
         tag.scaleX = 0.9f
@@ -202,7 +214,7 @@ class CatalogActivity : AppCompatActivity() {
 
     private fun closeOpenTag() {
         val tag = openTag ?: return
-        tag.animate().alpha(0f).setDuration(120).withEndAction { tag.visibility = View.GONE }.start()
+        tag.animate().alpha(0f).setDuration(120).withEndAction { tag.visibility = View.INVISIBLE }.start()
         openTag = null
     }
 

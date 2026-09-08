@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-
     <io.github.sceneview.ar.ARSceneView
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
-
-    <!-- 저장해 둔 "빈 배경" 대표 이미지를 카메라 위에 반투명으로 겹친다.
-         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다. -->
     <ImageView
         android:id="@+id/backgroundOverlay"
         android:layout_width="match_parent"
@@ -20,9 +16,6 @@
         android:contentDescription="배경 오버레이"
         android:clickable="false"
         android:focusable="false" />
-
-    <!-- 서버가 돌려준 "삭제 후" 결과 이미지 (벽 평면 앵커를 못 잡았을 때의 전체화면 대체 표시).
-         평소에는 3D quad 로 벽에 붙이고, 이 뷰는 fallback 이다. -->
     <ImageView
         android:id="@+id/resultOverlay"
         android:layout_width="match_parent"
@@ -32,370 +25,318 @@
         android:contentDescription="삭제 결과"
         android:clickable="false"
         android:focusable="false" />
-
-    <!-- "TV 선택 모드"에서 화면을 드래그해 제거할 사물의 사각형(bounding box)을 그린다.
-         visibility=gone 이면 터치를 먹지 않아 평소 탭/드래그에 영향이 없다. -->
     <com.hackathon.interior.remove.BboxSelectionView
         android:id="@+id/bboxSelectionView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
-
     <LinearLayout
         android:id="@+id/arTopPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top"
-        android:background="#B3211E1B"
         android:orientation="vertical"
-        android:paddingTop="40dp"
-        android:paddingHorizontal="12dp"
-        android:paddingBottom="10dp">
-
+        android:layout_gravity="top"
+        android:layout_margin="12dp"
+        android:background="@drawable/bg_workspace_panel"
+        android:padding="12dp"
+        android:clickable="true">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
             <Button
                 android:id="@+id/btnWorkspaceHome"
-                android:layout_width="52dp"
-                android:layout_height="44dp"
-                android:backgroundTint="#D91D1B19"
-                android:text="⌂"
-                android:textColor="@android:color/white"
-                android:textSize="20sp" />
-
-            <Space
+                style="@style/WorkspaceButton"
+                android:text="‹  화보"
+                android:contentDescription="화보로 돌아가기" />
+            <TextView
                 android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="내 공간에 배치"
+                android:gravity="center"
+                android:textColor="#F8F5F0"
+                android:textStyle="bold"
+                android:textSize="16sp" />
             <ImageButton
                 android:id="@+id/btnWorkspaceSettings"
-                android:layout_width="52dp"
-                android:layout_height="44dp"
-                android:backgroundTint="#D91D1B19"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_workspace_panel"
                 android:contentDescription="설정"
                 android:padding="12dp"
                 android:src="@drawable/ic_settings" />
         </LinearLayout>
-
         <TextView
             android:id="@+id/instructionText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
             android:text="@string/instruction_scan"
-            android:textColor="@android:color/white"
+            android:textColor="#F8F5F0"
             android:textSize="15sp"
-            android:shadowColor="@android:color/black"
-            android:shadowRadius="6" />
-
+            android:paddingVertical="6dp"
+            android:accessibilityLiveRegion="polite" />
+    </LinearLayout>
+    <com.hackathon.interior.ui.WorkspaceScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/bg_workspace_panel"
+        android:scrollbars="vertical"
+        android:clipToPadding="false">
         <LinearLayout
-            android:id="@+id/arPrimaryActions"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnCaptureBg"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:backgroundTint="#DAB476"
-                android:textColor="#211E1B"
-                android:text="배경 촬영" />
-
-            <Button
-                android:id="@+id/btnToggleBg"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:layout_marginStart="8dp"
-                android:backgroundTint="#F3EEE7"
-                android:enabled="false"
-                android:textColor="#211E1B"
-                android:text="배경 표시" />
-
-            <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). -->
-            <Button
-                android:id="@+id/btnAddFurniture"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:layout_marginStart="8dp"
-                android:backgroundTint="#403A34"
-                android:textColor="@android:color/white"
-                android:text="가구 추가" />
-        </LinearLayout>
-
-        <SeekBar
-            android:id="@+id/opacitySeekBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="100"
-            android:progress="50"
-            android:visibility="gone" />
-
-        <!-- 사물 제거 흐름 (P1-2/P1-3/P1-8/P1-9) -->
-
-        <!-- 지울 사물 종류. 서버 요청의 objectType 이 이 선택값을 따라간다. -->
-        <LinearLayout
-            android:id="@+id/removalTypeRow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="6dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:clickable="true">
+            <LinearLayout
+                android:id="@+id/selectionPanel"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="지울 사물"
-                android:textColor="@android:color/white"
-                android:textSize="13sp"
-                android:shadowColor="@android:color/black"
-                android:shadowRadius="6" />
-
-            <Spinner
-                android:id="@+id/objectTypeSpinner"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:minWidth="96dp"
-                android:background="#33FFFFFF"
-                android:popupBackground="#FFFFFF" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/removalSelectionRow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnTvSelectMode"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="영역 선택 모드" />
-
-            <Button
-                android:id="@+id/btnClearSelection"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:orientation="vertical"
                 android:visibility="gone"
-                android:text="선택 취소" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/removalRequestRow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnRequestRemove"
-                android:layout_width="wrap_content"
+                android:paddingBottom="8dp">
+                <TextView
+                    android:id="@+id/selectedNameText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="선택한 가구"
+                    android:textColor="#F8F5F0"
+                    android:textSize="15sp"
+                    android:paddingVertical="6dp"
+                    android:textStyle="bold" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnShrink"
+                        style="@style/WorkspaceButton"
+                        android:text="−"
+                        android:contentDescription="가구 크기 줄이기" />
+                    <Button
+                        android:id="@+id/btnGrow"
+                        style="@style/WorkspaceButton"
+                        android:text="＋"
+                        android:contentDescription="가구 크기 키우기" />
+                    <Button
+                        android:id="@+id/btnRotateLeft"
+                        style="@style/WorkspaceButton"
+                        android:text="↶ 15°"
+                        android:contentDescription="왼쪽으로 15도 회전" />
+                    <Button
+                        android:id="@+id/btnRotateRight"
+                        style="@style/WorkspaceButton"
+                        android:text="15° ↷"
+                        android:contentDescription="오른쪽으로 15도 회전" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnDelete"
+                        style="@style/WorkspaceButton"
+                        android:text="가구 삭제"
+                        android:textColor="#FFB4AB" />
+                    <Button
+                        android:id="@+id/btnDeselect"
+                        style="@style/WorkspaceButton"
+                        android:text="편집 완료" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/movedObjectPanel"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:enabled="false"
-                android:text="삭제 요청" />
-
-            <Button
-                android:id="@+id/btnToggleRemoval"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:orientation="vertical"
                 android:visibility="gone"
-                android:text="삭제 전/후" />
+                android:paddingBottom="8dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="지운 사물 편집"
+                    android:textColor="#F8F5F0"
+                    android:textSize="15sp"
+                    android:paddingVertical="6dp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnMovedHome"
+                        style="@style/WorkspaceButton"
+                        android:text="원위치" />
+                    <Button
+                        android:id="@+id/btnMovedClear"
+                        style="@style/WorkspaceButton"
+                        android:text="치우기" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnMovedShrink"
+                        style="@style/WorkspaceButton"
+                        android:text="−"
+                        android:contentDescription="사물 크기 줄이기" />
+                    <Button
+                        android:id="@+id/btnMovedGrow"
+                        style="@style/WorkspaceButton"
+                        android:text="＋"
+                        android:contentDescription="사물 크기 키우기" />
+                    <Button
+                        android:id="@+id/btnMovedRotate"
+                        style="@style/WorkspaceButton"
+                        android:text="회전 ↷" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnMovedRestore"
+                        style="@style/WorkspaceButton"
+                        android:text="배치 복원"
+                        android:enabled="false" />
+                    <Button
+                        android:id="@+id/btnMovedUndo"
+                        style="@style/WorkspaceButton"
+                        android:text="실행 취소"
+                        android:enabled="false" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <Button
+                    android:id="@+id/btnAddFurniture"
+                    style="@style/WorkspaceButton"
+                    android:text="다른 가구" />
+                <Button
+                    android:id="@+id/btnRemovalTools"
+                    style="@style/WorkspaceButton"
+                    android:text="사물 지우기 ▾"
+                    android:contentDescription="사물 지우기 도구 펼치기" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/removalTools"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:paddingTop="8dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="1  지울 사물을 고르세요"
+                    android:textColor="#F8F5F0"
+                    android:textSize="15sp"
+                    android:paddingVertical="6dp" />
+                <LinearLayout
+                    android:id="@+id/removalTypeRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="사물 종류"
+                        android:textColor="#F8F5F0"
+                        android:textSize="14sp"
+                        android:layout_marginEnd="12dp" />
+                    <Spinner
+                        android:id="@+id/objectTypeSpinner"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="48dp"
+                        android:background="#403A34"
+                        android:popupBackground="#FFFFFF" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/removalSelectionRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnTvSelectMode"
+                        style="@style/WorkspaceButton"
+                        android:text="2  영역 선택" />
+                    <Button
+                        android:id="@+id/btnClearSelection"
+                        style="@style/WorkspaceButton"
+                        android:text="선택 취소"
+                        android:visibility="gone" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/removalRequestRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnRequestRemove"
+                        style="@style/WorkspaceButton"
+                        android:text="3  사물 지우기"
+                        android:enabled="false"
+                        app:backgroundTint="@color/workspace_primary_tint"
+                        android:textColor="@color/workspace_primary_text" />
+                    <Button
+                        android:id="@+id/btnToggleRemoval"
+                        style="@style/WorkspaceButton"
+                        android:text="삭제 전 / 후"
+                        android:visibility="gone" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/removalStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#F8F5F0"
+                    android:textSize="15sp"
+                    android:paddingVertical="6dp"
+                    android:accessibilityLiveRegion="polite" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/arPrimaryActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <Button
+                    android:id="@+id/btnCaptureBg"
+                    style="@style/WorkspaceButton"
+                    android:text="배경 촬영" />
+                <Button
+                    android:id="@+id/btnToggleBg"
+                    style="@style/WorkspaceButton"
+                    android:text="배경 표시"
+                    android:enabled="false" />
+            </LinearLayout>
+            <SeekBar
+                android:id="@+id/opacitySeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:max="100"
+                android:progress="50"
+                android:visibility="gone"
+                android:contentDescription="배경 투명도" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/removalStatusText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="@android:color/white"
-            android:textSize="13sp"
-            android:shadowColor="@android:color/black"
-            android:shadowRadius="6"
-            android:text="" />
-    </LinearLayout>
-
-    <!-- PHASE 4/5: 삭제한 사물을 이동하는 패널. 삭제 완료 시 나타나고, 마커가 바로 떠서
-         손가락으로 끌어 옮긴다("여기로 옮기기" 버튼 없음). -->
-    <LinearLayout
-        android:id="@+id/movedObjectPanel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="112dp"
-        android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:background="#CC000000"
-        android:padding="10dp"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnMovedHome"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="원위치" />
-
-            <Button
-                android:id="@+id/btnMovedClear"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="치우기" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnMovedShrink"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="56dp"
-                android:text="－" />
-
-            <Button
-                android:id="@+id/btnMovedGrow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:minWidth="56dp"
-                android:text="＋" />
-
-            <Button
-                android:id="@+id/btnMovedRotate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="회전 ⟳" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnMovedRestore"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:enabled="false"
-                android:text="서버 배치 복원" />
-
-            <Button
-                android:id="@+id/btnMovedUndo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:enabled="false"
-                android:text="실행 취소" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- 가구를 선택하면 나타나는 조작 패널 (핀치로도 크기 조절 가능) -->
-    <LinearLayout
-        android:id="@+id/selectionPanel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="32dp"
-        android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:background="#CC000000"
-        android:padding="12dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/selectedNameText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@android:color/white"
-            android:textStyle="bold"
-            android:textSize="15sp"
-            android:text="선택됨" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnShrink"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="56dp"
-                android:text="－" />
-
-            <Button
-                android:id="@+id/btnGrow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:minWidth="56dp"
-                android:text="＋" />
-
-            <Button
-                android:id="@+id/btnRotateLeft"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:minWidth="56dp"
-                android:text="↶ 15°" />
-
-            <Button
-                android:id="@+id/btnRotateRight"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:minWidth="56dp"
-                android:text="15° ↷" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnDelete"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="삭제" />
-
-            <Button
-                android:id="@+id/btnDeselect"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="선택 해제" />
-        </LinearLayout>
-    </LinearLayout>
-
+    </com.hackathon.interior.ui.WorkspaceScrollView>
     <!-- 첫 화면 가구 브로셔. 항목을 선택하고 "우리 집에 적용"을 누른 뒤
          해당 종류에 맞는 평면(벽/바닥)을 탭하면 저폴리 3D 가구가 배치된다. -->
     <LinearLayout
@@ -407,19 +348,16 @@
         android:background="#E6000000"
         android:padding="12dp"
         android:visibility="gone">
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
-
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical">
-
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -427,7 +365,6 @@
                     android:textColor="@android:color/white"
                     android:textStyle="bold"
                     android:textSize="18sp" />
-
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -436,28 +373,24 @@
                     android:textColor="#B3FFFFFF"
                     android:textSize="12sp" />
             </LinearLayout>
-
             <Button
                 android:id="@+id/btnCatalogClose"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="닫기" />
         </LinearLayout>
-
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="190dp"
             android:layout_marginTop="10dp"
             android:fillViewport="false"
             android:scrollbars="none">
-
             <LinearLayout
                 android:id="@+id/catalogList"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:orientation="horizontal" />
         </HorizontalScrollView>
-
         <TextView
             android:id="@+id/catalogSelectedText"
             android:layout_width="match_parent"
@@ -467,7 +400,6 @@
             android:text="가구를 선택해 크기와 배치 위치를 확인하세요"
             android:textColor="@android:color/white"
             android:textSize="13sp" />
-
         <Button
             android:id="@+id/btnCatalogApply"
             android:layout_width="match_parent"
@@ -476,7 +408,6 @@
             android:enabled="false"
             android:text="우리 집에 적용" />
     </LinearLayout>
-
     <!-- 제공 Asset 디자인을 적용한 제품 진입 화면. AR 기능은 선택 후에만 노출한다. -->
     <ScrollView
         android:id="@+id/homeScreen"
@@ -485,7 +416,6 @@
         android:background="#F3EEE7"
         android:fillViewport="true"
         android:visibility="gone">
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -494,19 +424,16 @@
             android:paddingHorizontal="20dp"
             android:paddingTop="42dp"
             android:paddingBottom="26dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -515,7 +442,6 @@
                         android:text="MY HOME"
                         android:textColor="#211E1B"
                         android:textSize="24sp" />
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -525,7 +451,6 @@
                         android:textColor="#8B7256"
                         android:textSize="10sp" />
                 </LinearLayout>
-
                 <ImageButton
                     android:id="@+id/btnHomeSettings"
                     android:layout_width="54dp"
@@ -535,25 +460,21 @@
                     android:padding="12dp"
                     android:src="@drawable/ic_settings" />
             </LinearLayout>
-
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="330dp"
                 android:layout_marginTop="22dp">
-
                 <com.hackathon.interior.ui.AtlasCropView
                     android:id="@+id/homeHeroImage"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:contentDescription="따뜻한 거실 인테리어" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom"
                     android:orientation="vertical"
                     android:padding="24dp">
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -562,7 +483,6 @@
                         android:textColor="#E5BD7D"
                         android:textSize="12sp"
                         android:textStyle="bold" />
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -571,7 +491,6 @@
                         android:textColor="@android:color/white"
                         android:textSize="30sp"
                         android:textStyle="bold" />
-
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -581,7 +500,6 @@
                         android:textSize="13sp" />
                 </LinearLayout>
             </FrameLayout>
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -590,7 +508,6 @@
                 android:textColor="#211E1B"
                 android:textSize="20sp"
                 android:textStyle="bold" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -598,7 +515,6 @@
                 android:text="기능별 화면은 필요할 때만 열립니다."
                 android:textColor="#7C746C"
                 android:textSize="13sp" />
-
             <Button
                 android:id="@+id/btnHomeArPlacement"
                 android:layout_width="match_parent"
@@ -610,7 +526,6 @@
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-
             <Button
                 android:id="@+id/btnHomeSpaceEdit"
                 android:layout_width="match_parent"
@@ -622,7 +537,6 @@
                 android:textColor="#211E1B"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-
             <Button
                 android:id="@+id/btnHomeCatalog"
                 android:layout_width="match_parent"
@@ -634,7 +548,6 @@
                 android:textColor="#211E1B"
                 android:textSize="16sp"
                 android:textStyle="bold" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -644,13 +557,11 @@
                 android:textColor="#8B7256"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="120dp"
                 android:layout_marginTop="10dp"
                 android:orientation="horizontal">
-
                 <com.hackathon.interior.ui.AtlasCropView
                     android:id="@+id/homeCategoryLiving"
                     android:layout_width="0dp"
@@ -658,7 +569,6 @@
                     android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     android:contentDescription="거실 가구" />
-
                 <com.hackathon.interior.ui.AtlasCropView
                     android:id="@+id/homeCategoryDining"
                     android:layout_width="0dp"
@@ -666,7 +576,6 @@
                     android:layout_marginHorizontal="5dp"
                     android:layout_weight="1"
                     android:contentDescription="주방 식탁" />
-
                 <com.hackathon.interior.ui.AtlasCropView
                     android:id="@+id/homeCategoryDecor"
                     android:layout_width="0dp"
@@ -677,16 +586,16 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
-
     <!-- 서버 주소 등 기술 설정은 작업 화면에서 분리한다. -->
     <FrameLayout
         android:id="@+id/settingsScreen"
+        android:clickable="true"
+        android:focusable="true"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#F3EEE7"
         android:padding="24dp"
         android:visibility="gone">
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -695,7 +604,6 @@
             android:elevation="10dp"
             android:orientation="vertical"
             android:padding="24dp">
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -704,7 +612,6 @@
                 android:textColor="#A17B45"
                 android:textSize="12sp"
                 android:textStyle="bold" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -713,7 +620,6 @@
                 android:textColor="#211E1B"
                 android:textSize="26sp"
                 android:textStyle="bold" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -722,7 +628,6 @@
                 android:textColor="#403A34"
                 android:textSize="14sp"
                 android:textStyle="bold" />
-
             <EditText
                 android:id="@+id/serverUrlInput"
                 android:layout_width="match_parent"
@@ -736,7 +641,6 @@
                 android:singleLine="true"
                 android:textColor="#211E1B"
                 android:textColorHint="#887E75" />
-
             <TextView
                 android:id="@+id/settingsServerHint"
                 android:layout_width="wrap_content"
@@ -745,7 +649,6 @@
                 android:text="휴대폰과 서버 PC가 같은 Wi-Fi에 있어야 합니다."
                 android:textColor="#7C746C"
                 android:textSize="12sp" />
-
             <Button
                 android:id="@+id/btnSettingsSave"
                 android:layout_width="match_parent"
@@ -755,7 +658,6 @@
                 android:text="저장"
                 android:textColor="#211E1B"
                 android:textStyle="bold" />
-
             <Button
                 android:id="@+id/btnSettingsCancel"
                 android:layout_width="match_parent"
@@ -766,5 +668,4 @@
                 android:textColor="@android:color/white" />
         </LinearLayout>
     </FrameLayout>
-
 </FrameLayout>

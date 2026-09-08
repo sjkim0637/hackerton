@@ -10,7 +10,7 @@
 | shinym87 + Claude + Codex | `integration-interior-demo` | `experiments/shinym87/interior/` | 카메라 기반 공간 편집 / AR 가구 재배치 | 카메라·AI 제거·카탈로그 배치 흐름에 Depth 표면 검증을 통합한다. | `INTEGRATION` | [interior](docs/workstreams/interior.md) | 2026-09-08 |
 | goguma-salad + Codex | `agent/goguma-salad/interior-depth-placement` | `experiments/goguma-salad/interior-depth-placement/` | IR Depth Point Cloud 배치 모듈 | ARCore Depth를 온디바이스 Point Cloud와 안정적인 객체 배치 Pose로 변환하는 독립 모듈과 테스트 앱을 구현한다. | `INTEGRATION` | [interior-depth-placement](docs/workstreams/interior-depth-placement.md) | 2026-09-08 |
 | goguma-salad + Codex | `agent/goguma-salad/interior-depth-runtime` | `experiments/shinym87/interior/` | Interior Depth 직접 배치 | 평면 격자 의존을 제거하고 Depth world Pose로 가구 Anchor를 직접 배치한다. | `DONE` | [interior-depth-runtime](docs/workstreams/interior-depth-runtime.md) | 2026-09-08 |
-| goguma-salad + Codex | `agent/goguma-salad/interior-assets-ui` | `experiments/shinym87/interior/` | Interior Magazine 객체 선택 UI | 공간 화보 속 객체 직접 선택과 AR 배치·사물 지우기 통합 작업 화면을 구현한다. | `INTEGRATION` | [interior-assets-ui](docs/workstreams/interior-assets-ui.md) | 2026-09-08 |
+| goguma-salad + Codex | `agent/goguma-salad/interior-assets-ui` | `experiments/shinym87/interior/` | Interior Magazine 객체 선택 UI | Depth 면적 검사와 화보·AR 도구 가독성 개선 후 사용자 확인 대기. 데모 병합 전. | `INTEGRATION` | [interior-assets-ui](docs/workstreams/interior-assets-ui.md) | 2026-09-08 |
 
 ## 사용 방법
 
