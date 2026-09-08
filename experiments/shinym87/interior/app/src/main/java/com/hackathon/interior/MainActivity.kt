@@ -1,6 +1,7 @@
 package com.hackathon.interior
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -35,6 +36,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
     private lateinit var catalog: CatalogController
+
+    /** TEMP-DIAG: onMove 는 초당 수십 번 → 15회마다 한 줄만 찍는다. */
+    private var moveEventLog = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,12 +133,30 @@ class MainActivity : AppCompatActivity() {
         space.isIdle = { furniture.isIdle() }
 
         // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
+        // TEMP-DIAG: 제스처가 앱에 실제로 도달하는지 / 이동 마커가 먹는지 logcat 추적 (tag InteriorAR).
         sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { me, node -> furniture.handleTap(me, node) },
+            onSingleTapConfirmed = { me, node ->
+                Log.d(TAG, "[gesture] tap @(${me.x.toInt()},${me.y.toInt()}) → furniture.handleTap")
+                furniture.handleTap(me, node)
+            },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
-            onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
-            onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },
-            onMoveEnd = { _, _, _ -> if (!moved.onDragEnd()) furniture.endDrag() },
+            onMoveBegin = { _, me, node ->
+                val byMoved = moved.onDragBegin(me.x, me.y)
+                Log.d(TAG, "[gesture] moveBegin @(${me.x.toInt()},${me.y.toInt()}) movedTook=$byMoved")
+                if (!byMoved) furniture.beginDrag(node)
+            },
+            onMove = { _, me, _ ->
+                val byMoved = moved.onDrag(me.x, me.y)
+                if (++moveEventLog % 15 == 0) {
+                    Log.d(TAG, "[gesture] move #$moveEventLog @(${me.x.toInt()},${me.y.toInt()}) movedTook=$byMoved")
+                }
+                if (!byMoved) furniture.drag(me)
+            },
+            onMoveEnd = { _, _, _ ->
+                val byMoved = moved.onDragEnd()
+                Log.d(TAG, "[gesture] moveEnd movedTook=$byMoved")
+                if (!byMoved) furniture.endDrag()
+            },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },
@@ -160,5 +182,9 @@ class MainActivity : AppCompatActivity() {
         val d = item.baseSize.z * 100f * f
         binding.selectedNameText.text =
             "%s  ·  %.0f×%.0f×%.0f cm  (x%.2f)".format(item.name, w, h, d, f)
+    }
+
+    private companion object {
+        const val TAG = "InteriorAR"
     }
 }

@@ -124,6 +124,14 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   1건 → `GET /catalog/{id}` 크기 → 화면 기준 hitTest 재배치). `InteriorApiClient` 확장
   (createPlacement source/catalogItemId 하위호환, listPlacements, getCatalogItem, Placement DTO).
   removed_object 복원과 독립 공존. 실서버 스모크 OK. `docs/handoffs/user1.md`.
+- [DONE] 진단/수정: "삭제 완료 후 이동이 안 먹는다(화면이 멈춘 듯)" — 원인은 세션 정지가
+  아니라 `RemovalController.applyResult` 의 **전체화면 fallback**. 벽/바닥 앵커를 못 잡으면
+  결과 Bitmap 을 `resultOverlay`(match_parent ImageView) 로 덮어 라이브 카메라·평면 점·삭제 후
+  뜨는 이동 마커가 전부 가려졌다. 앵커 없을 때 전체화면 대신 라이브 유지 + "삭제 결과 보기"
+  버튼으로만 열람하도록 변경. `MovedObjectController.placeMarkerNow` 에 카메라 앞 1.2m
+  마지막 fallback 추가(평면 미인식이어도 마커가 떠서 바로 끌 수 있음). 제스처/hitTest/onFrame
+  임시 진단 로그(tag `InteriorAR`) 추가. `docs/handoffs/user2.md`,
+  루트 `docs/handoffs/interior-removal-fallback.md`(goguma-salad 보고서)와 동일 건.
 - [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)

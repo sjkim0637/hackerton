@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.PixelCopy
 import android.view.View
 import android.widget.AdapterView
@@ -359,6 +360,11 @@ class RemovalController(
         applyResult(bitmap, job.changedRect ?: bbox)
 
         // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
+        Log.d(
+            TAG,
+            "runFlow done → onRemovalApplied(scene=$sceneId type=$objectType " +
+                "hasBmp=${capturedObjectBitmap != null} hasPose=${originalObjectPose != null})",
+        )
         onRemovalApplied(
             sceneId, jobId, objectType,
             capturedObjectBitmap, originalObjectPose, bbox,
@@ -366,7 +372,15 @@ class RemovalController(
         )
     }
 
-    /** 결과 이미지를 벽 평면 quad 로 붙인다. 벽 앵커가 없으면 전체화면으로 대체 표시. */
+    /**
+     * 결과 이미지를 벽 평면 quad 로 붙인다.
+     *
+     * 벽/바닥 앵커가 없을 때 예전에는 결과 Bitmap 을 전체화면 [R.id.resultOverlay] 로
+     * 덮어버려, 라이브 카메라·평면 인식 점·삭제 후 뜨는 이동 마커가 전부 가려졌다.
+     * 사용자에겐 "삭제 후 화면이 그대로 멈춘" 것처럼 보였다(세션은 계속 돌고 있었음).
+     * 이제는 앵커가 없어도 라이브 카메라를 유지하고, 결과는 "삭제 결과 보기" 버튼으로만
+     * 잠깐 띄운다. (report: docs/handoffs/interior-removal-fallback.md)
+     */
     private fun applyResult(full: Bitmap, region: FloatArray) {
         clearResult()
         // 가장자리를 투명하게 페이드아웃해 quad 경계가 카메라 화면과 자연스럽게 섞이게 한다.
@@ -392,14 +406,20 @@ class RemovalController(
             resultNode = node
             smoothedPos = null
             binding.resultOverlay.visibility = View.GONE
+            showingAfter = true
+            binding.btnToggleRemoval.text = "삭제 후 (보임)"
+            status("완료 · '삭제 전/후'로 전환하세요")
+            Log.d(TAG, "applyResult: 벽 앵커 quad 경로 (vertical=$planeIsVertical)")
         } else {
+            // 전체화면으로 덮지 않는다 — Bitmap 만 보관해 두고 버튼으로만 열람.
             binding.resultOverlay.setImageBitmap(full)
-            binding.resultOverlay.visibility = View.VISIBLE
+            binding.resultOverlay.visibility = View.GONE
+            showingAfter = false
+            binding.btnToggleRemoval.text = "삭제 결과 보기"
+            status("완료 · 라이브 화면 유지 · 결과는 '삭제 결과 보기'로 확인하세요")
+            Log.d(TAG, "applyResult: 벽 앵커 없음 → 전체화면 fallback 제거, 라이브 카메라 유지")
         }
-        showingAfter = true
         binding.btnToggleRemoval.visibility = View.VISIBLE
-        binding.btnToggleRemoval.text = "삭제 후 (보임)"
-        status("완료 · '삭제 전/후'로 전환하세요")
     }
 
     /**
@@ -446,7 +466,12 @@ class RemovalController(
         if (binding.resultOverlay.drawable != null) {
             binding.resultOverlay.visibility = if (showingAfter) View.VISIBLE else View.GONE
         }
-        binding.btnToggleRemoval.text = if (showingAfter) "삭제 후 (보임)" else "삭제 전 (원본)"
+        binding.btnToggleRemoval.text = when {
+            // quad 로 벽에 붙은 경우: 3D 결과 표시/숨김
+            resultNode != null -> if (showingAfter) "삭제 후 (보임)" else "삭제 전 (원본)"
+            // 앵커가 없어 2D 결과만 있는 경우: 전체화면 프리뷰 열기/닫기 (라이브 화면 위에)
+            else -> if (showingAfter) "결과 닫기 (라이브로)" else "삭제 결과 보기"
+        }
     }
 
     // -------------------------------------------------------------- 내부 유틸
@@ -605,6 +630,7 @@ class RemovalController(
     }
 
     private companion object {
+        const val TAG = "InteriorAR"
         const val DEFAULT_SERVER_URL = "http://192.168.0.2:8000"
         const val KEY_SERVER_URL = "server_url"
 

@@ -13,6 +13,80 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 진단 + 수정 — "삭제 완료 후 이동이 안 먹힘 / 화면이 멈춘 듯" (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: 사물 삭제가 끝난 화면에서 탭·드래그가
+무반응, 화면이 정지한 것처럼 보이고 바닥 평면 점(dot)도 새로 안 뜬다.
+
+goguma-salad 가 다른 브랜치에서 같은 건을 이미 보고했다
+(`docs/handoffs/interior-removal-fallback.md`, Severity High). 원인 분석이 일치한다.
+
+### 요청한 4가지 확인
+
+1. **ARCore 세션 / onFrame 이 계속 도는가? → 돈다.**
+   `ArSpaceController.onSessionUpdated` 는 SceneView GL 렌더 스레드가 돌리며 어떤
+   View 오버레이와도 무관하다. 삭제/이동 흐름 어디에서도 세션·lifecycle 을 멈추지
+   않는다. 화면이 "멈춘 것처럼" 보이는 건 **정지 이미지가 카메라를 덮고 있어서**다.
+   → 확인용으로 `onFrame heartbeat #N tracking=… planes=…` 로그를 약 2초마다 찍게 했다
+   (tag `InteriorAR`). 삭제 후에도 이 줄이 계속 나오면 세션은 살아있다.
+
+2. **오버레이/패치가 터치를 가로채는가? → `resultOverlay` 가 화면을 덮는 게 핵심.**
+   `activity_main.xml` 의 `@id/resultOverlay` 는 `match_parent` × `match_parent`
+   `ImageView`. `RemovalController.applyResult()` 는 **벽/바닥 앵커(`wallAnchor`)를
+   못 잡았을 때** 서버가 준 전체 결과 Bitmap 을 이 오버레이에 넣고 `VISIBLE` 로
+   만들고, 그대로 무기한 남는다. `clickable=false` 라 터치 이벤트 자체는 아래
+   `sceneView` 로 통과하지만, **라이브 카메라·평면 격자/점·삭제 후 뜨는 이동 마커가
+   전부 이 정지 이미지에 가려진다.**
+   - `movedObjectPanel` 은 `wrap_content` 하단 패널이라 버튼 영역만 차지 — 무관.
+   - `backgroundOverlay`(gone), `bboxSelectionView`(선택 후 gone) — 무관.
+
+3. **"여기로 옮기기 버튼 → 탭" → "삭제 즉시 드래그" 변경이 제대로 적용됐는가? → 됐다. 충돌 없음.**
+   커밋 `a5d089e` 확인: `btnMovedPlace` 레이아웃에서 제거, `MovedObjectController`
+   의 `placing`/`onTap()` 경로 삭제, `MainActivity.onSingleTapConfirmed` 에서
+   `moved.onTap` 제거, `space.onFrame` 에 `moved.onFrame()` 추가, `canManipulate()`
+   에서 `!placing` 제거. 드래그 경로(`onDragBegin/onDrag/onDragEnd`)는 살아 있다.
+   → 진짜 문제는 로직 충돌이 아니라, **앵커가 없는 경로에서 `arm()` 이 마커를 못
+   띄운다**는 것: `originalPose == null`(= `wallAnchor?.pose`) + `source_region`
+   hitTest 도 평면이 없어 실패 → `node == null` → `canManipulate()` 가 false →
+   마커에 대한 탭·드래그가 전부 no-op. 여기에 2번의 전체화면 오버레이가 겹쳐
+   "완전히 멈춘 화면"으로 보인다.
+
+4. **logcat 진단 로그 (임시, tag `InteriorAR`, 코드에 `TEMP-DIAG` 주석)**
+   - `MainActivity` 제스처: `[gesture] tap …`, `[gesture] moveBegin … movedTook=`,
+     `[gesture] move #N … movedTook=`(15회마다), `[gesture] moveEnd movedTook=`.
+     → 터치가 앱에 도달하는지, 이동 컨트롤러가 먹는지.
+   - `MovedObjectController`: `arm: … markerPlaced= awaitingPlane=`,
+     `placeMarkerNow: …`(어느 경로로 마커를 놓/못 놓았는지), `onDragBegin … canManipulate=`,
+     `onDrag: hitTest 없음 …`, `onFrame: 이동 마커 배치 성공`.
+   - `RemovalController`: `runFlow done → onRemovalApplied(… hasPose=)`,
+     `applyResult: 벽 앵커 quad 경로` / `applyResult: 벽 앵커 없음 → …`.
+   - `ArSpaceController`: 위 heartbeat.
+
+### 적용한 수정
+
+- **`RemovalController.applyResult()`** — 앵커가 없어도 전체화면으로 덮지 않는다.
+  결과 Bitmap 은 `resultOverlay` 에 넣어두되 `GONE` 으로 두고, 라이브 카메라를
+  유지한다. `btnToggleRemoval` 이 "삭제 결과 보기" ↔ "결과 닫기 (라이브로)" 로
+  동작해 필요할 때만 프리뷰를 연다. 앵커가 있으면(벽 quad) 기존 동작 그대로.
+- **`MovedObjectController.placeMarkerNow()`** — 마지막 fallback 추가: 평면을 전혀
+  못 잡으면 **카메라 앞 ~1.2m** 에 마커를 띄운다. 평면 고정은 아니지만 사용자가
+  바로 붙잡아 끌 수 있고, `onDrag` 의 hitTest 가 평면 위에서 다시 재고정한다.
+  이로써 삭제 직후 거의 항상 `node != null` → `canManipulate()` true → 드래그가 먹는다.
+- 위 진단 로그. **데모 안정화 후 `TEMP-DIAG` 표시 줄은 제거할 것.**
+
+### 빌드
+
+`JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug`
+→ **BUILD SUCCESSFUL**. APK: `experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk` (약 47MB).
+
+### 실기기에서 좁힐 것
+
+- 삭제 완료 직후 `onFrame heartbeat` 가 계속 찍히는지 (세션 생존 확인).
+- `applyResult:` 로그가 "벽 앵커 quad 경로" 인지 "벽 앵커 없음" 인지 → 어느 경로 버그인지 확정.
+- `arm: … markerPlaced=true` 인지, `placeMarkerNow:` 가 어느 단계에서 성공/실패하는지.
+- 드래그 시 `[gesture] moveBegin … movedTook=true` + `onDragBegin … canManipulate=true` 가 뜨는지.
+- 마커가 눈에 보이는지(전체화면 오버레이 제거 후) — 안 보이면 마커 배치 좌표/스케일 문제로 좁힌다.
+
 ## PHASE 5 — 가구 카탈로그 썸네일 서빙 (2026-09-03)
 
 사용자 1 이 카탈로그 배치 UI 를 만들었지만 서버가 `/assets/*` 를 안 줘서 5종 모두 큐브

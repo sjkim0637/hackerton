@@ -141,6 +141,11 @@ class MovedObjectController(
             awaitingPlane = true
             status("삭제 완료 · 평면이 인식되면 ${label()} 마커가 나타납니다 · 끌어서 옮기세요")
         }
+        Log.d(
+            TAG,
+            "arm: type=$objectType hasOriginalPose=${originalPose != null} " +
+                "src=${sourceRect?.joinToString(",")} markerPlaced=${node != null} awaitingPlane=$awaitingPlane",
+        )
     }
 
     /** 전체 정리 (선택 취소 시). 서버 복원 정보까지 지운다. */
@@ -162,30 +167,66 @@ class MovedObjectController(
         if (!armed || node != null || !awaitingPlane) return
         if (placeMarkerNow()) {
             awaitingPlane = false
+            Log.d(TAG, "onFrame: 이동 마커 배치 성공 (awaitingPlane 해제)")
             status("${label()} 마커를 손가락으로 끌어 옮기세요")
         }
     }
 
     // ------------------------------------------------------------------- 배치
 
-    /** 삭제된 자리(원래 pose, 없으면 source_region 중심 hitTest)에 마커를 띄운다. */
+    /**
+     * 삭제된 자리에 마커를 띄운다. 순서대로 시도한다:
+     *  1) 삭제 시점 벽/바닥 앵커 pose(`originalPose`)
+     *  2) `source_region` 중심을 현재 화면에서 hitTest 한 자리
+     *  3) (평면 미인식) 카메라 앞 ~1.2m — 평면에 고정되진 않지만 **바로 붙잡아 끌 수 있고**,
+     *     드래그 중 `onDrag` 의 hitTest 로 평면에 재고정된다.
+     * 3번까지 실패하는 건 프레임 자체가 없을 때뿐이며, 그땐 `awaitingPlane` 재시도로 넘어간다.
+     */
     private fun placeMarkerNow(): Boolean {
         val pose = originalPose
         if (pose != null) {
-            val anchor = runCatching { sceneView.session?.createAnchor(pose) }.getOrNull() ?: return false
-            setNode(anchor, onVertical = wantsWall())
-            return true
+            val anchor = runCatching { sceneView.session?.createAnchor(pose) }.getOrNull()
+            if (anchor != null) {
+                Log.d(TAG, "placeMarkerNow: originalPose 사용")
+                setNode(anchor, onVertical = wantsWall())
+                return true
+            }
+            Log.d(TAG, "placeMarkerNow: originalPose 앵커 생성 실패 → 다음 경로")
         }
-        val src = sourceRect ?: return false
-        if (sceneView.width == 0 || sceneView.height == 0) return false
-        val cx = (src[0] + src[2] / 2f) * sceneView.width
-        val cy = (src[1] + src[3] / 2f) * sceneView.height
-        val hit = space.hitTestPreferring(cx, cy, wantsWall()) ?: return false
-        val anchor = hit.createAnchorOrNull()
-            ?: runCatching { sceneView.session?.createAnchor(hit.hitPose) }.getOrNull()
-            ?: return false
-        setNode(anchor, (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL)
-        return true
+
+        val src = sourceRect
+        if (src != null && sceneView.width > 0 && sceneView.height > 0) {
+            val cx = (src[0] + src[2] / 2f) * sceneView.width
+            val cy = (src[1] + src[3] / 2f) * sceneView.height
+            val hit = space.hitTestPreferring(cx, cy, wantsWall())
+            val anchor = hit?.let {
+                it.createAnchorOrNull()
+                    ?: runCatching { sceneView.session?.createAnchor(it.hitPose) }.getOrNull()
+            }
+            if (hit != null && anchor != null) {
+                Log.d(TAG, "placeMarkerNow: source_region hitTest 사용 @(${cx.toInt()},${cy.toInt()})")
+                setNode(anchor, (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL)
+                return true
+            }
+            Log.d(TAG, "placeMarkerNow: source_region hitTest 실패 @(${cx.toInt()},${cy.toInt()}) hit=${hit != null}")
+        }
+
+        // 3) 마지막 수단 — 카메라 앞 1.2m.
+        val camPose = space.latestFrame?.camera?.pose
+        if (camPose != null) {
+            val front = camPose.compose(Pose.makeTranslation(0f, 0f, -1.2f))
+            val anchor = runCatching { sceneView.session?.createAnchor(front) }.getOrNull()
+            if (anchor != null) {
+                Log.d(TAG, "placeMarkerNow: 평면 미인식 → 카메라 앞 1.2m fallback 마커")
+                setNode(anchor, onVertical = wantsWall())
+                return true
+            }
+        }
+        Log.d(
+            TAG,
+            "placeMarkerNow: 모든 경로 실패 (session=${sceneView.session != null} frame=${space.latestFrame != null})",
+        )
+        return false
     }
 
     private fun placeAtOriginal() {
@@ -203,7 +244,13 @@ class MovedObjectController(
     // --------------------------------------------- 드래그 이동 (큐브와 동일 방식)
 
     fun onDragBegin(xPx: Float, yPx: Float): Boolean {
-        if (!canManipulate()) return false
+        val ok = canManipulate()
+        Log.d(
+            TAG,
+            "onDragBegin @(${xPx.toInt()},${yPx.toInt()}) canManipulate=$ok " +
+                "(armed=$armed node=${node != null} furnitureSel=${furnitureHasSelection()})",
+        )
+        if (!ok) return false
         dragging = true
         node?.updateAnchorPose = false
         return true
@@ -212,12 +259,19 @@ class MovedObjectController(
     fun onDrag(xPx: Float, yPx: Float): Boolean {
         if (!dragging) return false
         val n = node ?: return true
-        val hit = space.hitTestPreferring(xPx, yPx, wantsWall()) ?: return true
+        val hit = space.hitTestPreferring(xPx, yPx, wantsWall())
+        if (hit == null) {
+            if (++dragLogN % 12 == 0) Log.d(TAG, "onDrag: hitTest 없음 @(${xPx.toInt()},${yPx.toInt()}) — 마커 위치 유지")
+            return true
+        }
         n.pose = hit.hitPose
         onVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
         applyChildTransforms()
         return true
     }
+
+    /** TEMP-DIAG: onDrag 스팸 억제용. */
+    private var dragLogN = 0
 
     fun onDragEnd(): Boolean {
         if (!dragging) return false

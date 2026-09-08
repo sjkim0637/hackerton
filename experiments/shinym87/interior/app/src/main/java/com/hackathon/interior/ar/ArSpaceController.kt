@@ -43,6 +43,9 @@ class ArSpaceController(
     private var lastFailureReason: String? = null
     private var lastPlaneCount = -1
 
+    /** TEMP-DIAG: 삭제 완료 뒤에도 onFrame 이 계속 도는지 확인용 하트비트 카운터. */
+    private var frameCount = 0L
+
     init {
         sceneView.lifecycle = lifecycle
 
@@ -66,6 +69,12 @@ class ArSpaceController(
             latestFrame = frame
             onFrame?.invoke()
             logTrackingState(session, frame)
+            // TEMP-DIAG: 약 2초(=120프레임)마다 한 줄. 이게 계속 찍히면 세션/카메라는 살아있다.
+            if (++frameCount % 120L == 0L) {
+                val planes = session.getAllTrackables(Plane::class.java)
+                    .count { it.trackingState == TrackingState.TRACKING }
+                Log.d(TAG, "onFrame heartbeat #$frameCount tracking=${frame.camera.trackingState} planes=$planes")
+            }
         }
     }
 
