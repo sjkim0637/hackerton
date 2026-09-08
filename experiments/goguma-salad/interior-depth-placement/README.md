@@ -122,3 +122,9 @@ if (length.isValid) {
 - 누적 공간 mesh와 실제 모델 occlusion은 아직 제공하지 않으므로, 가려짐과 여러 프레임에 걸친 빈 공간 검증은 Host 앱에서 추가해야 한다.
 - RGB camera color 결합과 raw/filtered point를 동시에 보관하는 debug mode는 구현하지 않았다. Viewer 색은 depth 기반이다.
 - 테스트 앱은 portrait 고정이며 기기 회전별 View-to-Depth 좌표 검증이 남아 있다.
+# 지지 면적 검사 보완 (2026-09-08)
+
+현재 작업 Branch의 개선이며 사용자 확인 후 데모 Branch에 병합한다.
+`PlacementConfig.minimumFootprintCoverage` 기본값은 0.75이다. 객체의 접촉 영역을 4×4 구역으로 나누어 최소 12개 구역과 모든 행·열에서 각각 2개 이상의 구역에 표면 점이 있어야 배치를 허용한다. 점의 개수만 많은 중앙 표면과 관측 범위를 벗어난 큰 객체는 거절한다.
+
+기울어진 바닥에서도 영역을 누락하지 않도록 현재 frame 전체를 검색한 후 실제 크기의 접촉 영역으로 제한한다. 표면 분포를 이용한 근사 검사이며 물리적 안정성이나 미관측 영역의 연속성을 보증하지 않는다. Host에서는 Depth 미준비·점 부족만 평면 fallback을 허용하고, 면적·장애물·표면 종류에 의한 거절은 유지한다.

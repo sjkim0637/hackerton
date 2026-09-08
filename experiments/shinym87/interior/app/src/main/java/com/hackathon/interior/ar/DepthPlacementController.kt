@@ -19,6 +19,7 @@ data class DepthPlacementDecision(
     val pose: Pose? = null,
     val isVertical: Boolean? = null,
     val message: String? = null,
+    val allowPlaneFallback: Boolean = false,
 )
 
 /**
@@ -107,6 +108,8 @@ class DepthPlacementController {
                         },
                         isVertical = wantWall,
                         message = if (result.isValid) null else failureMessage(result.failureReason),
+                        allowPlaneFallback = result.failureReason == PlacementFailureReason.NO_DEPTH_FRAME ||
+                            result.failureReason == PlacementFailureReason.INSUFFICIENT_POINTS,
                     ),
                 )
             }

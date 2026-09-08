@@ -456,7 +456,7 @@ class FurnitureController(
             placementValidationPending = false
             when {
                 decision.accepted -> onAccepted(decision)
-                planeFallback?.invoke() != null ->
+                decision.allowPlaneFallback && planeFallback?.invoke() != null ->
                     onAccepted(DepthPlacementDecision(depthAvailable = false, accepted = true))
                 else -> {
                     onRejected()

@@ -180,10 +180,9 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         val referenceAxis = if (abs(fit.normal.x) < 0.9f) Vec3(1f, 0f, 0f) else Vec3(0f, 0f, 1f)
         val axisU = (referenceAxis - fit.normal * referenceAxis.dot(fit.normal)).normalized()
         val axisV = fit.normal.cross(axisU).normalized()
-        val halfExtentMeters = max(objectSize.widthMeters, objectSize.depthMeters) / 2f
-        val footprintRadiusPixels = (
-            ceil(max(state.input.intrinsics.fx, state.input.intrinsics.fy) * halfExtentMeters / reference.depthMeters).toInt() + 4
-            ).coerceAtLeast(radius)
+        // A perspective-shortened floor can extend far beyond a camera-facing ROI.
+        // Search the captured frame, then clip in metric surface coordinates below.
+        val footprintRadiusPixels = max(state.input.width, state.input.height)
         val placementPoints = sampleRegion(
             frame = state.input,
             centerU = screenX.toInt(),
@@ -195,18 +194,34 @@ private class DefaultDepthPlacementEngine(initialConfig: PlacementConfig) : Dept
         var surfacePoints = 0
         var obstacles = 0
         var confidenceSum = 0f
+        val gridSize = 4
+        val covered = BooleanArray(gridSize * gridSize)
         for (point in placementPoints) {
             val d = point.position - fit.center
             val x = abs(d.dot(axisU)); val z = abs(d.dot(axisV)); val height = d.dot(fit.normal)
             if (x <= objectSize.widthMeters / 2f && z <= objectSize.depthMeters / 2f) {
                 if (abs(height) <= cfg.planeDistanceThresholdMeters) {
                     surfacePoints++; confidenceSum += point.confidence
+                    val column = (((d.dot(axisU) / objectSize.widthMeters) + 0.5f) * gridSize)
+                        .toInt().coerceIn(0, gridSize - 1)
+                    val row = (((d.dot(axisV) / objectSize.depthMeters) + 0.5f) * gridSize)
+                        .toInt().coerceIn(0, gridSize - 1)
+                    covered[row * gridSize + column] = true
                 } else if (height > cfg.obstacleHeightThresholdMeters && height <= objectSize.heightMeters) obstacles++
             }
         }
         if (surfacePoints < cfg.minValidPointCount) return failed(PlacementFailureReason.INSUFFICIENT_SURFACE, started, fit, surface, surfacePoints, slope, obstacles)
         if (obstacles > max(2, surfacePoints / 100)) return failed(PlacementFailureReason.OBSTACLE_DETECTED, started, fit, surface, surfacePoints, slope, obstacles)
-        val density = (surfacePoints.toFloat() / max(cfg.minValidPointCount, 1)).coerceAtMost(1f)
+        val density = covered.count { it }.toFloat() / covered.size
+        // Every outer strip needs support: a dense central island or three-sided
+        // ledge must not pass merely by supplying enough samples overall.
+        val supportedEdges = (0 until gridSize).all { index ->
+            (0 until gridSize).count { covered[index * gridSize + it] } >= gridSize / 2 &&
+                (0 until gridSize).count { covered[it * gridSize + index] } >= gridSize / 2
+        }
+        if (density < cfg.minimumFootprintCoverage || !supportedEdges) {
+            return failed(PlacementFailureReason.INSUFFICIENT_SURFACE, started, fit, surface, surfacePoints, slope, obstacles)
+        }
         val averageConfidence = confidenceSum / max(surfacePoints, 1)
         val flatness = (1f - fit.meanError / max(cfg.planeDistanceThresholdMeters, 0.001f)).coerceIn(0f, 1f)
         val confidence = (0.4f * density + 0.35f * averageConfidence + 0.25f * flatness).coerceIn(0f, 1f)

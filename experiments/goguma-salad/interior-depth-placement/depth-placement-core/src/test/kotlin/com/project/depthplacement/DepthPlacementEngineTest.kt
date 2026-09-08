@@ -96,10 +96,52 @@ class DepthPlacementEngineTest {
         val depth = ShortArray(40 * 40) { index -> if (index % 40 < 20) 1000.toShort() else 2000.toShort() }
         engine.start()
         engine.updateDepthFrame(wallFrame(depth))
-        val result = engine.evaluatePlacement(18f, 20f, PlacementObjectSize(0.2f, 0.2f, 0.05f), PlacementTarget.WALL)
+        val result = engine.evaluatePlacement(18f, 20f, PlacementObjectSize(0.04f, 0.2f, 0.05f), PlacementTarget.WALL)
         assertTrue(result.isValid, result.toString())
         assertEquals(1f, result.depthMeters, 0.03f)
         assertEquals(-0.02f, result.pose!!.position.x, 0.015f)
+    }
+
+    @Test fun `dense central island cannot support a larger footprint`() {
+        val depth = ShortArray(40 * 40)
+        for (v in 14..26) for (u in 14..26) depth[v * 40 + u] = 1000
+        engine.start()
+        engine.updateDepthFrame(floorFrame(depth))
+        val result = engine.evaluatePlacement(20f, 20f, PlacementObjectSize(0.35f, 0.35f, 0.5f))
+        assertFalse(result.isValid)
+        assertEquals(PlacementFailureReason.INSUFFICIENT_SURFACE, result.failureReason)
+    }
+
+    @Test fun `footprint extending beyond observed floor is rejected`() {
+        engine.start()
+        engine.updateDepthFrame(floorFrame())
+        val result = engine.evaluatePlacement(20f, 20f, PlacementObjectSize(2f, 2f, 0.5f))
+        assertFalse(result.isValid)
+        assertEquals(PlacementFailureReason.INSUFFICIENT_SURFACE, result.failureReason)
+    }
+
+    @Test fun `missing outer support rejects an otherwise dense floor`() {
+        val depth = ShortArray(40 * 40) { index -> if (index % 40 < 30) 1000 else 0 }
+        engine.start()
+        engine.updateDepthFrame(floorFrame(depth))
+        val result = engine.evaluatePlacement(20f, 20f, PlacementObjectSize(0.4f, 0.3f, 0.5f))
+        assertFalse(result.isValid)
+        assertEquals(PlacementFailureReason.INSUFFICIENT_SURFACE, result.failureReason)
+    }
+
+    @Test fun `scattered missing depth still permits supported floor`() {
+        val depth = ShortArray(40 * 40) { index -> if (index % 7 == 0) 0 else 1000 }
+        engine.start()
+        engine.updateDepthFrame(floorFrame(depth))
+        assertTrue(engine.evaluatePlacement(20f, 20f, PlacementObjectSize(0.3f, 0.3f, 0.5f)).isValid)
+    }
+
+    @Test fun `small wall patch cannot support a large wall object`() {
+        engine.start()
+        engine.updateDepthFrame(wallFrame())
+        val result = engine.evaluatePlacement(20f, 20f, PlacementObjectSize(1f, 1f, 0.05f), PlacementTarget.WALL)
+        assertFalse(result.isValid)
+        assertEquals(PlacementFailureReason.INSUFFICIENT_SURFACE, result.failureReason)
     }
 
     private fun floorFrame(depth: ShortArray = ShortArray(40 * 40) { 1000.toShort() }) = DepthFrameInput(

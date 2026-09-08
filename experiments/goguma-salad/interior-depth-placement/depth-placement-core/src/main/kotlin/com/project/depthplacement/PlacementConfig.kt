@@ -22,6 +22,7 @@ data class PlacementConfig(
     val enablePlaneFitting: Boolean = true,
     val enableRansac: Boolean = true,
     val processingFpsLimit: Int = 30,
+    val minimumFootprintCoverage: Float = 0.75f,
 ) {
     init {
         require(globalStride >= 1 && roiStride >= 1)
@@ -32,6 +33,7 @@ data class PlacementConfig(
         require(placementDepthContinuityMeters > 0f)
         require(maxSurfaceSlopeDegrees in 0f..90f)
         require(processingFpsLimit >= 1)
+        require(minimumFootprintCoverage > 0f && minimumFootprintCoverage <= 1f)
     }
 
     companion object { fun default() = PlacementConfig() }
