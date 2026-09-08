@@ -82,12 +82,10 @@ class CatalogActivity : AppCompatActivity() {
                 return false
             }
         })
-        val listener = View.OnTouchListener { _, event -> detector.onTouchEvent(event) }
-        // 사진 판 바깥의 종이 여백에서도 넘길 수 있도록 페이지 전체가 Swipe를 받는다.
-        binding.catalogRoot.setOnTouchListener(listener)
-        binding.magazinePage.setOnTouchListener(listener)
-        binding.magazineImage.setOnTouchListener(listener)
-        binding.hotspotLayer.setOnTouchListener(listener)
+        // 가장 바깥 View 한 곳에서만 받는다. 여러 View에 같은 detector를 달면 터치 하나가
+        // 부모로 올라오며 여러 번 전달되어, 탭 한 번에 페이지가 넘어가는 오작동이 생긴다.
+        // 점 marker와 태그는 자기 클릭을 먼저 소비하므로 여기까지 올라오지 않는다.
+        binding.catalogRoot.setOnTouchListener { _, event -> detector.onTouchEvent(event) }
     }
 
     private fun changePage(delta: Int) {
