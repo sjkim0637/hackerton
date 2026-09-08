@@ -9,7 +9,11 @@
         android:layout_height="match_parent" />
 
     <!-- 저장해 둔 "빈 배경" 대표 이미지를 카메라 위에 반투명으로 겹친다.
-         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다. -->
+         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다.
+         PHASE 5 데모에서는 비활성 — 카메라를 안 따라가는 2D 스냅샷이라 폰을 움직이면
+         어긋나 보이고, "변경 전/후"는 삭제 결과의 '삭제 전/후' 토글이 담당한다.
+         BackgroundKeyframe 코드/배선은 남겨두어 되돌리기 쉽게 한다
+         (아래 btnCaptureBg / btnToggleBg / opacitySeekBar 를 visibility="visible" 로). -->
     <ImageView
         android:id="@+id/backgroundOverlay"
         android:layout_width="match_parent"
@@ -67,10 +71,13 @@
             android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
+            <!-- PHASE 5 데모 비활성 (BackgroundKeyframe): 효과가 미미하고 시연 시나리오에
+                 없다. 되돌리려면 이 두 버튼과 opacitySeekBar 를 visibility="visible" 로. -->
             <Button
                 android:id="@+id/btnCaptureBg"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:visibility="gone"
                 android:text="배경 촬영" />
 
             <Button
@@ -79,6 +86,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:enabled="false"
+                android:visibility="gone"
                 android:text="배경 표시" />
 
             <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). -->
@@ -86,10 +94,11 @@
                 android:id="@+id/btnAddFurniture"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
                 android:text="가구 추가" />
         </LinearLayout>
 
+        <!-- PHASE 5 데모 비활성 (BackgroundKeyframe 투명도 조절). btnToggleBg 가 gone 이라
+             이 슬라이더를 켤 경로도 없다. 되돌리려면 위 버튼들과 함께 visible 로. -->
         <SeekBar
             android:id="@+id/opacitySeekBar"
             android:layout_width="match_parent"

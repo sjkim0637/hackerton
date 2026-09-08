@@ -13,6 +13,52 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 정리 — "배경 촬영 / 배경 표시" 기능 데모 UI 에서 숨김 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 피드백: 이 기능 효과가 잘 안 느껴진다.
+
+### 확인한 것
+
+1. **켜졌을 때 실제 효과** — `BackgroundKeyframe.capture()` 가 현재 카메라
+   프레임(가구 AR 노드만 숨김, 실제 물리 가구는 그대로)을 `PixelCopy` 로 찍어
+   `empty_background.png` 저장 → `배경 표시` 를 누르면 그 **정지 이미지**를
+   `backgroundOverlay`(match_parent ImageView) 에 `alpha≈0.5` 로 겹친다.
+   - 문제 (a): 같은 방의 정지 사진 ↔ 같은 방의 라이브 영상을 반투명 블렌딩 →
+     차이가 거의 없어 "아무 일도 안 일어난 것"처럼 보인다.
+   - 문제 (b): 오버레이가 **카메라를 안 따라간다**(2D 고정). 폰을 조금만 움직여도
+     프레임이 어긋나 유령처럼 겹친다 — 시연에서 오히려 버그처럼 보인다.
+   - 문제 (c): "변경 전/후 비교" 목적은 이미 `RemovalController` 의 **`삭제 전/후`**
+     토글(`btnToggleRemoval`)이 담당한다 — 그쪽은 실제 AI 결과와 원본을 비교하므로
+     훨씬 설득력 있다. 배경 오버레이는 그와 중복.
+
+2. **`opacitySeekBar` 가 화면에 보이나?** — 버그로 숨은 게 아니다.
+   `BackgroundKeyframe.show(visible)` 가 `opacityBar.visibility = VISIBLE` 로
+   토글하므로 `배경 표시` 를 누르면 나타난다. 다만 위치가 나쁘다 — 상단
+   컨트롤 스택(안내문 → 배경/가구 버튼 → **슬라이더** → 서버주소 입력 → 스피너 →
+   삭제 버튼들 → 상태문)에 끼어 있어 라벨도 없고 눈에 안 띈다. (이번에 숨김 처리로 무의미해짐.)
+
+3. **PHASE 9 / 2분 시연에 필요한가? — 아니다.**
+   현재 제출 문서 `experiments/shinym87/interior/NOTION_SUBMISSION.md` 의 2분 시연
+   시나리오(0:00–2:00)에 배경 촬영/표시 단계가 **없다**. "전후 비교와 가치"(1:52–2:00)는
+   삭제 결과 토글 + 이동/카탈로그 흐름으로 전달된다. PHASE 0 `phase-0.md` 시연
+   시나리오 6번("`배경 표시` 토글로 변경 전/후 비교")의 잔재이며, 그 역할은
+   `삭제 전/후` 로 대체됐다.
+
+### 적용
+
+- `activity_main.xml`: `btnCaptureBg` · `btnToggleBg` · `opacitySeekBar` 를
+  `visibility="gone"`. `backgroundOverlay` 는 원래 gone. 되돌리는 법을 주석에 명시.
+- `BackgroundKeyframe.kt` 와 `MainActivity` 배선은 **그대로 유지** — 세 위젯을
+  `visible` 로만 바꾸면 부활. `MainActivity` 에 이유 주석.
+- `README.md` 사용 방법 7번 / 기능표 갱신.
+- 빌드: `:app:assembleDebug` 성공.
+
+### 남은 판단 (원하면)
+
+되살릴 가치가 있으려면 오버레이를 **카메라 추적**에 얹거나(정지 프레임이 아니라
+캡처 시점 pose 기준 빌보드/평면 투영), 애초에 이 기능을 접고 완전 제거(옵션 3)해도
+된다. 지금은 코드만 남기고 UI 만 숨긴 상태.
+
 ## 진단 + 수정 — "삭제 완료 후 이동이 안 먹힘 / 화면이 멈춘 듯" (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 증상: 사물 삭제가 끝난 화면에서 탭·드래그가

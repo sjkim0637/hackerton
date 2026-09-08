@@ -69,6 +69,8 @@ class MainActivity : AppCompatActivity() {
             space.setPlaneVisualizationEnabled(true)
         }
 
+        // "빈 배경" 오버레이. PHASE 5 데모에서는 버튼/슬라이더를 layout 에서 gone 처리해
+        // 사실상 비활성이다(효과 미미 + 시나리오에 없음). 배선은 되돌리기 쉽게 남겨둔다.
         keyframe = BackgroundKeyframe(
             activity = this,
             sceneView = sceneView,
