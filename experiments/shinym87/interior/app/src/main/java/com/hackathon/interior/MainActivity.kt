@@ -9,7 +9,6 @@ import androidx.lifecycle.lifecycleScope
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.ar.DepthPlacementController
 import com.hackathon.interior.databinding.ActivityMainBinding
-import com.hackathon.interior.furniture.CatalogController
 import com.hackathon.interior.furniture.FurnitureController
 import com.hackathon.interior.furniture.FurnitureItem
 import com.hackathon.interior.keyframe.BackgroundKeyframe
@@ -17,21 +16,8 @@ import com.hackathon.interior.remove.MovedObjectController
 import com.hackathon.interior.remove.RemovalController
 import com.hackathon.interior.settings.AppSettings
 
-/**
- * 카메라 기반 공간 편집 / AR 가구 재배치 시뮬레이터 — 공간·AR 작업 흐름의 진입점.
- *
- * 화면 구성은 네 조각으로 나뉜다.
- * - [ArSpaceController]  : 카메라 실행, AR 세션, 벽/바닥 평면 인식, hitTest
- * - [FurnitureController]: 탭 생성 · 드래그 이동 · 핀치/버튼 크기 조절 · 회전 · 삭제
- * - [CatalogController]  : 첫 화면 브로셔 → "우리 집에 적용" → 3D 배치 (PHASE 5)
- * - [BackgroundKeyframe] : "빈 배경" 대표 이미지 캡처와 반투명 오버레이
- * - [RemovalController]  : TV 영역 지정 → 키프레임 캡처 → 서버 호출 → 결과를 벽에 적용
- * - [MovedObjectController]: 삭제한 사물을 다른 위치로 이동 + placements 서버 저장/복원
- *
- * MainActivity 는 이 조각들을 레이아웃 위젯과 제스처에 연결만 한다.
- */
+/** AR 배치와 사진 속 사물 지우기를 한 카메라 화면에서 제공한다. */
 class MainActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivityMainBinding
     private lateinit var space: ArSpaceController
     private lateinit var furniture: FurnitureController
@@ -39,24 +25,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyframe: BackgroundKeyframe
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
-    private lateinit var catalog: CatalogController
     private lateinit var settings: AppSettings
-    private var settingsOpenedFromHome = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        val sceneView = binding.sceneView
         settings = AppSettings(this)
 
-        space = ArSpaceController(sceneView, lifecycle, binding.instructionText)
+        space = ArSpaceController(binding.sceneView, lifecycle, binding.instructionText)
         depthPlacement = DepthPlacementController()
-
         furniture = FurnitureController(
             activity = this,
-            sceneView = sceneView,
+            sceneView = binding.sceneView,
             hitTest = space::hitTest,
             hitTestPreferring = space::hitTestPreferring,
             scope = lifecycleScope,
@@ -67,7 +48,6 @@ class MainActivity : AppCompatActivity() {
             onSelectionChanged = ::renderSelectionPanel,
         )
 
-        // 캡처 직전: 가구 노드 + 평면 격자/특징점 시각화를 끈다 (AI 로 보내는 이미지에 안 찍히게).
         val beforeCapture = {
             furniture.setAllVisible(false)
             space.setPlaneVisualizationEnabled(false)
@@ -79,7 +59,7 @@ class MainActivity : AppCompatActivity() {
 
         keyframe = BackgroundKeyframe(
             activity = this,
-            sceneView = sceneView,
+            sceneView = binding.sceneView,
             overlay = binding.backgroundOverlay,
             captureButton = binding.btnCaptureBg,
             toggleButton = binding.btnToggleBg,
@@ -91,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         removal = RemovalController(
             activity = this,
             scope = lifecycleScope,
-            sceneView = sceneView,
+            sceneView = binding.sceneView,
             space = space,
             binding = binding,
             serverBaseUrl = { settings.serverBaseUrl },
@@ -105,50 +85,32 @@ class MainActivity : AppCompatActivity() {
 
         moved = MovedObjectController(
             activity = this,
-            sceneView = sceneView,
+            sceneView = binding.sceneView,
             space = space,
             binding = binding,
             scope = lifecycleScope,
             serverBaseUrl = { settings.serverBaseUrl },
             furnitureHasSelection = furniture::hasSelection,
             status = { binding.removalStatusText.text = it },
-            onAlsoRestore = { furniture.restoreCatalogFromServer() },  // "서버 배치 복원" 이 카탈로그도 복원
-        )
-
-        // PHASE 5: 서버 카탈로그에서 새 가구 추가 (삭제-후-재배치와 별개 진입점).
-        catalog = CatalogController(
-            activity = this,
-            scope = lifecycleScope,
-            binding = binding,
-            serverBaseUrl = { settings.serverBaseUrl },
-            onOpen = { furniture.ensureCatalogScene() },  // "가구 추가" 최초에 scene 확보 + 복원
-            onPick = { item ->
-                furniture.beginCatalogPlacement(
-                    name = item.name,
-                    widthM = item.widthM, heightM = item.heightM, depthM = item.depthM,
-                    wantWall = item.anchorHint == "wall",
-                    catalogItemId = item.id, objectType = item.category,
-                )
-                binding.instructionText.text =
-                    "‘${item.name}’ — ${if (item.anchorHint == "wall") "벽" else "바닥"}을 탭해 배치하세요"
-            },
+            onAlsoRestore = { furniture.restoreCatalogFromServer() },
         )
 
         space.onFrame = {
             space.latestFrame?.let(depthPlacement::onFrame)
             furniture.billboard()
-            removal.onFrame()   // 결과 quad 를 벽 앵커에 스무딩해서 고정
-            moved.onFrame()     // 평면 인식되면 이동 마커를 띄운다
+            removal.onFrame()
+            moved.onFrame()
         }
         space.isIdle = { furniture.isIdle() }
 
-        // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
-        sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { me, node -> furniture.handleTap(me, node) },
+        binding.sceneView.setOnGestureListener(
+            onSingleTapConfirmed = { event, node -> furniture.handleTap(event, node) },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
-            onMoveBegin = { _, me, node -> if (!moved.onDragBegin(me.x, me.y)) furniture.beginDrag(node) },
-            onMove = { _, me, _ -> if (!moved.onDrag(me.x, me.y)) furniture.drag(me) },
-            onMoveEnd = { _, me, _ -> if (!moved.onDragEnd()) furniture.endDrag(me) },
+            onMoveBegin = { _, event, node ->
+                if (!moved.onDragBegin(event.x, event.y)) furniture.beginDrag(node)
+            },
+            onMove = { _, event, _ -> if (!moved.onDrag(event.x, event.y)) furniture.drag(event) },
+            onMoveEnd = { _, event, _ -> if (!moved.onDragEnd()) furniture.endDrag(event) },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },
@@ -161,84 +123,67 @@ class MainActivity : AppCompatActivity() {
         binding.btnDeselect.setOnClickListener { furniture.deselect() }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
 
-        setupProductNavigation()
+        setupUnifiedWorkspace()
     }
 
-    private fun setupProductNavigation() {
-        binding.homeHeroImage.setAssetCrop("interior_asset_BG.png", 0.013f, 0.016f, 0.343f, 0.409f, 58)
-        binding.homeCategoryLiving.setAssetCrop("interior_asset_BG.png", 0.013f, 0.428f, 0.096f, 0.586f)
-        binding.homeCategoryDining.setAssetCrop("interior_asset_BG.png", 0.194f, 0.428f, 0.277f, 0.586f)
-        binding.homeCategoryDecor.setAssetCrop("interior_asset_BG.png", 0.376f, 0.428f, 0.461f, 0.586f)
+    private fun setupUnifiedWorkspace() {
+        binding.homeScreen.visibility = View.GONE
+        binding.catalogPanel.visibility = View.GONE
+        binding.settingsScreen.visibility = View.GONE
+        binding.arTopPanel.visibility = View.VISIBLE
+        binding.arPrimaryActions.visibility = View.VISIBLE
+        binding.removalTypeRow.visibility = View.VISIBLE
+        binding.removalSelectionRow.visibility = View.VISIBLE
+        binding.removalRequestRow.visibility = View.VISIBLE
+        binding.removalStatusText.visibility = View.VISIBLE
 
         binding.serverUrlInput.setText(settings.serverBaseUrl)
-        binding.btnHomeArPlacement.setOnClickListener { showWorkspace(WorkspaceMode.PLACEMENT) }
-        binding.btnHomeSpaceEdit.setOnClickListener { showWorkspace(WorkspaceMode.REMOVAL) }
-        binding.btnHomeCatalog.setOnClickListener {
-            showWorkspace(WorkspaceMode.PLACEMENT)
-            catalog.show()
+        binding.btnWorkspaceHome.setOnClickListener { finish() }
+        binding.btnAddFurniture.text = "잡지"
+        binding.btnAddFurniture.setOnClickListener { finish() }
+        binding.btnWorkspaceSettings.setOnClickListener {
+            binding.serverUrlInput.setText(settings.serverBaseUrl)
+            binding.settingsScreen.visibility = View.VISIBLE
         }
-        binding.btnWorkspaceHome.setOnClickListener { showHome() }
-        binding.btnHomeSettings.setOnClickListener { showSettings(fromHome = true) }
-        binding.btnWorkspaceSettings.setOnClickListener { showSettings(fromHome = false) }
         binding.btnSettingsSave.setOnClickListener {
             settings.serverBaseUrl = binding.serverUrlInput.text?.toString().orEmpty()
             binding.serverUrlInput.setText(settings.serverBaseUrl)
-            Toast.makeText(this, "서버 주소를 저장했습니다", Toast.LENGTH_SHORT).show()
-            closeSettings()
+            Toast.makeText(this, "서버 주소를 저장했습니다.", Toast.LENGTH_SHORT).show()
+            binding.settingsScreen.visibility = View.GONE
         }
         binding.btnSettingsCancel.setOnClickListener {
             binding.serverUrlInput.setText(settings.serverBaseUrl)
-            closeSettings()
+            binding.settingsScreen.visibility = View.GONE
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                when {
-                    binding.settingsScreen.visibility == View.VISIBLE -> closeSettings()
-                    binding.homeScreen.visibility != View.VISIBLE -> showHome()
-                    else -> finish()
-                }
+                if (binding.settingsScreen.visibility == View.VISIBLE) {
+                    binding.settingsScreen.visibility = View.GONE
+                } else finish()
             }
         })
-        showHome()
+        applyMagazineSelection()
     }
 
-    private fun showWorkspace(mode: WorkspaceMode) {
-        binding.homeScreen.visibility = View.GONE
-        binding.settingsScreen.visibility = View.GONE
-        binding.arTopPanel.visibility = View.VISIBLE
-        val removalVisible = if (mode == WorkspaceMode.REMOVAL) View.VISIBLE else View.GONE
-        binding.arPrimaryActions.visibility = if (mode == WorkspaceMode.PLACEMENT) View.VISIBLE else View.GONE
-        binding.removalTypeRow.visibility = removalVisible
-        binding.removalSelectionRow.visibility = removalVisible
-        binding.removalRequestRow.visibility = removalVisible
-        binding.removalStatusText.visibility = removalVisible
-        binding.instructionText.text = if (mode == WorkspaceMode.REMOVAL) {
-            "지울 사물을 선택하고 화면에서 영역을 그리세요"
-        } else {
-            "Depth 직접 배치 · 원하는 바닥이나 벽을 탭하세요"
+    private fun applyMagazineSelection() {
+        val name = intent.getStringExtra(CatalogActivity.EXTRA_OBJECT_NAME)
+        if (name == null) {
+            binding.instructionText.text = "AR 배치와 사진 속 사물 지우기를 한 화면에서 사용할 수 있습니다."
+            return
         }
-    }
-
-    private fun showHome() {
-        furniture.cancelCatalogPlacement()
-        furniture.deselect()
-        binding.catalogPanel.visibility = View.GONE
-        binding.settingsScreen.visibility = View.GONE
-        binding.arTopPanel.visibility = View.GONE
-        binding.selectionPanel.visibility = View.GONE
-        binding.movedObjectPanel.visibility = View.GONE
-        binding.homeScreen.visibility = View.VISIBLE
-    }
-
-    private fun showSettings(fromHome: Boolean) {
-        settingsOpenedFromHome = fromHome
-        binding.serverUrlInput.setText(settings.serverBaseUrl)
-        binding.settingsScreen.visibility = View.VISIBLE
-    }
-
-    private fun closeSettings() {
-        binding.settingsScreen.visibility = View.GONE
-        if (settingsOpenedFromHome) showHome()
+        val anchor = intent.getStringExtra(CatalogActivity.EXTRA_OBJECT_ANCHOR) ?: "floor"
+        furniture.ensureCatalogScene()
+        furniture.beginCatalogPlacement(
+            name = name,
+            widthM = intent.getFloatExtra(CatalogActivity.EXTRA_OBJECT_WIDTH_M, 0.8f),
+            heightM = intent.getFloatExtra(CatalogActivity.EXTRA_OBJECT_HEIGHT_M, 0.8f),
+            depthM = intent.getFloatExtra(CatalogActivity.EXTRA_OBJECT_DEPTH_M, 0.8f),
+            wantWall = anchor == "wall",
+            catalogItemId = intent.getStringExtra(CatalogActivity.EXTRA_OBJECT_ID),
+            objectType = intent.getStringExtra(CatalogActivity.EXTRA_OBJECT_CATEGORY) ?: "other",
+        )
+        binding.instructionText.text =
+            "$name 선택됨 · ${if (anchor == "wall") "벽" else "바닥"}을 눌러 배치하세요. 사물 지우기도 바로 사용할 수 있습니다."
     }
 
     override fun onDestroy() {
@@ -246,22 +191,20 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    /** 선택된 가구가 있으면 하단 조작 패널을 채우고, 없으면 숨긴다. */
     private fun renderSelectionPanel(item: FurnitureItem?) {
         if (item == null) {
             binding.selectionPanel.visibility = View.GONE
             return
         }
         binding.selectionPanel.visibility = View.VISIBLE
-        val f = item.scaleFactor
-        val w = item.baseSize.x * 100f * f
-        val h = item.baseSize.y * 100f * f
-        val d = item.baseSize.z * 100f * f
-        binding.selectedNameText.text =
-            "%s  ·  %.0f×%.0f×%.0f cm  (x%.2f · %.0f°)".format(
-                item.name, w, h, d, f, item.rotationDeg,
-            )
+        val scale = item.scaleFactor
+        binding.selectedNameText.text = "%s · %.0f×%.0f×%.0f cm (x%.2f · %.0f°)".format(
+            item.name,
+            item.baseSize.x * 100f * scale,
+            item.baseSize.y * 100f * scale,
+            item.baseSize.z * 100f * scale,
+            scale,
+            item.rotationDeg,
+        )
     }
-
-    private enum class WorkspaceMode { PLACEMENT, REMOVAL }
 }

@@ -46,9 +46,11 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
+        android:background="#B3211E1B"
         android:orientation="vertical"
         android:paddingTop="40dp"
-        android:paddingHorizontal="12dp">
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="10dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -70,14 +72,14 @@
                 android:layout_height="1dp"
                 android:layout_weight="1" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/btnWorkspaceSettings"
                 android:layout_width="52dp"
                 android:layout_height="44dp"
                 android:backgroundTint="#D91D1B19"
-                android:text="⚙"
-                android:textColor="@android:color/white"
-                android:textSize="18sp" />
+                android:contentDescription="설정"
+                android:padding="12dp"
+                android:src="@drawable/ic_settings" />
         </LinearLayout>
 
         <TextView
@@ -102,23 +104,29 @@
             <Button
                 android:id="@+id/btnCaptureBg"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="44dp"
+                android:backgroundTint="#DAB476"
+                android:textColor="#211E1B"
                 android:text="배경 촬영" />
 
             <Button
                 android:id="@+id/btnToggleBg"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="44dp"
                 android:layout_marginStart="8dp"
+                android:backgroundTint="#F3EEE7"
                 android:enabled="false"
+                android:textColor="#211E1B"
                 android:text="배경 표시" />
 
             <!-- PHASE 5: 서버 카탈로그에서 새 가구를 골라 배치 (삭제-후-재배치와 별개). -->
             <Button
                 android:id="@+id/btnAddFurniture"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="44dp"
                 android:layout_marginStart="8dp"
+                android:backgroundTint="#403A34"
+                android:textColor="@android:color/white"
                 android:text="가구 추가" />
         </LinearLayout>
 
@@ -476,7 +484,7 @@
         android:layout_height="match_parent"
         android:background="#F3EEE7"
         android:fillViewport="true"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -518,15 +526,14 @@
                         android:textSize="10sp" />
                 </LinearLayout>
 
-                <Button
+                <ImageButton
                     android:id="@+id/btnHomeSettings"
                     android:layout_width="54dp"
                     android:layout_height="48dp"
                     android:backgroundTint="#211E1B"
                     android:contentDescription="설정"
-                    android:text="⚙"
-                    android:textColor="@android:color/white"
-                    android:textSize="18sp" />
+                    android:padding="12dp"
+                    android:src="@drawable/ic_settings" />
             </LinearLayout>
 
             <FrameLayout

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#171513">
+
+    <com.hackathon.interior.ui.AtlasCropView
+        android:id="@+id/magazineImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="196dp"
+        android:contentDescription="인테리어 화보" />
+
+    <FrameLayout
+        android:id="@+id/hotspotLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="196dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="22dp"
+        android:paddingTop="42dp"
+        android:paddingEnd="18dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.18"
+                android:text="MY HOME"
+                android:textColor="@android:color/white"
+                android:textSize="20sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.28"
+                android:text="INTERIOR MAGAZINE"
+                android:textColor="#E5BD7D"
+                android:textSize="9sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnCatalogSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="설정"
+            android:padding="12dp"
+            android:src="@drawable/ic_settings" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="196dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_magazine_panel"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="18dp">
+
+        <TextView
+            android:id="@+id/issueText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.12"
+            android:textColor="#9B7547"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/pageTitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="#211E1B"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/pageDescriptionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="#6E665F"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/pageIndicatorText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="end"
+            android:textColor="#9B7547"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/catalogSettingsScreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F3EEE7"
+        android:padding="24dp"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#FFFFFFFF"
+            android:elevation="10dp"
+            android:orientation="vertical"
+            android:padding="24dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="연결 설정"
+                android:textColor="#211E1B"
+                android:textSize="25sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:text="Interior API 서버 주소"
+                android:textColor="#403A34"
+                android:textStyle="bold" />
+            <EditText
+                android:id="@+id/catalogServerUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="8dp"
+                android:hint="http://192.168.0.10:8000"
+                android:imeOptions="actionDone"
+                android:inputType="textUri"
+                android:singleLine="true" />
+            <Button
+                android:id="@+id/btnCatalogSettingsSave"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="22dp"
+                android:backgroundTint="#DAB476"
+                android:text="저장"
+                android:textColor="#211E1B" />
+            <Button
+                android:id="@+id/btnCatalogSettingsClose"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#211E1B"
+                android:text="닫기"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

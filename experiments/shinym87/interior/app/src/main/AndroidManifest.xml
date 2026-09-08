@@ -36,7 +36,7 @@
             tools:replace="android:value" />
 
         <activity
-            android:name=".MainActivity"
+            android:name=".CatalogActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true"
             android:screenOrientation="locked"
@@ -46,6 +46,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:screenOrientation="locked"
+            android:theme="@style/Theme.InteriorAr" />
     </application>
 
 </manifest>
