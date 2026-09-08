@@ -1,9 +1,9 @@
 # Handoff
 
-## 현재 Branch의 후속 개선 — 사용자 확인 대기
+## 현재 후속 개선 — 데모 Branch 병합 완료
 
 - `7c5c1dd` 이후 Depth 면적 검사와 화보·AR UI 가독성을 개선했다. 아래 기존 Completed·Verification은 이전 전달 시점의 기록이다.
-- 이번 변경은 `agent/goguma-salad/interior-assets-ui`에만 있으며 `integration-interior-demo`에 병합하지 않았다.
+- 사용자 승인으로 `28c7053`, `697b1ed`를 `integration-interior-demo`에 fast-forward 병합했다. 기존 하단의 Branch 위치와 완료 기록은 당시 시점의 이력이다.
 - Depth: 4×4 지지 구역 중 75% 이상, 각 행·열 최소 절반의 지지가 필요하다. 면적 부족·장애물 판정은 평면 대체 배치로 우회하지 않는다.
 - UI: 상단 안내와 하단 스크롤 도구, 접을 수 있는 사물 지우기, 48dp 가구 선택 영역, 큰 이름 태그를 적용했다.
 - Depth 테스트 19개 통과. 실제 기기 연결이 없어 이번 UI와 면적 검사의 실기기 검증은 사용자 확인이 필요하다.

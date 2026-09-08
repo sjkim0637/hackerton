@@ -26,7 +26,7 @@ ARCore Depth 입력을 실시간 Point Cloud로 변환하고, 표면 기울기�
 
 ## Current Direction
 
-- `agent/goguma-salad/interior-assets-ui`의 후속 개선에서 4×4 footprint 구역 점유율(기본 75%)과 행·열별 지지를 검사한다. 테스트는 19개 통과했으며 사용자 확인 전까지 데모 Branch에 병합하지 않는다.
+- `agent/goguma-salad/interior-assets-ui`의 후속 개선에서 4×4 footprint 구역 점유율(기본 75%)과 행·열별 지지를 검사한다. 테스트는 19개 통과했으며 사용자 승인으로 데모 Branch에 병합했다(`28c7053`, `697b1ed`).
 
 - `depth-placement-core`: Android UI 및 ARCore에 의존하지 않는 계산과 Public API
 - `depth-placement-arcore`: ARCore `Frame`, Depth image, intrinsics, pose 변환

@@ -2,6 +2,8 @@
 
 ## 결과
 
+2026-09-08 후속 통합: 사용자 승인으로 `agent/goguma-salad/interior-assets-ui`의 `28c7053`(면적 검사)과 `697b1ed`(UI)을 `integration-interior-demo`에 fast-forward 병합했다. 충돌·의존성·API/DB 변경은 없다. Core의 설정 필드 `minimumFootprintCoverage`(기본 0.75)가 추가됐다. 테스트 19개, APK build와 Lint(오류 0건·경고 131건) 검증 결과를 유지한다. 실기기 확인은 남아 있다.
+
 `agent/goguma-salad/interior-depth-placement`의 독립 Depth 모듈을 `integration-interior-demo`의 Interior AR 앱에 Gradle project dependency로 연결했다. 기존 카메라·AI 제거·카탈로그·가구 편집 기능은 유지하면서 가구를 처음 놓거나 이동을 끝낼 때 Depth 기반 품질 검사를 추가한다.
 
 ## 통합 범위

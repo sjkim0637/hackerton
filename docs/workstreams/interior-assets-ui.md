@@ -68,20 +68,20 @@ INTEGRATION
 
 ## Integration Candidate
 
-사용자 검토 대기. 이번 변경은 현재 Branch에만 보관한다.
-`integration-interior-demo` 병합과 원격 Push는 사용자의 확인 이후 별도로 진행한다.
+사용자 승인으로 `28c7053`과 `697b1ed`를 `integration-interior-demo`에 fast-forward 병합했다. 충돌이나 추가 코드 수정은 없으며 기존 테스트 19개·APK build·Lint 오류 0건 결과를 유지한다.
 
 ## Next
 
 1. APK에서 화보 점·태그를 눌러 선택과 AR 진입을 확인한다.
 2. AR 하단 도구 펼치기·접기, 가구 편집, 큰 글꼴에서의 스크롤을 확인한다.
 3. 넓은 바닥·벽은 배치되고 좁은 받침면·표면 가장자리에서는 거절되는지 확인한다.
-4. 사용자 확인 후 `integration-interior-demo`에 병합한다.
+4. 데모 Branch에서 실제 기기 배치와 화면 사용성을 계속 확인한다.
 
 ## Relevant Commits
 
 - `7c5c1dd`: 이번 작업 시작 기준 Handoff.
-- 이번 Branch의 `fix(depth)` 및 `feat(ui)` Commit: 면적 검사와 UI 개선을 목적별로 분리한다.
+- `28c7053`: 가구 지지 면적 검사와 품질 거절 처리 강화.
+- `697b1ed`: AR 도구 패널과 화보 선택 표시 가독성 개선.
 
 ## Handoff
 
