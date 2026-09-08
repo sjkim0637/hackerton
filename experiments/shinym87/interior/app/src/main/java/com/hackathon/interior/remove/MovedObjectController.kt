@@ -120,8 +120,26 @@ class MovedObjectController(
         this.objectType = objectType
         this.objectBitmap = (bitmap ?: placeholderBitmap()).let { EdgeFade.feather(downscale(it)) }
         this.originalPose = originalPose
-        this.baseW = widthM.coerceIn(0.15f, 3f)
-        this.baseH = heightM.coerceIn(0.15f, 3f)
+        // 실제 크기: 삭제 당시 hitTest 로 잰 미터값을 그대로 쓴다. quad 는 월드 미터 단위라
+        // 새 위치의 카메라 거리 차이는 원근으로 자동 반영된다(별도 거리 보정 불필요).
+        //  - 폭(widthM)을 기준으로 잡는다: 평면 위 수평 hitTest 라 세로보다 안정적.
+        //  - 세로는 크롭 이미지 종횡비로 유도해, quad 비율이 이미지와 어긋나 늘어나지 않게 한다.
+        //  - 작은 소품(텀블러/컵)까지 살릴 수 있게 하한을 0.05m 로 낮춘다(기존 0.15m).
+        //  - MOVED_SCALE_CORRECTION: 원근 때문에 폭이 약간 크게 측정되는 잔차용 임시 노브.
+        val cropBmp = this.objectBitmap
+        this.baseW = (widthM * MOVED_SCALE_CORRECTION).coerceIn(0.05f, 3f)
+        this.baseH = if (cropBmp != null && cropBmp.width > 0) {
+            (this.baseW * cropBmp.height.toFloat() / cropBmp.width.toFloat()).coerceIn(0.05f, 3f)
+        } else {
+            (heightM * MOVED_SCALE_CORRECTION).coerceIn(0.05f, 3f)
+        }
+        Log.d(
+            TAG,
+            "arm size: 측정 W=%.3f H=%.3f m → baseW=%.3f baseH=%.3f (crop=%dx%d corr=%.2f)".format(
+                widthM, heightM, this.baseW, this.baseH,
+                cropBmp?.width ?: 0, cropBmp?.height ?: 0, MOVED_SCALE_CORRECTION,
+            ),
+        )
         this.scaleF = 1f
         this.rotDeg = 0f
         armed = true
@@ -470,9 +488,11 @@ class MovedObjectController(
         Log.d(TAG, "이동 마커: type=$objectType vertical=$onVertical pose=${anchor.pose}")
     }
 
-    /** 자식(이미지/라벨)의 회전·배율·오프셋을 잡는다. 마커는 터치하기 쉽게 조금 크게 보인다. */
+    /** 자식(이미지/라벨)의 회전·배율·오프셋을 잡는다. */
     private fun applyChildTransforms() {
-        val disp = scaleF * MARKER_SCALE
+        // MARKER_SCALE 은 이제 1.0 (표시 확대 없음). MOVED_SCALE_CORRECTION 은 실기기
+        // 미세 조정용 임시 노브 — 둘 다 1.0 이면 baseW×baseH(실측 미터) 그대로 그린다.
+        val disp = scaleF * MARKER_SCALE * MOVED_SCALE_CORRECTION
         val h = baseH * disp
         imageNode?.let {
             it.scale = Scale(disp)
@@ -535,8 +555,23 @@ class MovedObjectController(
         const val LABEL_W = 0.12f
         const val LABEL_GAP = 0.06f
         const val SAVE_DEBOUNCE_MS = 500L
-        /** 마커를 실제 크기보다 이만큼 크게 그려 손가락으로 잡기 쉽게 한다. */
-        const val MARKER_SCALE = 1.35f
+
+        /**
+         * 마커 표시 배율. 예전엔 1.35 로 키웠지만(터치 편의 목적), 마커 ImageNode 는
+         * `isTouchable = false` 이고 드래그 판정은 화면 좌표 기반(`onDragBegin` 이 노드를
+         * hitTest 하지 않음)이라 확대 이득이 전혀 없었다. 오히려 이동된 사물이 원본보다
+         * ~1.35배 커 보이는 주원인이라 1.0 으로 되돌렸다.
+         */
+        const val MARKER_SCALE = 1f
+
+        /**
+         * 이동 사물 크기 임시 보정 계수 (설계서의 INTERIOR_MOVED_SCALE_CORRECTION 대응).
+         * 크기 계산은 전부 앱(클라이언트)에서 하므로 서버 env 가 아니라 이 상수다.
+         * bbox 가장자리 hitTest 로 잰 폭이 원근 때문에 실제보다 조금 크게 나오는 잔차를
+         * 실기기에서 맞추기 위한 노브. 1.0 = 보정 없음. 크게 나오면 0.67 등으로 내린다.
+         * 값 변경 후 `:app:assembleDebug` 증분 빌드(~40s) → 재설치.
+         */
+        const val MOVED_SCALE_CORRECTION = 1f
         const val KEY_LAST_SCENE = "moved_last_scene"
         const val KEY_LAST_JOB = "moved_last_job"
         val OBJECT_LABELS = mapOf(

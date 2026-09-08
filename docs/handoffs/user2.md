@@ -13,6 +13,86 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 진단 + 수정 — 이동된 사물이 원본보다 ~1.5배 크게 표시 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 텀블러(=objectType `other`)를 삭제 후 이동하니
+마커 이미지가 원본보다 약 1.5배 크게 보였다.
+
+### 1. 이동 사물 quad 크기가 결정되는 경로
+
+```
+RemovalController.resolveWall(rect)
+  bbox 네 변(rect.left/right/centerY, centerX/top/bottom)에서 space.hitTest → hitPose
+  patchWidthM  = distance(left, right)   // 3D 거리(m), coerceIn(0.2, 4)  ← 기존
+  patchHeightM = distance(top,  bottom)  // 3D 거리(m), coerceIn(0.2, 4)  ← 기존
+        │  (RemovalController.runFlow → onRemovalApplied 의 마지막 두 인자)
+        ▼
+MovedObjectController.arm(… widthM=patchWidthM, heightM=patchHeightM)
+  baseW = widthM.coerceIn(0.15, 3)      ← 기존
+  baseH = heightM.coerceIn(0.15, 3)     ← 기존
+        ▼
+setNode() → ImageNode(size = Size(baseW, baseH))   // 월드 미터 단위 quad
+applyChildTransforms(): imageNode.scale = Scale(scaleF * MARKER_SCALE)
+  scaleF = 1 (초기), MARKER_SCALE = 1.35   ← 여기!
+```
+
+- **정규화 bbox × 해상도로 픽셀 크기를 구하나?** — 아니다. bbox 네 변의 화면 좌표에서
+  직접 `hitTest` 하고, 맞은 **3D 점들 사이 유클리드 거리(m)**를 크기로 쓴다.
+- **픽셀 → 미터 변환 공식?** — 별도 변환 없음. hitTest 가 이미 월드 좌표(m)를 준다.
+  즉 "hitTest 거리 기반" 이 맞고, 원근 계산은 hitTest 내부(ARCore)에서 처리된다.
+
+### 2. 카메라-사물 거리 차이는 반영되는가 → **이미 올바르게 반영됨**
+
+실제 크기를 **삭제 당시 hitTest 로 잰 미터값**으로 저장하고(`patchWidthM/HeightM`),
+새 위치의 quad 도 `Size(baseW, baseH)` = **월드 미터** 로 만든다. 월드 미터 quad 는
+보는 거리가 달라지면 화면상 크기가 원근으로 자동 조정된다 — 실제 사물과 동일.
+따라서 "삭제 거리 ↔ 이동 거리" 차이는 **재계산할 필요가 없고, 이미 맞다.**
+(사용자가 제안한 "원래 거리 기준 cm 저장 후 유지" 는 현재 코드가 이미 하는 일.)
+
+남는 오차는 **측정 자체의 원근 과대추정**이다: bbox 좌/우 변을 지나는 광선이
+사물 앞면이 아니라 그 뒤 지지면(책상)에 맞아, 두 교点 간격이 사물 실제 폭보다
+약간 넓게 나온다. 깊이 없이는 정밀 보정이 어려워 임시 노브로 처리(아래 4).
+
+### 3. 512px 다운스케일 → **크기 버그와 무관**
+
+`MovedObjectController.downscale()` 는 가장 긴 변을 512(`MAX_TEX`)로 맞추되 **가로/세로에
+같은 계수 `f`** 를 곱한다 → 종횡비 보존. 게다가 quad 월드 크기(`Size(baseW, baseH)`)와
+**독립**이다(텍스처 해상도만 바뀜). `EdgeFade.feather` 도 치수 불변(가장자리 alpha 램프
+뿐, 오히려 불투명 영역이 ~16% 작아 보이게 함).
+다만 `baseW/baseH` 를 이미지 종횡비와 무관하게 **각각 hitTest 로** 재던 탓에 quad 비율이
+이미지와 어긋나 늘어나 보일 수 있었다 → 이번에 세로를 이미지 종횡비로 유도하도록 수정.
+
+### 원인 정리
+
+| 요인 | 영향 | 조치 |
+|---|---|---|
+| **`MARKER_SCALE = 1.35`** (commit a5d089e, "터치하기 쉽게") | quad 를 항상 1.35× 확대. 마커는 `isTouchable=false` 고 드래그는 화면 좌표 기반이라 **터치 이득 0** — 순수 부작용 | `1.0` 으로 되돌림 (주 원인) |
+| `patchWidthM/HeightM` `coerceIn(0.2, 4)` + `baseW/baseH` `coerceIn(0.15, 3)` | 텀블러(~7–9cm)가 15–20cm 로 바닥 클램프 → 최대 2–3× 과대 | 하한 `0.05m` 로 낮춤 |
+| `baseW`·`baseH` 를 각각 독립 hitTest | quad 종횡비 ≠ 이미지 종횡비 → 늘어남 | 폭만 실측, 세로는 크롭 이미지 종횡비로 유도 |
+| bbox 가장자리 hitTest 의 원근 과대추정 | 폭이 실제보다 약간 큼(잔차) | `MOVED_SCALE_CORRECTION` 노브 |
+
+### 적용 (수정)
+
+- **`MovedObjectController`**
+  - `MARKER_SCALE = 1.35f → 1f`. `applyChildTransforms` 의 `disp = scaleF * MARKER_SCALE
+    * MOVED_SCALE_CORRECTION`.
+  - `MOVED_SCALE_CORRECTION = 1f` 추가 (companion 상수). **크기 계산이 전부 클라이언트라
+    서버 env 가 아니라 앱 상수다.** 실기기에서 크게 나오면 `0.67` 등으로 내리고
+    `:app:assembleDebug`(증분 ~40s) 재설치.
+  - `arm()`: `baseW = (widthM * MOVED_SCALE_CORRECTION).coerceIn(0.05, 3)`,
+    `baseH = baseW * cropBmp.height / cropBmp.width` (이미지 종횡비 유지, 없으면
+    `heightM` 폴백). 하한 0.05m. 계산값 `Log.d(TAG, "arm size: …")` 로 남김.
+- **`RemovalController.resolveWall`**: `patchWidthM/HeightM` `coerceIn(0.2,4) → coerceIn(0.05,4)`.
+  `Log.d(TAG, "resolveWall: patchW=… patchH=… edges=…")` 추가.
+- 빌드 `:app:assembleDebug` 성공.
+
+### 알려진 잔여 이슈 (이번 범위 밖)
+
+- **서버 배치 복원 시 실제 크기 유실**: `savePlacementNow` 는 `scaleF` 만 저장하고
+  `baseW/baseH` 는 저장/복원하지 않는다 → `restoreFromServer` 후 `baseW=baseH=0.6`(필드
+  기본값)으로 뜬다. 같은 세션 내 삭제→이동에는 영향 없음. 서버 스키마에 `base_w/base_h`
+  (또는 `source_region` + `plane_distance`)를 추가하면 근본 해결.
+
 ## 정리 — "배경 촬영 / 배경 표시" 기능 데모 UI 에서 숨김 (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 피드백: 이 기능 효과가 잘 안 느껴진다.

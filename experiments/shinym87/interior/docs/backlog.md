@@ -132,6 +132,17 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   마지막 fallback 추가(평면 미인식이어도 마커가 떠서 바로 끌 수 있음). 제스처/hitTest/onFrame
   임시 진단 로그(tag `InteriorAR`) 추가. `docs/handoffs/user2.md`,
   루트 `docs/handoffs/interior-removal-fallback.md`(goguma-salad 보고서)와 동일 건.
+- [DONE] 진단/수정: 이동된 사물이 원본보다 ~1.5배 크게 표시. 주원인은 `MARKER_SCALE=1.35`
+  (터치 편의 목적이었으나 마커 `isTouchable=false` + 드래그가 화면 좌표 기반이라 이득 0)
+  → `1.0`. 부수: `patchWidthM/HeightM`·`baseW/baseH` 하한을 0.2/0.15m → 0.05m (텀블러가
+  20cm 로 부풀던 것), `baseH` 를 크롭 이미지 종횡비로 유도(quad 늘어남 방지). 임시 노브
+  `MOVED_SCALE_CORRECTION`(기본 1.0, 앱 상수) 추가 — 원근 과대추정 잔차용. 512 다운스케일은
+  종횡비 보존·quad 크기와 독립이라 무관. `docs/handoffs/user2.md`.
+- [DONE] 정리: "배경 촬영/배경 표시"(BackgroundKeyframe) 데모 UI 숨김 — 효과 미미(정지
+  2D 스냅샷, 카메라 미추적) + 2분 시연 시나리오에 없음. "변경 전/후"는 "삭제 전/후" 담당.
+  `activity_main.xml` 3개 위젯 `visibility=gone`, 코드/배선 유지. `docs/handoffs/user2.md`.
+- [TODO] 서버 배치 복원 시 실제 크기 유실 — placements 에 `base_w/base_h` (또는 source_region
+  + 거리) 저장/복원 추가. 지금은 `scaleF` 만 저장돼 복원 후 0.6m 로 뜬다.
 - [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)

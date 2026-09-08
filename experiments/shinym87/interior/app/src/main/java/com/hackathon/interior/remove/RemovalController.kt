@@ -247,8 +247,15 @@ class RemovalController(
         val right = space.hitTest(rect.right, rect.centerY())?.hitPose
         val top = space.hitTest(rect.centerX(), rect.top)?.hitPose
         val bottom = space.hitTest(rect.centerX(), rect.bottom)?.hitPose
-        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.2f, 4f)
-        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.2f, 4f)
+        // 하한을 0.05m 로 (기존 0.2m). 텀블러/컵 같은 소품이 20cm 로 부풀던 문제.
+        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.05f, 4f)
+        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.05f, 4f)
+        Log.d(
+            TAG,
+            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b T=%b B=%b)".format(
+                patchWidthM, patchHeightM, left != null, right != null, top != null, bottom != null,
+            ),
+        )
     }
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
