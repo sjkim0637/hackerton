@@ -100,7 +100,7 @@ class AtlasCropView @JvmOverloads constructor(
         val crop = visibleCropPixels(image)
         val destination = destinationRect(crop.width(), crop.height())
         clipPath.reset()
-        clipPath.addRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), dp(12f), dp(12f), Path.Direction.CW)
+        clipPath.addRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), 0f, 0f, Path.Direction.CW)
         canvas.save()
         canvas.clipPath(clipPath)
         canvas.drawBitmap(

@@ -21,6 +21,7 @@ data class MagazineObject(
 
 data class MagazinePage(
     val id: String,
+    val asset: String,
     val issue: String,
     val title: String,
     val description: String,
@@ -34,46 +35,121 @@ interface MagazineFeedProvider {
 }
 
 /**
- * 실제 화보 사진이 준비되기 전까지 쓰는 임시 데이터.
- * crop 영역은 `interior_asset_BG.png`에서 로고, 홍보 문구, 화살표 버튼이 들어가지 않는
- * 순수한 사진 부분만 고른 값이다. `assets/magazine/<id>.jpg`가 생기면 그 사진이 우선한다.
+ * 공급받은 화보 atlas 두 장에서 한 페이지씩 잘라 쓴다.
+ * `interior_magazine1.png`, `interior_magazine2.png`는 3열 격자에 완성된 잡지 지면이 들어 있다.
+ * 좌표는 원본 이미지 기준 0..1 비율이라 화면 크기가 달라져도 같은 자리를 가리킨다.
  */
 class MockMagazineFeedProvider : MagazineFeedProvider {
     override suspend fun pages(): List<MagazinePage> = listOf(
         MagazinePage(
-            id = "warm-reading-room",
+            id = "my-home-my-style",
+            asset = M1,
             issue = "SEPTEMBER · LIVING",
-            title = "빛이 머무는 독서 공간",
-            description = "오후 볕이 벽을 타고 내려오는 자리에 라운지 체어 한 점을 두었다. 사진 속 점을 눌러 내 방에서 크기를 확인해 보세요.",
-            crop = AtlasCrop(0.0195f, 0.1641f, 0.2799f, 0.4102f),
+            title = "공간이 달라지면 일상이 특별해집니다",
+            description = "",
+            crop = AtlasCrop(0.0024f, 0.0011f, 0.3314f, 0.2868f),
             objects = listOf(
-                MagazineObject("lounge-chair-01", "라운지 체어", "chair", 0.82f, 0.88f, 0.78f, "floor", 0.363f, 0.640f),
-                MagazineObject("side-table-01", "마블 사이드 테이블", "table", 0.44f, 0.52f, 0.44f, "floor", 0.845f, 0.660f),
-                MagazineObject("floor-lamp-01", "아치 플로어 램프", "lamp", 0.42f, 1.65f, 0.42f, "floor", 0.845f, 0.100f),
+                MagazineObject("sofa-stone-01", "3인 패브릭 소파", "sofa", 2.20f, 0.78f, 0.95f, "floor", 0.22f, 0.68f),
+                MagazineObject("table-stone-01", "라운드 스톤 테이블", "table", 0.95f, 0.35f, 0.95f, "floor", 0.55f, 0.78f),
+                MagazineObject("lamp-mood-01", "무드 테이블 조명", "lamp", 0.30f, 0.45f, 0.30f, "floor", 0.60f, 0.53f),
             ),
         ),
         MagazinePage(
-            id = "soft-neutral-living",
-            issue = "NEW COLLECTION · SOFT NEUTRAL",
-            title = "낮은 채도의 편안한 거실",
-            description = "채도를 낮춘 패브릭과 짙은 원목이 만나는 거실. 소파와 테이블, 화분을 하나씩 눌러 배치를 가늠해 보세요.",
-            crop = AtlasCrop(0.7474f, 0.0352f, 0.8802f, 0.2021f),
+            id = "modern-style",
+            asset = M1,
+            issue = "MODERN STYLE",
+            title = "모던한 감각, 세련된 일상",
+            description = "",
+            crop = AtlasCrop(0.6698f, 0.0011f, 0.9976f, 0.2868f),
             objects = listOf(
-                MagazineObject("sectional-sofa-01", "모듈 소파", "sofa", 2.45f, 0.82f, 0.95f, "floor", 0.598f, 0.637f),
-                MagazineObject("coffee-table-01", "라운드 커피 테이블", "table", 0.86f, 0.38f, 0.86f, "floor", 0.147f, 0.772f),
-                MagazineObject("palm-planter-01", "야자수 화분", "decor", 0.52f, 1.45f, 0.52f, "floor", 0.868f, 0.257f),
+                MagazineObject("sofa-modern-01", "모던 3인 소파", "sofa", 2.30f, 0.75f, 0.92f, "floor", 0.35f, 0.70f),
+                MagazineObject("table-round-01", "라운드 커피 테이블", "table", 0.90f, 0.36f, 0.90f, "floor", 0.58f, 0.80f),
+                MagazineObject("lamp-arch-01", "아치 플로어 램프", "lamp", 0.55f, 1.95f, 0.42f, "floor", 0.72f, 0.45f),
+                MagazineObject("art-abstract-01", "추상 월 아트", "decor", 0.80f, 1.10f, 0.05f, "wall", 0.27f, 0.42f),
             ),
         ),
         MagazinePage(
-            id = "night-lounge",
-            issue = "EDITOR'S PICK · NIGHT LOUNGE",
-            title = "짙은 톤으로 만든 휴식",
-            description = "어두운 벽과 낮게 내린 조명이 만드는 저녁의 방. 점을 누르면 이름이 뜨고, 한 번 더 누르면 AR 작업 화면으로 넘어갑니다.",
-            crop = AtlasCrop(0.7721f, 0.2256f, 0.8757f, 0.3867f),
+            id = "natural-dining",
+            asset = M1,
+            issue = "NATURAL STYLE",
+            title = "자연을 담은 편안한 공간",
+            description = "",
+            crop = AtlasCrop(0.0024f, 0.2906f, 0.3314f, 0.5601f),
             objects = listOf(
-                MagazineObject("accent-chair-01", "월넛 암체어", "chair", 0.76f, 0.86f, 0.80f, "floor", 0.420f, 0.660f),
-                MagazineObject("pendant-light-01", "돔 펜던트 조명", "lamp", 0.48f, 0.34f, 0.48f, "wall", 0.060f, 0.160f),
+                MagazineObject("table-dining-01", "원목 다이닝 테이블", "table", 1.80f, 0.75f, 0.90f, "floor", 0.55f, 0.66f),
+                MagazineObject("chair-dining-01", "우드 다이닝 체어", "chair", 0.48f, 0.82f, 0.52f, "floor", 0.25f, 0.78f),
+                MagazineObject("lamp-dome-01", "돔 펜던트 조명", "lamp", 0.42f, 0.32f, 0.42f, "wall", 0.62f, 0.42f),
+            ),
+        ),
+        MagazinePage(
+            id = "quiet-bedroom",
+            asset = M1,
+            issue = "BEDROOM",
+            title = "온전한 휴식을 위한 나만의 침실",
+            description = "",
+            crop = AtlasCrop(0.3396f, 0.2906f, 0.6604f, 0.5601f),
+            objects = listOf(
+                MagazineObject("bed-queen-01", "퀸 패브릭 베드", "bed", 1.65f, 0.95f, 2.10f, "floor", 0.45f, 0.75f),
+                MagazineObject("lamp-linen-01", "리넨 테이블 램프", "lamp", 0.28f, 0.48f, 0.28f, "floor", 0.79f, 0.585f),
+                MagazineObject("plant-indoor-01", "실내 화분", "decor", 0.45f, 1.30f, 0.45f, "floor", 0.93f, 0.45f),
+            ),
+        ),
+        MagazinePage(
+            id = "warm-kitchen",
+            asset = M1,
+            issue = "KITCHEN & DINING",
+            title = "맛있는 일상이 머무는 곳",
+            description = "",
+            crop = AtlasCrop(0.6698f, 0.2906f, 0.9976f, 0.5601f),
+            objects = listOf(
+                MagazineObject("island-wood-01", "우드 아일랜드", "table", 1.90f, 0.92f, 0.85f, "floor", 0.62f, 0.68f),
+                MagazineObject("stool-bar-01", "바 스툴", "chair", 0.42f, 0.75f, 0.42f, "floor", 0.53f, 0.78f),
+                MagazineObject("lamp-cone-01", "코니컬 펜던트 조명", "lamp", 0.30f, 0.35f, 0.30f, "wall", 0.73f, 0.33f),
+            ),
+        ),
+        MagazinePage(
+            id = "balcony-outdoor",
+            asset = M1,
+            issue = "BALCONY & OUTDOOR",
+            title = "바깥의 풍경이 가까워지는 공간",
+            description = "",
+            crop = AtlasCrop(0.6698f, 0.5644f, 0.9976f, 0.8193f),
+            objects = listOf(
+                MagazineObject("chair-rattan-01", "라탄 라운지 체어", "chair", 0.78f, 0.85f, 0.80f, "floor", 0.78f, 0.62f),
+                MagazineObject("table-side-01", "원형 사이드 테이블", "table", 0.45f, 0.50f, 0.45f, "floor", 0.61f, 0.64f),
+                MagazineObject("planter-outdoor-01", "야외 화분", "decor", 0.50f, 0.95f, 0.50f, "floor", 0.27f, 0.78f),
+            ),
+        ),
+        MagazinePage(
+            id = "living-together",
+            asset = M2,
+            issue = "LIVING ROOM",
+            title = "머무는 순간이 더 편안한 거실",
+            description = "",
+            crop = AtlasCrop(0.6682f, 0.0011f, 0.9977f, 0.2939f),
+            objects = listOf(
+                MagazineObject("sofa-couch-01", "모듈 카우치 소파", "sofa", 2.80f, 0.72f, 1.60f, "floor", 0.42f, 0.68f),
+                MagazineObject("table-oval-01", "오벌 우드 테이블", "table", 1.10f, 0.32f, 0.70f, "floor", 0.47f, 0.79f),
+                MagazineObject("plant-large-01", "대형 실내 화분", "decor", 0.55f, 1.50f, 0.55f, "floor", 0.53f, 0.48f),
+            ),
+        ),
+        MagazinePage(
+            id = "kids-room",
+            asset = M2,
+            issue = "KIDS ROOM",
+            title = "아이의 상상이 자라는 공간",
+            description = "",
+            crop = AtlasCrop(0.6682f, 0.2961f, 0.9977f, 0.5743f),
+            objects = listOf(
+                MagazineObject("bed-house-01", "하우스 프레임 침대", "bed", 1.00f, 1.45f, 1.95f, "floor", 0.58f, 0.60f),
+                MagazineObject("rug-round-01", "라운드 러그", "decor", 1.60f, 0.02f, 1.60f, "floor", 0.55f, 0.82f),
+                MagazineObject("lamp-globe-01", "글로브 펜던트 조명", "lamp", 0.35f, 0.35f, 0.35f, "wall", 0.87f, 0.13f),
             ),
         ),
     )
+
+    private companion object {
+        const val M1 = "magazine/interior_magazine1.png"
+        const val M2 = "magazine/interior_magazine2.png"
+    }
 }

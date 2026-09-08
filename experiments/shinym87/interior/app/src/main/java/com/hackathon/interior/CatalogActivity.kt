@@ -11,7 +11,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -43,14 +42,6 @@ class CatalogActivity : AppCompatActivity() {
 
         setupGestures()
         setupSettings()
-        // 사진 판 크기가 확정된 뒤에 marker 위치를 다시 계산한다.
-        binding.photoPlate.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-            val sizeChanged = (right - left) != (oldRight - oldLeft) || (bottom - top) != (oldBottom - oldTop)
-            val page = pages.getOrNull(pageIndex) ?: return@addOnLayoutChangeListener
-            if (sizeChanged || binding.hotspotLayer.childCount == 0) {
-                binding.hotspotLayer.post { renderHotspots(page) }
-            }
-        }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.catalogSettingsScreen.visibility == View.VISIBLE) {
@@ -65,9 +56,6 @@ class CatalogActivity : AppCompatActivity() {
             pages = provider.pages()
             if (pages.isEmpty()) return@launch
             renderPage()
-            binding.photoPlate.post {
-                pages.getOrNull(pageIndex)?.let { renderHotspots(it) }
-            }
         }
     }
 
@@ -117,29 +105,11 @@ class CatalogActivity : AppCompatActivity() {
 
     private fun renderPage() {
         val page = pages[pageIndex]
-        val customPhoto = findCustomPhotoAsset(page.id)
-        if (customPhoto != null) {
-            // 화보 전용 세로 사진이 준비되면 atlas crop 대신 이 원본을 화면 전체에 꽉 채운다.
-            binding.magazineImage.setAssetCrop(
-                customPhoto, 0f, 0f, 1f, 1f,
-                scrimAlpha = 20, fitCenter = false,
-            )
-        } else {
-            with(page.crop) {
-                // 실제 화보 사진이 준비되기 전까지 쓰는 임시 Mock이다. 사진 판이 사진 비율에 맞춰지므로
-                // 잘리는 양은 거의 없다. Known Issues에 실제 콘텐츠 공급 필요성을 기록해 두었다.
-                binding.magazineImage.setAssetCrop(
-                    "interior_asset_BG.png", left, top, right, bottom,
-                    scrimAlpha = 12, fitCenter = false,
-                )
-            }
+        with(page.crop) {
+            // 화보 사진을 잘리는 부분 없이 화면에 맞춰 보여 준다. 사진 안에 이미 제목과 설명이 있다.
+            binding.magazineImage.setAssetCrop(page.asset, left, top, right, bottom, fitCenter = true)
         }
-        binding.issueText.text = page.issue
-        binding.pageTitleText.text = page.title
-        binding.pageDescriptionText.text = page.description
-        binding.pageIndicatorText.text = "%02d / %02d".format(pageIndex + 1, pages.size)
-        renderCredits(page)
-        binding.photoPlate.post { resizePhotoPlate() }
+        binding.hotspotLayer.post { renderHotspots(page) }
     }
 
     /**
@@ -223,74 +193,6 @@ class CatalogActivity : AppCompatActivity() {
         }
     }
 
-    /** 잡지 뒷단의 제품 크레딧처럼 화보에 등장한 가구와 실제 크기를 적는다. 누르는 곳은 사진 속 점이다. */
-    private fun renderCredits(page: MagazinePage) {
-        val rows = binding.creditsRows
-        rows.removeAllViews()
-        page.objects.forEachIndexed { index, item ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(11f).toInt(), 0, dp(11f).toInt())
-            }
-            row.addView(
-                TextView(this).apply {
-                    text = "%02d".format(index + 1)
-                    textSize = 11f
-                    letterSpacing = 0.1f
-                    setTextColor(Color.parseColor("#B9AC98"))
-                },
-                LinearLayout.LayoutParams(dp(34f).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT),
-            )
-            row.addView(
-                TextView(this).apply {
-                    text = item.name
-                    textSize = 13f
-                    setTextColor(Color.parseColor("#443D36"))
-                },
-                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
-            )
-            row.addView(
-                TextView(this).apply {
-                    text = "%d × %d × %d cm".format(
-                        (item.widthM * 100).toInt(),
-                        (item.heightM * 100).toInt(),
-                        (item.depthM * 100).toInt(),
-                    )
-                    textSize = 11f
-                    setTextColor(Color.parseColor("#8C8377"))
-                },
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ),
-            )
-            rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            if (index < page.objects.lastIndex) {
-                val divider = View(this).apply { setBackgroundColor(Color.parseColor("#E2D8C8")) }
-                rows.addView(divider, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-            }
-        }
-    }
-
-    /**
-     * 사진 판의 높이를 사진 비율에 맞춘다. 잡지처럼 사진 위아래에 종이 여백이 남고,
-     * 사진이 잘리거나 검은 여백이 생기지 않는다.
-     */
-    private fun resizePhotoPlate() {
-        val plate = binding.photoPlate
-        val width = plate.width
-        if (width <= 0) return
-        val aspect = binding.magazineImage.cropAspect().coerceIn(0.6f, 2.0f)
-        val available = binding.magazinePage.height - binding.magazinePage.paddingTop -
-            binding.magazinePage.paddingBottom
-        val maxHeight = (available * 0.52f).toInt().coerceAtLeast(dp(200f).toInt())
-        val target = (width / aspect).toInt().coerceAtMost(maxHeight)
-        if (plate.layoutParams.height != target) {
-            plate.layoutParams = plate.layoutParams.apply { height = target }
-            plate.requestLayout()
-        }
-    }
-
     private fun showTag(tag: View) {
         tag.visibility = View.VISIBLE
         tag.alpha = 0f
@@ -351,17 +253,6 @@ class CatalogActivity : AppCompatActivity() {
         pulseAnimators.forEach { it.cancel() }
         pulseAnimators.clear()
         super.onDestroy()
-    }
-
-    /**
-     * `assets/magazine/<page.id>.jpg|png`가 있으면 그 세로 사진을 그대로 쓴다.
-     * ImageGen이나 sjkim0637이 실제 화보 사진을 넣어 주면 코드 변경 없이 바로 반영된다.
-     */
-    private fun findCustomPhotoAsset(pageId: String): String? {
-        return listOf("jpg", "png", "webp").map { "magazine/$pageId.$it" }
-            .firstOrNull { name ->
-                runCatching { assets.open(name).use { } }.isSuccess
-            }
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density

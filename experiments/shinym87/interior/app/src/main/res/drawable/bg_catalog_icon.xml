@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 화보 위에 올라가는 설정 아이콘 배경. 사진을 가리지 않도록 반투명 원으로 둔다. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#59000000" />
+</shape>

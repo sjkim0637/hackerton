@@ -1,181 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  인테리어 잡지 한 페이지를 그대로 옮긴 구조이다.
-  제호(masthead) - 발행 정보 - 큰 제목 - 사진 판(plate) - 사진 설명 - 쪽 번호 순서로 읽힌다.
-  사진 판의 높이는 사진 비율에 맞춰 코드에서 정한다. 그래서 사진이 잘리거나 빈 여백이 생기지 않는다.
+  화보 사진이 화면 전체를 차지한다. 사진 위에는 가구를 가리키는 점 아이콘만 올라간다.
+  제목과 설명은 사진 안에 이미 들어 있으므로 앱이 따로 글을 얹지 않는다.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/catalogRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#ECE5DA">
+    android:background="#0F0D0C">
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/magazinePage"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:paddingStart="26dp"
-        android:paddingTop="40dp"
-        android:paddingEnd="26dp"
-        android:paddingBottom="24dp">
+        android:layout_height="match_parent">
 
-        <LinearLayout
+        <com.hackathon.interior.ui.AtlasCropView
+            android:id="@+id/magazineImage"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:letterSpacing="0.2"
-                    android:text="MY HOME"
-                    android:textColor="#1E1B18"
-                    android:textSize="21sp" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:letterSpacing="0.3"
-                    android:text="INTERIOR MAGAZINE"
-                    android:textColor="#9B7547"
-                    android:textSize="9sp" />
-            </LinearLayout>
-
-            <ImageButton
-                android:id="@+id/btnCatalogSettings"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@android:color/transparent"
-                android:contentDescription="설정"
-                android:padding="11dp"
-                android:src="@drawable/ic_settings"
-                app:tint="#4A423B" />
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="12dp"
-            android:background="#D3C3A6" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:baselineAligned="false"
-            android:orientation="horizontal">
-            <TextView
-                android:id="@+id/issueText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:letterSpacing="0.14"
-                android:textColor="#9B7547"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                tools:text="SEPTEMBER · LIVING" />
-            <TextView
-                android:id="@+id/pageIndicatorText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:letterSpacing="0.14"
-                android:textColor="#A79B8C"
-                android:textSize="10sp"
-                tools:text="01 / 03" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/pageTitleText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:lineSpacingExtra="2dp"
-            android:textColor="#1E1B18"
-            android:textSize="27sp"
-            tools:text="빛이 머무는 독서 공간" />
+            android:layout_height="match_parent"
+            android:contentDescription="인테리어 화보" />
 
         <FrameLayout
-            android:id="@+id/photoPlate"
+            android:id="@+id/hotspotLayer"
             android:layout_width="match_parent"
-            android:layout_height="240dp"
-            android:layout_marginTop="20dp">
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
-            <com.hackathon.interior.ui.AtlasCropView
-                android:id="@+id/magazineImage"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="인테리어 화보" />
-
-            <FrameLayout
-                android:id="@+id/hotspotLayer"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/pageDescriptionText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:lineSpacingExtra="3dp"
-            android:textColor="#6E665F"
-            android:textSize="13sp"
-            tools:text="사진 속 은은한 점을 눌러 이 가구를 내 공간에서 확인해 보세요." />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="30dp"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:letterSpacing="0.16"
-                android:text="이 화보의 가구"
-                android:textColor="#9B7547"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginTop="10dp"
-                android:background="#DCD1BF" />
-            <LinearLayout
-                android:id="@+id/creditsRows"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <View
-            android:layout_width="52dp"
-            android:layout_height="1dp"
-            android:background="#D3C3A6" />
-
-        <TextView
-            android:id="@+id/pageHintText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:letterSpacing="0.05"
-            android:text="↑ ↓ 쓸어넘겨 다음 공간 보기"
-            android:textColor="#A79B8C"
-            android:textSize="11sp" />
-    </LinearLayout>
+    <ImageButton
+        android:id="@+id/btnCatalogSettings"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="14dp"
+        android:background="@drawable/bg_catalog_icon"
+        android:contentDescription="설정"
+        android:padding="10dp"
+        android:src="@drawable/ic_settings"
+        app:tint="#F2ECE4" />
 
     <FrameLayout
         android:id="@+id/catalogSettingsScreen"
