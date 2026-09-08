@@ -10,6 +10,7 @@ import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.HitResult
 import com.google.ar.core.Pose
+import com.hackathon.interior.ar.DepthPlacementDecision
 import com.hackathon.interior.ar.PlaneKind
 import com.hackathon.interior.remove.InteriorApiClient
 import com.hackathon.interior.ui.FurnitureInfoDialog
@@ -49,7 +50,7 @@ class FurnitureController(
     /** 현재 서버 주소 (부수효과 없이). */
     private val serverBaseUrl: () -> String,
     /** Depth가 준비된 경우 표면 종류·평탄도·footprint·장애물을 비동기로 검사한다. */
-    private val validatePlacement: ((Float, Float, Size, Boolean, (Boolean, String?) -> Unit) -> Unit)? = null,
+    private val validatePlacement: ((Float, Float, Size, Boolean?, (DepthPlacementDecision) -> Unit) -> Unit)? = null,
     /** 선택 대상이나 크기가 바뀔 때 호출. null 이면 선택 해제. */
     private val onSelectionChanged: (FurnitureItem?) -> Unit,
 ) {
@@ -60,9 +61,7 @@ class FurnitureController(
     private val items = mutableListOf<FurnitureItem>()
     private var selected: FurnitureItem? = null
 
-    /** 팝업 입력을 기다리는, 아직 가구가 안 붙은 앵커. */
-    private var pendingAnchor: Anchor? = null
-    private var pendingIsVertical = false
+    private var createDialogPending = false
 
     /** PHASE 5: 카탈로그에서 고른 뒤, 평면 탭을 기다리는 가구. null 이면 카탈로그 배치 모드 아님. */
     private var pendingCatalog: PendingCatalog? = null
@@ -89,7 +88,7 @@ class FurnitureController(
     private var placementValidationPending = false
 
     /** 선택/입력 중이 아니면 true. 안내 문구 자동 갱신 조건으로 쓰인다. */
-    fun isIdle(): Boolean = selected == null && pendingAnchor == null && pendingCatalog == null && !placementValidationPending
+    fun isIdle(): Boolean = selected == null && !createDialogPending && pendingCatalog == null && !placementValidationPending
 
     // ------------------------------------------------- PHASE 5: 카탈로그 가구 배치
 
@@ -149,25 +148,26 @@ class FurnitureController(
 
     private fun placeCatalog(xPx: Float, yPx: Float) {
         val pc = pendingCatalog ?: return
-        val hit = hitTestPreferring(xPx, yPx, pc.wantWall)
-        if (hit == null) {
-            Toast.makeText(
-                activity,
-                "격자가 보이는 ${if (pc.wantWall) "벽" else "바닥"} 위를 탭하세요",
-                Toast.LENGTH_SHORT,
-            ).show()
-            return
-        }
-        withValidatedPlacement(xPx, yPx, pc.size, pc.wantWall) {
+        withValidatedPlacement(xPx, yPx, pc.size, pc.wantWall) { decision ->
             if (pendingCatalog !== pc) return@withValidatedPlacement
-            val anchor = hit.createAnchorOrNull()
+            val fallbackHit = if (decision.depthAvailable) null
+            else hitTestPreferring(xPx, yPx, pc.wantWall)
+            val anchor = decision.pose?.let { pose ->
+                runCatching { sceneView.session?.createAnchor(pose) }.getOrNull()
+            } ?: fallbackHit?.createAnchorOrNull()
             if (anchor == null) {
-                Toast.makeText(activity, "AR 앵커를 만들지 못했습니다. 다시 탭하세요", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    activity,
+                    if (decision.depthAvailable) "Depth 위치에 앵커를 만들지 못했습니다. 다시 탭하세요"
+                    else "${if (pc.wantWall) "벽" else "바닥"}을 비추고 다시 탭하세요",
+                    Toast.LENGTH_SHORT,
+                ).show()
                 return@withValidatedPlacement
             }
             pendingCatalog = null
             val item = createFurniture(
-                anchor, pc.name, pc.size, PlaneKind.isVerticalHit(hit),
+                anchor, pc.name, pc.size,
+                decision.isVertical ?: fallbackHit?.let(PlaneKind::isVerticalHit) ?: pc.wantWall,
                 catalogItemId = pc.catalogItemId, objectType = pc.objectType,
             )
             scheduleCatalogSave(item)
@@ -323,8 +323,7 @@ class FurnitureController(
     fun drag(motionEvent: MotionEvent) {
         if (!draggingSelected) return
         val item = selected ?: return
-        // 벽 가구는 벽만, 바닥 가구는 바닥만 따라가도록 종류에 맞는 평면을 우선한다.
-        // 이동 중에도 최초 배치의 표면 종류를 유지한다. 벽 가구가 바닥으로 순간 이동하지 않는다.
+        // AR plane이 있으면 드래그 중 미리보기로 사용한다. Depth 전용 위치는 손을 뗄 때 확정한다.
         val hit = hitTestPreferring(motionEvent.x, motionEvent.y, item.onVerticalPlane) ?: return
         item.anchorNode.pose = hit.hitPose
         dragIsVertical = PlaneKind.isVerticalHit(hit)
@@ -347,7 +346,9 @@ class FurnitureController(
                 applyPlacement(item)
                 dragStartPose = null
             },
-            onAccepted = {
+            onAccepted = { decision ->
+                decision.pose?.let { item.anchorNode.pose = it }
+                dragIsVertical = decision.isVertical ?: item.onVerticalPlane
                 finalizeDrag()
                 dragStartPose = null
             },
@@ -390,30 +391,33 @@ class FurnitureController(
     // ---------------------------------------------------------------- 생성
 
     private fun startCreateFlow(xPx: Float, yPx: Float) {
-        val hit = hitTest(xPx, yPx)
-        val anchor = hit?.createAnchorOrNull()
-        if (hit == null || anchor == null) {
-            Toast.makeText(activity, "격자가 보이는 평면(바닥/책상/벽) 위를 탭하세요", Toast.LENGTH_SHORT).show()
-            return
-        }
-        pendingAnchor = anchor
-        pendingIsVertical = PlaneKind.isVerticalHit(hit)
+        // Depth 모드에서는 크기를 입력받은 뒤 바닥/벽을 자동 판별한다. AR hit는 fallback용이다.
+        val fallbackHit = hitTest(xPx, yPx)
+        createDialogPending = true
 
         FurnitureInfoDialog.show(
             activity = activity,
             onCreate = { name, baseSize ->
-                val pending = pendingAnchor ?: return@show
-                pendingAnchor = null
-                val isVertical = pendingIsVertical
+                createDialogPending = false
                 withValidatedPlacement(
-                    xPx, yPx, baseSize, isVertical,
-                    onAccepted = { createFurniture(pending, name, baseSize, isVertical) },
-                    onRejected = { pending.detach() },
+                    xPx, yPx, baseSize, wantWall = null,
+                    onAccepted = { decision ->
+                        val anchor = decision.pose?.let { pose ->
+                            runCatching { sceneView.session?.createAnchor(pose) }.getOrNull()
+                        } ?: fallbackHit?.createAnchorOrNull()
+                        if (anchor == null) {
+                            Toast.makeText(activity, "바닥이나 벽을 비추고 다시 탭하세요", Toast.LENGTH_SHORT).show()
+                            return@withValidatedPlacement
+                        }
+                        val isVertical = decision.isVertical
+                            ?: fallbackHit?.let(PlaneKind::isVerticalHit)
+                            ?: false
+                        createFurniture(anchor, name, baseSize, isVertical)
+                    },
                 )
             },
             onCancel = {
-                pendingAnchor?.detach()
-                pendingAnchor = null
+                createDialogPending = false
             },
         )
     }
@@ -423,13 +427,13 @@ class FurnitureController(
         xPx: Float,
         yPx: Float,
         size: Size,
-        wantWall: Boolean,
+        wantWall: Boolean?,
         onRejected: () -> Unit = {},
-        onAccepted: () -> Unit,
+        onAccepted: (DepthPlacementDecision) -> Unit,
     ) {
         val validator = validatePlacement
         if (validator == null) {
-            onAccepted()
+            onAccepted(DepthPlacementDecision(depthAvailable = false, accepted = true))
             return
         }
         if (placementValidationPending) {
@@ -438,13 +442,13 @@ class FurnitureController(
             return
         }
         placementValidationPending = true
-        validator(xPx, yPx, size, wantWall) { accepted, message ->
+        validator(xPx, yPx, size, wantWall) { decision ->
             placementValidationPending = false
-            if (accepted) {
-                onAccepted()
+            if (decision.accepted) {
+                onAccepted(decision)
             } else {
                 onRejected()
-                Toast.makeText(activity, message ?: "이 위치에는 놓기 어려워요", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, decision.message ?: "이 위치에는 놓기 어려워요", Toast.LENGTH_SHORT).show()
             }
         }
     }

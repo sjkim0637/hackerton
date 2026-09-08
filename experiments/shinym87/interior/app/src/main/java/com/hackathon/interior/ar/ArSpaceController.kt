@@ -39,6 +39,10 @@ class ArSpaceController(
     /** 화면에 아무것도 선택/입력 중이 아니면 true. 이때만 안내 문구를 자동 갱신한다. */
     var isIdle: () -> Boolean = { true }
 
+    /** true면 화면 배치 UX는 ARCore 격자 대신 Depth world pose를 사용한다. */
+    var usesDepthPlacement: Boolean = false
+        private set
+
     // 상태 로그 스팸 방지용.
     private var lastTrackingState: TrackingState? = null
     private var lastFailureReason: String? = null
@@ -48,7 +52,8 @@ class ArSpaceController(
         sceneView.lifecycle = lifecycle
 
         // 인식된 평면 위에 격자(그리드)를 그린다.
-        sceneView.planeRenderer.isEnabled = true
+        // Session capability를 확인하기 전에는 격자를 숨긴다. Depth 미지원일 때만 아래에서 켠다.
+        sceneView.planeRenderer.isEnabled = false
         sceneView.planeRenderer.planeRendererMode = PlaneRenderer.PlaneRendererMode.RENDER_ALL
 
         sceneView.configureSession { session, config ->
@@ -57,7 +62,9 @@ class ArSpaceController(
             // 실내 조명에 맞춰 오브젝트 밝기를 자동 조정 (없으면 Filament 오브젝트가 새까맣게 보임).
             config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
             // 지원 기기에서는 가구 footprint 검증에 사용할 dense Depth를 함께 활성화한다.
+            usesDepthPlacement = ArCoreDepthAdapter.isDepthSupported(session)
             ArCoreDepthAdapter.prepareConfig(session, config)
+            sceneView.planeRenderer.isEnabled = !usesDepthPlacement
         }
 
         sceneView.onSessionFailed = { exception ->
@@ -95,7 +102,7 @@ class ArSpaceController(
      * 캡처가 끝나면 다시 켠다. (인식 자체는 계속 동작하고, 화면 표시만 멈춘다.)
      */
     fun setPlaneVisualizationEnabled(enabled: Boolean) {
-        runCatching { sceneView.planeRenderer.isEnabled = enabled }
+        runCatching { sceneView.planeRenderer.isEnabled = enabled && !usesDepthPlacement }
     }
 
     private fun logTrackingState(session: Session, frame: Frame) {
@@ -119,6 +126,8 @@ class ArSpaceController(
             instruction.text = when {
                 trackingState != TrackingState.TRACKING ->
                     "추적 준비 중 ($failureReason) · 밝은 곳에서 폰을 좌우로 천천히 움직이세요"
+                usesDepthPlacement ->
+                    "Depth 직접 배치 · 바닥이나 벽을 비추고 원하는 위치를 탭하세요"
                 trackingPlanes == 0 ->
                     "평면 찾는 중 · 바닥/책상/벽을 비추며 폰을 움직이세요"
                 else ->

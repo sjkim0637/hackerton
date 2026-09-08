@@ -3,6 +3,7 @@ package com.hackathon.interior.ar
 import android.os.Handler
 import android.os.Looper
 import com.google.ar.core.Frame
+import com.google.ar.core.Pose
 import com.project.depthplacement.DepthPlacementEngineFactory
 import com.project.depthplacement.PlacementFailureReason
 import com.project.depthplacement.PlacementObjectSize
@@ -10,6 +11,14 @@ import com.project.depthplacement.PlacementTarget
 import com.project.depthplacement.arcore.ArCoreDepthAdapter
 import io.github.sceneview.math.Size
 import java.util.concurrent.Executors
+
+data class DepthPlacementDecision(
+    val depthAvailable: Boolean,
+    val accepted: Boolean,
+    val pose: Pose? = null,
+    val isVertical: Boolean? = null,
+    val message: String? = null,
+)
 
 /**
  * 독립 Depth 모듈을 제품 AR 화면에 연결한다.
@@ -37,12 +46,12 @@ class DepthPlacementController {
         viewX: Float,
         viewY: Float,
         size: Size,
-        wantWall: Boolean,
-        callback: (accepted: Boolean, message: String?) -> Unit,
+        wantWall: Boolean?,
+        callback: (DepthPlacementDecision) -> Unit,
     ) {
         val snapshot = engine.getLatestPointCloud()
         if (frame == null || snapshot == null) {
-            callback(true, null)
+            callback(DepthPlacementDecision(depthAvailable = false, accepted = true))
             return
         }
         val depthPoint = runCatching {
@@ -51,14 +60,30 @@ class DepthPlacementController {
             )
         }.getOrNull()
         if (depthPoint == null) {
-            callback(true, null)
+            callback(DepthPlacementDecision(depthAvailable = false, accepted = true))
             return
         }
+        if (wantWall == null) {
+            evaluate(depthPoint, size, wantWall = false) { floor ->
+                if (floor.accepted) callback(floor)
+                else evaluate(depthPoint, size, wantWall = true) { wall ->
+                    callback(if (wall.accepted) wall else floor)
+                }
+            }
+        } else {
+            evaluate(depthPoint, size, wantWall, callback)
+        }
+    }
+
+    private fun evaluate(
+        depthPoint: Pair<Float, Float>,
+        size: Size,
+        wantWall: Boolean,
+        callback: (DepthPlacementDecision) -> Unit,
+    ) {
         val objectSize = if (wantWall) {
-            // 벽 표면을 차지하는 폭×높이, 벽 바깥으로 돌출되는 깊이.
             PlacementObjectSize(size.x, size.y, size.z)
         } else {
-            // 바닥 footprint는 폭×깊이, 높이는 장애물 여유 판정에 사용한다.
             PlacementObjectSize(size.x, size.z, size.y)
         }
         engine.evaluatePlacementAsync(
@@ -68,7 +93,21 @@ class DepthPlacementController {
             target = if (wantWall) PlacementTarget.WALL else PlacementTarget.HORIZONTAL,
         ) { result ->
             mainHandler.post {
-                callback(result.isValid, if (result.isValid) null else failureMessage(result.failureReason))
+                val corePose = result.pose
+                callback(
+                    DepthPlacementDecision(
+                        depthAvailable = true,
+                        accepted = result.isValid,
+                        pose = corePose?.let {
+                            Pose(
+                                floatArrayOf(it.position.x, it.position.y, it.position.z),
+                                it.rotation.copyOf(),
+                            )
+                        },
+                        isVertical = wantWall,
+                        message = if (result.isValid) null else failureMessage(result.failureReason),
+                    ),
+                )
             }
         }
     }
