@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -42,6 +43,14 @@ class CatalogActivity : AppCompatActivity() {
 
         setupGestures()
         setupSettings()
+        // 사진 판 크기가 확정된 뒤에 marker 위치를 다시 계산한다.
+        binding.photoPlate.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            val sizeChanged = (right - left) != (oldRight - oldLeft) || (bottom - top) != (oldBottom - oldTop)
+            val page = pages.getOrNull(pageIndex) ?: return@addOnLayoutChangeListener
+            if (sizeChanged || binding.hotspotLayer.childCount == 0) {
+                binding.hotspotLayer.post { renderHotspots(page) }
+            }
+        }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.catalogSettingsScreen.visibility == View.VISIBLE) {
@@ -54,7 +63,11 @@ class CatalogActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             pages = provider.pages()
-            if (pages.isNotEmpty()) renderPage()
+            if (pages.isEmpty()) return@launch
+            renderPage()
+            binding.photoPlate.post {
+                pages.getOrNull(pageIndex)?.let { renderHotspots(it) }
+            }
         }
     }
 
@@ -82,6 +95,9 @@ class CatalogActivity : AppCompatActivity() {
             }
         })
         val listener = View.OnTouchListener { _, event -> detector.onTouchEvent(event) }
+        // 사진 판 바깥의 종이 여백에서도 넘길 수 있도록 페이지 전체가 Swipe를 받는다.
+        binding.catalogRoot.setOnTouchListener(listener)
+        binding.magazinePage.setOnTouchListener(listener)
         binding.magazineImage.setOnTouchListener(listener)
         binding.hotspotLayer.setOnTouchListener(listener)
     }
@@ -91,9 +107,11 @@ class CatalogActivity : AppCompatActivity() {
         val next = (pageIndex + delta).coerceIn(0, pages.lastIndex)
         if (next == pageIndex) return
         pageIndex = next
-        binding.magazineImage.animate().alpha(0.25f).setDuration(90).withEndAction {
+        val direction = if (delta > 0) -dp(18f) else dp(18f)
+        binding.magazinePage.animate().alpha(0.2f).translationY(direction).setDuration(110).withEndAction {
             renderPage()
-            binding.magazineImage.animate().alpha(1f).setDuration(180).start()
+            binding.magazinePage.translationY = -direction
+            binding.magazinePage.animate().alpha(1f).translationY(0f).setDuration(200).start()
         }.start()
     }
 
@@ -108,19 +126,20 @@ class CatalogActivity : AppCompatActivity() {
             )
         } else {
             with(page.crop) {
-                // 실제 화보 사진이 준비되기 전까지 쓰는 임시 Mock. 세로 화면을 빈 여백 없이 채우도록
-                // 잘라 채우기(cover)로 표시한다. Known Issues에 실제 콘텐츠 공급 필요성을 기록해 둔다.
+                // 실제 화보 사진이 준비되기 전까지 쓰는 임시 Mock이다. 사진 판이 사진 비율에 맞춰지므로
+                // 잘리는 양은 거의 없다. Known Issues에 실제 콘텐츠 공급 필요성을 기록해 두었다.
                 binding.magazineImage.setAssetCrop(
                     "interior_asset_BG.png", left, top, right, bottom,
-                    scrimAlpha = 20, fitCenter = false,
+                    scrimAlpha = 12, fitCenter = false,
                 )
             }
         }
         binding.issueText.text = page.issue
         binding.pageTitleText.text = page.title
         binding.pageDescriptionText.text = page.description
-        binding.pageIndicatorText.text = "%02d / %02d   ↑↓ 넘기기".format(pageIndex + 1, pages.size)
-        binding.hotspotLayer.post { renderHotspots(page) }
+        binding.pageIndicatorText.text = "%02d / %02d".format(pageIndex + 1, pages.size)
+        renderCredits(page)
+        binding.photoPlate.post { resizePhotoPlate() }
     }
 
     /**
@@ -201,6 +220,74 @@ class CatalogActivity : AppCompatActivity() {
                     tag.y = tagY.coerceIn(0f, (binding.hotspotLayer.height - tag.height).coerceAtLeast(0).toFloat())
                 }
             }
+        }
+    }
+
+    /** 잡지 뒷단의 제품 크레딧처럼 화보에 등장한 가구와 실제 크기를 적는다. 누르는 곳은 사진 속 점이다. */
+    private fun renderCredits(page: MagazinePage) {
+        val rows = binding.creditsRows
+        rows.removeAllViews()
+        page.objects.forEachIndexed { index, item ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(11f).toInt(), 0, dp(11f).toInt())
+            }
+            row.addView(
+                TextView(this).apply {
+                    text = "%02d".format(index + 1)
+                    textSize = 11f
+                    letterSpacing = 0.1f
+                    setTextColor(Color.parseColor("#B9AC98"))
+                },
+                LinearLayout.LayoutParams(dp(34f).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT),
+            )
+            row.addView(
+                TextView(this).apply {
+                    text = item.name
+                    textSize = 13f
+                    setTextColor(Color.parseColor("#443D36"))
+                },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            row.addView(
+                TextView(this).apply {
+                    text = "%d × %d × %d cm".format(
+                        (item.widthM * 100).toInt(),
+                        (item.heightM * 100).toInt(),
+                        (item.depthM * 100).toInt(),
+                    )
+                    textSize = 11f
+                    setTextColor(Color.parseColor("#8C8377"))
+                },
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+            rows.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            if (index < page.objects.lastIndex) {
+                val divider = View(this).apply { setBackgroundColor(Color.parseColor("#E2D8C8")) }
+                rows.addView(divider, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+            }
+        }
+    }
+
+    /**
+     * 사진 판의 높이를 사진 비율에 맞춘다. 잡지처럼 사진 위아래에 종이 여백이 남고,
+     * 사진이 잘리거나 검은 여백이 생기지 않는다.
+     */
+    private fun resizePhotoPlate() {
+        val plate = binding.photoPlate
+        val width = plate.width
+        if (width <= 0) return
+        val aspect = binding.magazineImage.cropAspect().coerceIn(0.6f, 2.0f)
+        val available = binding.magazinePage.height - binding.magazinePage.paddingTop -
+            binding.magazinePage.paddingBottom
+        val maxHeight = (available * 0.52f).toInt().coerceAtLeast(dp(200f).toInt())
+        val target = (width / aspect).toInt().coerceAtMost(maxHeight)
+        if (plate.layoutParams.height != target) {
+            plate.layoutParams = plate.layoutParams.apply { height = target }
+            plate.requestLayout()
         }
     }
 

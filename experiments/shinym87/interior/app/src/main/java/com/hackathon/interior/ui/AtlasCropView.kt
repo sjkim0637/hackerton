@@ -49,39 +49,58 @@ class AtlasCropView @JvmOverloads constructor(
     /** 현재 crop 안의 상대 좌표를 View 좌표로 바꾼다. 잡지 사진의 객체 hotspot 배치에 사용한다. */
     fun mapCropPoint(x: Float, y: Float): PointF {
         val image = bitmap ?: return PointF(0f, 0f)
-        val cropWidth = normalizedCrop.width() * image.width
-        val cropHeight = normalizedCrop.height() * image.height
-        val destination = destinationRect(cropWidth, cropHeight)
+        val fullCrop = cropPixels(image)
+        val visible = visibleCropPixels(image)
+        val destination = destinationRect(visible.width(), visible.height())
+        // 잘라 채우기(cover)에서는 crop 일부만 화면에 보인다. 보이는 영역 기준으로 좌표를 옮겨야
+        // 사진 속 가구 위치와 marker 위치가 어긋나지 않는다.
+        val pointX = fullCrop.left + fullCrop.width() * x.coerceIn(0f, 1f)
+        val pointY = fullCrop.top + fullCrop.height() * y.coerceIn(0f, 1f)
         return PointF(
-            destination.left + destination.width() * x.coerceIn(0f, 1f),
-            destination.top + destination.height() * y.coerceIn(0f, 1f),
+            destination.left + destination.width() * ((pointX - visible.left) / visible.width()),
+            destination.top + destination.height() * ((pointY - visible.top) / visible.height()),
         )
+    }
+
+    /** 화면에 보이는 사진 영역의 가로세로 비율. 화보 판형을 사진에 맞출 때 사용한다. */
+    fun cropAspect(): Float {
+        val image = bitmap ?: return 1f
+        val crop = cropPixels(image)
+        if (crop.height() <= 0f) return 1f
+        return crop.width() / crop.height()
+    }
+
+    private fun cropPixels(image: Bitmap) = RectF(
+        normalizedCrop.left * image.width,
+        normalizedCrop.top * image.height,
+        normalizedCrop.right * image.width,
+        normalizedCrop.bottom * image.height,
+    )
+
+    /** `fitCenter`가 아니면 화면 비율에 맞춰 crop을 잘라 채운다. onDraw와 좌표 변환이 같은 규칙을 쓴다. */
+    private fun visibleCropPixels(image: Bitmap): RectF {
+        val crop = cropPixels(image)
+        if (fitCenter || width <= 0 || height <= 0) return crop
+        val destinationRatio = width.toFloat() / height
+        val cropRatio = crop.width() / crop.height()
+        if (cropRatio > destinationRatio) {
+            val targetWidth = crop.height() * destinationRatio
+            crop.inset((crop.width() - targetWidth) / 2f, 0f)
+        } else {
+            val targetHeight = crop.width() / destinationRatio
+            crop.inset(0f, (crop.height() - targetHeight) / 2f)
+        }
+        return crop
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val image = bitmap ?: return
         if (width <= 0 || height <= 0) return
-        val crop = RectF(
-            normalizedCrop.left * image.width,
-            normalizedCrop.top * image.height,
-            normalizedCrop.right * image.width,
-            normalizedCrop.bottom * image.height,
-        )
+        val crop = visibleCropPixels(image)
         val destination = destinationRect(crop.width(), crop.height())
-        if (!fitCenter) {
-            val destinationRatio = width.toFloat() / height
-            val cropRatio = crop.width() / crop.height()
-            if (cropRatio > destinationRatio) {
-                val targetWidth = crop.height() * destinationRatio
-                crop.inset((crop.width() - targetWidth) / 2f, 0f)
-            } else {
-                val targetHeight = crop.width() / destinationRatio
-                crop.inset(0f, (crop.height() - targetHeight) / 2f)
-            }
-        }
         clipPath.reset()
-        clipPath.addRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), dp(28f), dp(28f), Path.Direction.CW)
+        clipPath.addRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), dp(12f), dp(12f), Path.Direction.CW)
         canvas.save()
         canvas.clipPath(clipPath)
         canvas.drawBitmap(
