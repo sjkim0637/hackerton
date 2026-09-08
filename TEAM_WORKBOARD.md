@@ -9,7 +9,7 @@
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
 | shinym87 + Claude + Codex | `integration-interior-demo` | `experiments/shinym87/interior/` | 카메라 기반 공간 편집 / AR 가구 재배치 | 카메라·AI 제거·카탈로그 배치 흐름에 Depth 표면 검증을 통합한다. | `INTEGRATION` | [interior](docs/workstreams/interior.md) | 2026-09-08 |
 | goguma-salad + Codex | `agent/goguma-salad/interior-depth-placement` | `experiments/goguma-salad/interior-depth-placement/` | IR Depth Point Cloud 배치 모듈 | ARCore Depth를 온디바이스 Point Cloud와 안정적인 객체 배치 Pose로 변환하는 독립 모듈과 테스트 앱을 구현한다. | `INTEGRATION` | [interior-depth-placement](docs/workstreams/interior-depth-placement.md) | 2026-09-08 |
-| goguma-salad + Codex | `agent/goguma-salad/interior-depth-runtime` | `experiments/shinym87/interior/` | Interior Depth 직접 배치 | 평면 격자 의존을 제거하고 Depth world Pose로 가구 Anchor를 직접 배치한다. | `INTEGRATION` | [interior-depth-runtime](docs/workstreams/interior-depth-runtime.md) | 2026-09-08 |
+| goguma-salad + Codex | `agent/goguma-salad/interior-depth-runtime` | `experiments/shinym87/interior/` | Interior Depth 직접 배치 | 평면 격자 의존을 제거하고 Depth world Pose로 가구 Anchor를 직접 배치한다. | `DONE` | [interior-depth-runtime](docs/workstreams/interior-depth-runtime.md) | 2026-09-08 |
 
 ## 사용 방법
 

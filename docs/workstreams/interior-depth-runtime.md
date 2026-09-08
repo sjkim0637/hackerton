@@ -18,7 +18,7 @@ goguma-salad + Codex
 
 ## Status
 
-INTEGRATION
+DONE
 
 ## Goal
 
@@ -43,14 +43,13 @@ Depth 지원 기기에서 ARCore 평면 격자와 plane hit를 먼저 기다리�
 - Depth Core synthetic test 14개 통과
 - Depth 직접 Pose를 포함한 Interior debug APK build 통과
 - Interior Android Lint 통과(오류 0건)
-- `SM-S908N` 재설치 중 USB 연결이 해제되어 새 APK의 화면 확인은 보류
+- `SM-S908N`에 새 APK 설치 성공, `MainActivity` 기동과 Crash 없음 확인
+- 사용자가 Depth 직접 배치 화면을 확인했으며 `integration-interior-demo` 병합 완료
 
 ## Next
 
-1. `SM-S908N`에 APK 설치 후 평면 격자가 사라지는지 확인
-2. Chair 바닥 배치와 Picture Frame 벽 배치 확인
-3. 배치/이동 오거절 메시지 및 anchor 안정성 확인
-4. `integration-interior-demo` 병합 후 실기기 검증 결과를 반영
+1. Chair 바닥 배치와 Picture Frame 벽 배치의 장시간 anchor 안정성 측정
+2. 배치/이동 오거절률을 기기별로 수집해 threshold 조정
 
 ## Relevant Commits
 
