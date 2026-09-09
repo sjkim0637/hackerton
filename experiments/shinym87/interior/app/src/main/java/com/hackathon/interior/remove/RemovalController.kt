@@ -6,12 +6,14 @@ import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.PixelCopy
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import com.google.ar.core.Anchor
+import com.google.ar.core.HitResult
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingState
@@ -34,6 +36,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.sqrt
 
 /**
@@ -72,7 +76,23 @@ class RemovalController(
     private var patchHeightM = 0.7f
 
     private var resultNode: AnchorNode? = null
+
+    /**
+     * "삭제 결과 보기" 전체화면 프리뷰(정지 이미지)가 켜져 있는지.
+     * **월드 앵커 커버 quad([resultNode]) 의 표시 여부와는 무관하다** — 커버 quad 는
+     * 결과가 있는 한 라이브 모드에서도 항상 렌더링되어 실제 사물을 계속 가린다.
+     */
     private var showingAfter = false
+
+    /** 선택 시점엔 평면이 없어 커버 quad 를 못 만든 상태. onFrame 에서 계속 재시도한다. */
+    private var awaitingCoverAnchor = false
+    private var pendingCoverPatch: Bitmap? = null
+    private var pendingCoverRegion: FloatArray? = null
+
+    /** TEMP-DIAG(B): 커버 quad 를 만든 시점의 카메라 pose. 지금 카메라와의 차이를 로그로 본다. */
+    private var coverCamPoseAtBuild: Pose? = null
+    private var coverFrameLog = 0L
+
     private var busy = false
 
     /** PHASE 4: 삭제 요청 시점의 "원래 사물" 스냅샷(이동 기능이 재사용). */
@@ -242,8 +262,15 @@ class RemovalController(
         val right = space.hitTest(rect.right, rect.centerY())?.hitPose
         val top = space.hitTest(rect.centerX(), rect.top)?.hitPose
         val bottom = space.hitTest(rect.centerX(), rect.bottom)?.hitPose
-        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.2f, 4f)
-        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.2f, 4f)
+        // 하한을 0.05m 로 (기존 0.2m). 텀블러/컵 같은 소품이 20cm 로 부풀던 문제.
+        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.05f, 4f)
+        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.05f, 4f)
+        Log.d(
+            TAG,
+            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b T=%b B=%b)".format(
+                patchWidthM, patchHeightM, left != null, right != null, top != null, bottom != null,
+            ),
+        )
     }
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
@@ -332,6 +359,11 @@ class RemovalController(
         applyResult(bitmap, job.changedRect ?: bbox)
 
         // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
+        Log.d(
+            TAG,
+            "runFlow done → onRemovalApplied(scene=$sceneId type=$objectType " +
+                "hasBmp=${capturedObjectBitmap != null} hasPose=${originalObjectPose != null})",
+        )
         onRemovalApplied(
             sceneId, jobId, objectType,
             capturedObjectBitmap, originalObjectPose, bbox,
@@ -339,49 +371,143 @@ class RemovalController(
         )
     }
 
-    /** 결과 이미지를 벽 평면 quad 로 붙인다. 벽 앵커가 없으면 전체화면으로 대체 표시. */
+    /**
+     * 삭제 결과를 화면에 반영한다. **두 가지가 분리되어 있다:**
+     *
+     * 1. **월드 앵커 커버 quad** ([resultNode]) — AI 가 복원한 배경 패치를 실제 사물이
+     *    있던 위치의 평면 앵커에 고정한다. 라이브 모드에서도 **항상** 렌더링되어 실제
+     *    사물(모니터 등)을 계속 가린다. 표시 여부는 [toggleBeforeAfter] 와 무관하며
+     *    [onFrame] 이 추적 상태만 보고 관리한다.
+     *    선택 시점에 평면을 못 잡았으면 [awaitingCoverAnchor] 로 두고 [onFrame] 에서
+     *    사물 영역을 계속 hitTest 해 잡히는 즉시 만든다.
+     * 2. **전체화면 프리뷰** ([R.id.resultOverlay]) — 결과 전체 이미지를 정지 화면으로
+     *    덮어 크게 확인하는 용도. "삭제 결과 보기" 버튼으로만 켜고 끈다. 기본은 꺼짐
+     *    (라이브 유지 — report: docs/handoffs/interior-removal-fallback.md).
+     */
     private fun applyResult(full: Bitmap, region: FloatArray) {
         clearResult()
         // 가장자리를 투명하게 페이드아웃해 quad 경계가 카메라 화면과 자연스럽게 섞이게 한다.
         val patch = EdgeFade.feather(cropNormalized(full, region))
-        val anchor = wallAnchor
-        if (anchor != null) {
-            val image = ImageNode(
-                materialLoader = sceneView.materialLoader,
-                bitmap = patch,
-                size = Size(patchWidthM, patchHeightM),
-            ).apply {
-                isTouchable = false
-                // 수직 평면(벽): 앵커 로컬 +Y 가 벽 바깥이므로 quad 를 X축 -90° 세운다.
-                rotation = if (planeIsVertical) Rotation(x = -90f) else Rotation(0f, 0f, 0f)
-            }
-            val node = AnchorNode(sceneView.engine, anchor).apply {
-                isPositionEditable = false
-                // pose 는 우리가 매 프레임 스무딩해서 직접 넣는다 (onFrame). SceneView 자동 갱신 끔.
-                updateAnchorPose = false
-                addChildNode(image)
-            }
-            sceneView.addChildNode(node)
-            resultNode = node
-            smoothedPos = null
-            binding.resultOverlay.visibility = View.GONE
-        } else {
-            binding.resultOverlay.setImageBitmap(full)
-            binding.resultOverlay.visibility = View.VISIBLE
-        }
-        showingAfter = true
+
+        // 전체화면 프리뷰용 이미지는 앵커 유무와 무관하게 항상 준비(기본은 꺼짐).
+        binding.resultOverlay.setImageBitmap(full)
+        binding.resultOverlay.visibility = View.GONE
+        showingAfter = false
+        binding.btnToggleRemoval.text = "삭제 결과 보기"
         binding.btnToggleRemoval.visibility = View.VISIBLE
-        binding.btnToggleRemoval.text = "삭제 후 (보임)"
-        status("완료 · '삭제 전/후'로 전환하세요")
+
+        // 커버 quad 앵커: 선택 시점 것이 있으면 그대로, 없으면 지금(결과 도착 시점) 사물
+        // 영역에서 재시도 — 대개 이 무렵엔 평면이 잡혀 있다.
+        var anchor = wallAnchor
+        var isVertical = planeIsVertical
+        if (anchor == null) {
+            val hit = hitTestSourceRegion(region)
+            val fresh = hit?.let {
+                it.createAnchorOrNull()
+                    ?: runCatching { sceneView.session?.createAnchor(it.hitPose) }.getOrNull()
+            }
+            if (fresh != null) {
+                anchor = fresh
+                isVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
+                wallAnchor = fresh
+                planeIsVertical = isVertical
+            }
+        }
+
+        if (anchor != null) {
+            buildResultNode(anchor, isVertical, patch)
+            status("완료 · 라이브 화면에서 삭제 자리가 가려집니다 · '삭제 결과 보기'로 전체 확인")
+            Log.d(TAG, "applyResult: 커버 quad 고정 (vertical=$isVertical)")
+        } else {
+            // 아직 평면 없음 → onFrame 에서 재시도. 전체화면으로 덮지 않는다(라이브 유지).
+            pendingCoverPatch = patch
+            pendingCoverRegion = region.copyOf()
+            awaitingCoverAnchor = true
+            status("완료 · 삭제 자리 평면이 인식되면 결과가 고정됩니다 · 그 방향을 잠깐 비춰주세요")
+            Log.d(TAG, "applyResult: 앵커 없음 → onFrame 에서 커버 quad 재시도")
+        }
+    }
+
+    /** 사물 영역([region] = 정규화 [x,y,w,h]) 중심에서 평면 hitTest. */
+    private fun hitTestSourceRegion(region: FloatArray): HitResult? {
+        if (sceneView.width == 0 || sceneView.height == 0) return null
+        val cx = (region[0] + region[2] / 2f) * sceneView.width
+        val cy = (region[1] + region[3] / 2f) * sceneView.height
+        // planeIsVertical 은 선택 시점 값이라 힌트로만 쓰고, 없으면 아무 평면이나.
+        val hit = space.hitTestPreferring(cx, cy, planeIsVertical)
+        // TEMP-DIAG(B): 이 화면 좌표는 "선택 시점" 기준이다. 결과가 온 지금 카메라가 그때와
+        // 다르면, 같은 픽셀이 다른 월드 지점을 가리켜 커버 quad 앵커가 엉뚱한 곳에 박힌다.
+        Log.d(
+            TAG,
+            "hitTestSourceRegion: 화면(%.0f,%.0f)px → hitPose=%s · 현재 camPose=%s".format(
+                cx, cy, poseStr(hit?.hitPose), poseStr(space.latestFrame?.camera?.pose),
+            ),
+        )
+        return hit
+    }
+
+    /** 커버 quad(AnchorNode + ImageNode)를 만들어 씬에 붙인다. */
+    private fun buildResultNode(anchor: Anchor, isVertical: Boolean, patch: Bitmap) {
+        val image = ImageNode(
+            materialLoader = sceneView.materialLoader,
+            bitmap = patch,
+            size = Size(patchWidthM, patchHeightM),
+        ).apply {
+            isTouchable = false
+            // 수직 평면(벽): 앵커 로컬 +Y 가 벽 바깥이므로 quad 를 X축 -90° 세운다.
+            rotation = if (isVertical) Rotation(x = -90f) else Rotation(0f, 0f, 0f)
+        }
+        val node = AnchorNode(sceneView.engine, anchor).apply {
+            isPositionEditable = false
+            // pose 는 매 프레임 스무딩해서 직접 넣는다 (onFrame). SceneView 자동 갱신 끔.
+            updateAnchorPose = false
+            addChildNode(image)
+        }
+        sceneView.addChildNode(node)
+        resultNode = node
+        smoothedPos = null
+        awaitingCoverAnchor = false
+        pendingCoverPatch = null
+        pendingCoverRegion = null
+        coverCamPoseAtBuild = space.latestFrame?.camera?.pose
+        Log.d(
+            TAG,
+            "buildResultNode: node#%d anchorPose=%s vertical=%b patch=%.2fx%.2fm camAtBuild=%s".format(
+                node.hashCode(), poseStr(anchor.pose), isVertical,
+                patchWidthM, patchHeightM, poseStr(coverCamPoseAtBuild),
+            ),
+        )
     }
 
     /**
-     * 매 프레임 호출: 결과 quad 를 벽 앵커에 스무딩해서 고정한다.
-     * - 앵커가 추적 중이 아닐 땐 마지막 위치를 그대로 두어 "미끄러짐"을 막는다.
-     * - 위치 값에 이동 평균(EMA)을 걸어 ARCore 재추적 지터를 완화한다.
-     * - 회전은 앵커 값을 그대로 쓴다(회전 지터는 상대적으로 작다).
+     * 매 프레임 호출.
+     * 1. 커버 quad 를 아직 못 만들었으면 사물 영역을 hitTest 해 잡히는 즉시 만든다.
+     * 2. 커버 quad 위치를 벽 앵커에 스무딩해서 고정한다. **[showingAfter](전체화면
+     *    프리뷰) 와 무관하게 항상 보이게 한다** — 라이브에서도 실제 사물을 가려야 하므로.
+     *    - 앵커가 STOPPED 면 숨긴다(트래킹을 잃음). TRACKING 이 아니면 마지막 위치 유지.
+     *    - 위치에 이동 평균(EMA)을 걸어 재추적 지터를 완화한다.
      */
     fun onFrame() {
+        if (awaitingCoverAnchor && resultNode == null) {
+            val region = pendingCoverRegion
+            val patch = pendingCoverPatch
+            if (region != null && patch != null) {
+                val hit = hitTestSourceRegion(region)
+                val fresh = hit?.let {
+                    it.createAnchorOrNull()
+                        ?: runCatching { sceneView.session?.createAnchor(it.hitPose) }.getOrNull()
+                }
+                if (fresh != null) {
+                    val isVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
+                    wallAnchor = fresh
+                    planeIsVertical = isVertical
+                    buildResultNode(fresh, isVertical, patch)
+                    status("삭제 자리에 결과가 고정되었습니다")
+                    Log.d(TAG, "onFrame: 커버 quad 앵커 확보 (vertical=$isVertical)")
+                }
+            }
+        }
+
         val node = resultNode ?: return
         val anchor = wallAnchor ?: return
         val ts = anchor.trackingState
@@ -408,29 +534,69 @@ class RemovalController(
         val quat = FloatArray(4)
         p.getRotationQuaternion(quat, 0)
         node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
-        if (!node.isVisible && showingAfter) node.isVisible = true
+        node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
+
+        // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
+        // 카메라의 위치·회전 차이가 클수록, 평면 이미지 1장으론 시차(parallax)를 못 살려
+        // 실제 사물과 quad 가 어긋나 보인다(반투명 잔상). anchorΔ 는 앵커 자체 표류.
+        if (++coverFrameLog % 60L == 0L) {
+            val camNow = space.latestFrame?.camera?.pose
+            val built = coverCamPoseAtBuild
+            if (camNow != null && built != null) {
+                Log.d(
+                    TAG,
+                    ("[cover B] 커버 생성시점 대비 카메라 Δ이동=%.2fm Δ회전=%.1f° · " +
+                        "현재 카메라→커버앵커=%.2fm · anchorΔ(pose vs 스무딩)=%.3fm · track=%s").format(
+                        distance(camNow, built), quatAngleDeg(camNow, built),
+                        distance(camNow, anchor.pose),
+                        distance(anchor.pose, Pose(floatArrayOf(nx, ny, nz), quat)),
+                        ts,
+                    ),
+                )
+            }
+        }
     }
 
-    // -------------------------------------------------------------- 삭제 전/후 (P1-9)
+    /** 두 pose 회전의 각도 차(도). 커버 quad 재투영 어긋남 진단용. */
+    private fun quatAngleDeg(a: Pose, b: Pose): Float {
+        val qa = FloatArray(4).also { a.getRotationQuaternion(it, 0) }
+        val qb = FloatArray(4).also { b.getRotationQuaternion(it, 0) }
+        var dot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3]
+        dot = abs(dot).coerceIn(0f, 1f)
+        return Math.toDegrees(2.0 * acos(dot.toDouble())).toFloat()
+    }
 
+    private fun poseStr(p: Pose?): String =
+        if (p == null) "null" else "t=(%.2f,%.2f,%.2f)".format(p.tx(), p.ty(), p.tz())
+
+    // ---------------------------------------------- 전체화면 결과 프리뷰 (P1-9)
+
+    /**
+     * "삭제 결과 보기" ↔ "결과 닫기 (라이브로)".
+     * **전체화면 프리뷰([R.id.resultOverlay])만** 켜고 끈다. 월드 앵커 커버
+     * quad([resultNode])는 여기서 건드리지 않으며 항상 렌더링된다.
+     */
     fun toggleBeforeAfter() {
+        if (binding.resultOverlay.drawable == null) return
         showingAfter = !showingAfter
-        resultNode?.isVisible = showingAfter
-        if (binding.resultOverlay.drawable != null) {
-            binding.resultOverlay.visibility = if (showingAfter) View.VISIBLE else View.GONE
-        }
-        binding.btnToggleRemoval.text = if (showingAfter) "삭제 후 (보임)" else "삭제 전 (원본)"
+        binding.resultOverlay.visibility = if (showingAfter) View.VISIBLE else View.GONE
+        binding.btnToggleRemoval.text = if (showingAfter) "결과 닫기 (라이브로)" else "삭제 결과 보기"
     }
 
     // -------------------------------------------------------------- 내부 유틸
 
     private fun clearResult() {
         resultNode?.let { node ->
+            Log.d(TAG, "clearResult: 커버 quad node#${node.hashCode()} 제거")
             sceneView.removeChildNode(node)
             runCatching { node.destroy() }
         }
         resultNode = null
         smoothedPos = null
+        awaitingCoverAnchor = false
+        pendingCoverPatch = null
+        pendingCoverRegion = null
+        coverCamPoseAtBuild = null
         binding.btnToggleRemoval.visibility = View.GONE
         binding.resultOverlay.visibility = View.GONE
         binding.resultOverlay.setImageDrawable(null)
@@ -458,7 +624,8 @@ class RemovalController(
         sceneView.postDelayed({
             PixelCopy.request(sceneView, bitmap, { copyResult ->
                 onAfterCapture()
-                resultNode?.isVisible = showingAfter
+                // 커버 quad 는 캡처 후 다시 항상 보이게 (onFrame 이 재확인하지만 즉시 복구).
+                resultNode?.isVisible = true
                 if (copyResult == PixelCopy.SUCCESS) {
                     val out = ByteArrayOutputStream()
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
@@ -577,6 +744,7 @@ class RemovalController(
     }
 
     private companion object {
+        const val TAG = "InteriorAR"
 
         /** 선택 사각형이 화면 면적의 이 비율 이상이면 "넓다" 경고. */
         const val LARGE_SELECTION_FRACTION = 0.40f

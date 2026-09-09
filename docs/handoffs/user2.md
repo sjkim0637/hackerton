@@ -13,6 +13,338 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 진단 로그 추가 — 이동 후 원래 자리에 남는 "반투명 잔상" (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: 모니터 삭제→이동 후 화면에 3개가 동시에
+보인다 — (1) 실제 모니터, (2) 원래 자리 근처 반투명 잔상, (3) 새 자리의 이동된 모니터.
+(2)의 정체를 A/B 로 나눠 로그를 넣었다. **아직 수정은 안 함** — 실기기 재현으로 원인
+확정 후 대응.
+
+### (2)는 `RemovalController.resultNode`(커버 quad)일 가능성이 높다
+
+직전 커밋에서 커버 quad 는 "결과가 있는 한 항상 렌더링" 하도록 바꿨다. 즉 원래 자리에
+반투명(EdgeFade 알파 램프) 패치가 계속 떠 있는 건 **의도된 동작**이다. 문제는 그게
+실제 모니터와 **어긋나** 둘 다 보인다는 것. 두 원인 후보:
+
+**A) 드래그 노드 정리 누락?** — 코드상으로는 아님.
+- `MovedObjectController` 의 이동 마커는 `node` **하나뿐**이다. `onDrag` 는 같은 `node`
+  의 `pose` 만 바꾸고, `onDragEnd` 는 **노드는 그대로 두고 `anchor` 만 교체**한다
+  (새 노드/마커 생성 없음). 원래 자리에 남을 임시 노드가 없다.
+- 새 노드는 `setNode()` 에서만 생기고, `setNode` 는 맨 앞에서 `clearMovedNode()`
+  (remove + `anchor.detach()` + `destroy()`) 를 부른다. `arm`/`disarm`/`undo`/"치우기"
+  도 `clearMovedNode`.
+- 로그로 확인: `setNode: … node#<id>`, `clearMovedNode: node#<id> 제거`,
+  `onDragEnd: node#<id> 같은 노드 재고정(새 노드/마커 생성 안 함)`,
+  `[moved A] node#<id> anchorPos=… dragging=…`(60프레임마다). **node# 가 계속 하나로
+  유지되고 drag 후 anchorPos 가 "새 위치" 면 A 아님.**
+
+**B) 평면 이미지 재투영 한계 (시야각 어긋남)** — 유력.
+- 커버 quad 는 한 시점에서 찍은 **평면 텍스처 1장**을 한 앵커에 붙인 것이다. 생성 때와
+  다른 각도/위치에서 보면 실제 3D 장면의 시차(parallax)를 못 살려 실물과 어긋난다.
+- 로그: `[cover B] 커버 생성시점 대비 카메라 Δ이동=…m Δ회전=…° · 현재 카메라→커버앵커=…m
+  · anchorΔ … · track=…`(60프레임마다). **Δ이동/Δ회전이 크고 그때 잔상이 심해지면 B.**
+- `buildResultNode: node#… anchorPose=… camAtBuild=…` — 커버 quad 앵커·생성 시점 카메라.
+
+**B의 하위 원인 — 앵커가 애초에 엉뚱한 곳:** 선택 시점에 `wallAnchor` 를 못 잡았으면
+`applyResult`/`onFrame` 이 `hitTestSourceRegion` 으로 **선택 시점의 화면 좌표(정규화
+bbox 중심)** 를 지금 다시 hitTest 한다. 그 사이 카메라가 움직였으면 같은 픽셀이 다른
+월드 지점을 가리켜 커버 quad 가 실제 모니터에서 벗어난 곳에 박힌다.
+- 로그: `hitTestSourceRegion: 화면(x,y)px → hitPose=… · 현재 camPose=…`. **선택할 때와
+  결과 왔을 때 camPose 가 크게 다르면 이 경로가 범인.**
+
+### 추가한 로그 (tag `InteriorAR`, 모두 `TEMP-DIAG` 주석)
+
+| 위치 | 로그 | 무엇을 보나 |
+|---|---|---|
+| `RemovalController.buildResultNode` | `buildResultNode: node#… anchorPose=… camAtBuild=…` | 커버 quad 생성 위치·시점 카메라 |
+| `RemovalController.hitTestSourceRegion` | `hitTestSourceRegion: 화면(x,y)px → hitPose=… camPose=…` | 스테일 화면좌표 재투영 여부 |
+| `RemovalController.onFrame` (60f) | `[cover B] … Δ이동 Δ회전 … 카메라→커버앵커 … anchorΔ … track=…` | 시야각 어긋남(B) 정량 |
+| `RemovalController.clearResult` | `clearResult: 커버 quad node#… 제거` | 커버 quad 소멸 시점 |
+| `MovedObjectController.setNode` | `setNode: 이동 마커 node#… anchorPose=… camAtCreate=…` | 마커 생성(개수/위치) |
+| `MovedObjectController.clearMovedNode` | `clearMovedNode: node#… 제거` | 마커 소멸 |
+| `MovedObjectController.onDragEnd` | `onDragEnd: node#… 같은 노드 재고정(새 노드 안 만듦) …` | A(드래그 잔여 노드) 배제 |
+| `MovedObjectController.onFrame` (60f) | `[moved A] node#… anchorPos=… track=… dragging=… · 생성 후 카메라 Δ…` | 마커가 하나로 유지되는지 |
+
+빌드 `:app:assembleDebug` 성공.
+
+### 재현 시 볼 것
+
+1. `setNode` 로그가 이동 1회당 몇 번 찍히나 (1번이어야 A 아님). `[moved A]` 의 node# 가
+   계속 같은지, `clearMovedNode` 없이 `[moved A]` 가 두 줄씩 안 나오는지.
+2. 삭제 영역 선택할 때 vs 결과 왔을 때 `camPose` 차이 (`hitTestSourceRegion` 로그) —
+   크면 커버 앵커가 잘못 박힌 것(B 하위).
+3. 잔상이 심한 순간 `[cover B]` 의 Δ이동/Δ회전 값 — 클수록 재투영 한계(B).
+4. `anchorΔ` 가 계속 튀면 앵커 표류(ARCore 재추적).
+
+## 진단 + 수정 — "결과 닫기 (라이브로)" 시 커버 quad 도 같이 꺼져 사물이 2개로 보임 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: "삭제 결과 보기" → "결과 닫기 (라이브로)"
+로 전환하면 삭제 자리를 가려주던 결과 오버레이가 사라지고 실제 모니터가 다시 보인다.
+거기에 이동시킨 모니터 이미지까지 새 자리에 있어 모니터가 2개.
+
+### 1. "결과 닫기 (라이브로)" 핸들러
+
+`RemovalController.toggleBeforeAfter()` (init 에서 `btnToggleRemoval` 클릭에 연결).
+**정지 화면 on/off 와 앵커 고정 결과 quad 의 표시/숨김을 하나의 `showingAfter`
+불리언으로 같이 건드리고 있었다:**
+
+```kotlin
+fun toggleBeforeAfter() {
+    showingAfter = !showingAfter
+    resultNode?.isVisible = showingAfter          // ← 월드 앵커 커버 quad 까지 껐다
+    if (resultOverlay.drawable != null) resultOverlay.visibility = if (showingAfter) VISIBLE else GONE
+    ...
+}
+```
+
+`onFrame()` 도 `if (!node.isVisible && showingAfter) node.isVisible = true` 라, 한 번
+끄면 다시 안 켜졌다.
+
+### 2. 원인 확인 → 맞음. 게다가 사용자 케이스엔 커버 quad 가 아예 없었다.
+
+- 두 관심사(전체화면 프리뷰 / 월드 커버 quad)가 `showingAfter` 하나에 묶여 있었다. ✅
+- 추가로: "삭제 결과 보기" / "결과 닫기 (라이브로)" **버튼 텍스트는 `resultNode == null`
+  일 때만** 나오는 분기였다. 즉 사용자 세션에선 선택 시점에 `wallAnchor` 를 못 잡아
+  **커버 quad(`resultNode`) 가 처음부터 만들어지지 않았고**, 2D 전체화면 이미지만
+  있었다. 그걸 닫으면 실제 모니터가 그대로 → 이동 마커와 합쳐 2개.
+
+### 3. 수정 — "정지화면 표시"와 "커버 quad 표시"를 분리
+
+`RemovalController`:
+
+- **커버 quad (`resultNode`) 는 결과가 있는 한 항상 렌더링.**
+  `onFrame()` 이 추적 상태만 보고(`STOPPED` 면 숨김, 아니면 `isVisible = true`)
+  관리한다. `toggleBeforeAfter` 는 이제 이 노드를 **건드리지 않는다**.
+- **선택 시점에 평면이 없어도 커버 quad 를 만든다.** `applyResult` 에서 `wallAnchor`
+  가 null 이면 그 자리에서 사물 영역(`hitTestSourceRegion`, 정규화 bbox 중심)을
+  hitTest 해 앵커를 잡는다(결과가 도착한 이 무렵엔 대개 평면이 잡혀 있음). 그래도
+  없으면 `awaitingCoverAnchor=true` → `onFrame` 이 매 프레임 재시도해 잡히는 즉시
+  `buildResultNode`. (전체화면으로 덮지 않고 라이브 유지 — 이전 fallback 수정과 일관.)
+- **`toggleBeforeAfter()` 는 전체화면 프리뷰(`resultOverlay`)만** on/off.
+  버튼 텍스트도 항상 "삭제 결과 보기" ↔ "결과 닫기 (라이브로)" 하나로 통일.
+  (앵커 유무로 갈라지던 "삭제 전(원본)/삭제 후(보임)" 텍스트·동작 제거 — 커버는 늘
+  떠 있어야 하므로 "패치를 숨겨 원본과 비교" 기능은 의도적으로 없앴다.)
+- `applyResult`: 전체화면 프리뷰용 `full` 비트맵은 앵커 유무와 무관하게 항상
+  `resultOverlay` 에 세팅(기본 `GONE`).
+- `captureSceneJpeg`: 캡처 후 복구를 `resultNode?.isVisible = showingAfter` →
+  `= true` 로.
+- 새 헬퍼: `hitTestSourceRegion(region)`, `buildResultNode(anchor, isVertical, patch)`.
+  새 상태: `awaitingCoverAnchor`, `pendingCoverPatch`, `pendingCoverRegion`
+  (`clearResult` 에서 함께 정리).
+
+### 4. 이동 기능과의 상호작용 → 정상 (동시 표시)
+
+`RemovalController.resultNode`(원래 자리 커버)와 `MovedObjectController.node`(새 자리
+이동 마커)는 **서로 독립된 노드**다. 한쪽이 생겨도 다른 쪽을 지우는 코드 경로가 없다.
+- 삭제 → 커버 quad 가 원래 자리에 고정(실제 모니터 가림).
+- `moved.arm()` → 이동 마커가 (originalPose 있으면 그 자리, 없으면 사물 영역) 에 생성.
+  처음엔 커버와 같은 자리에 겹쳐 뜨고, 드래그해서 새 자리로 옮기면 커버는 원래 자리에
+  그대로 남는다 → **지운 자리는 가려지고, 새 자리엔 사물이 보이는** 그림.
+- 둘을 함께 지우는 건 `clearSelection()`(명시적 "선택 취소") → `clearResult()` +
+  `onRemovalCleared()` → `moved.disarm()` 뿐.
+
+빌드 `:app:assembleDebug` 성공.
+
+## 진단 + 수정 — 이동된 사물이 원본보다 ~1.5배 크게 표시 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 텀블러(=objectType `other`)를 삭제 후 이동하니
+마커 이미지가 원본보다 약 1.5배 크게 보였다.
+
+### 1. 이동 사물 quad 크기가 결정되는 경로
+
+```
+RemovalController.resolveWall(rect)
+  bbox 네 변(rect.left/right/centerY, centerX/top/bottom)에서 space.hitTest → hitPose
+  patchWidthM  = distance(left, right)   // 3D 거리(m), coerceIn(0.2, 4)  ← 기존
+  patchHeightM = distance(top,  bottom)  // 3D 거리(m), coerceIn(0.2, 4)  ← 기존
+        │  (RemovalController.runFlow → onRemovalApplied 의 마지막 두 인자)
+        ▼
+MovedObjectController.arm(… widthM=patchWidthM, heightM=patchHeightM)
+  baseW = widthM.coerceIn(0.15, 3)      ← 기존
+  baseH = heightM.coerceIn(0.15, 3)     ← 기존
+        ▼
+setNode() → ImageNode(size = Size(baseW, baseH))   // 월드 미터 단위 quad
+applyChildTransforms(): imageNode.scale = Scale(scaleF * MARKER_SCALE)
+  scaleF = 1 (초기), MARKER_SCALE = 1.35   ← 여기!
+```
+
+- **정규화 bbox × 해상도로 픽셀 크기를 구하나?** — 아니다. bbox 네 변의 화면 좌표에서
+  직접 `hitTest` 하고, 맞은 **3D 점들 사이 유클리드 거리(m)**를 크기로 쓴다.
+- **픽셀 → 미터 변환 공식?** — 별도 변환 없음. hitTest 가 이미 월드 좌표(m)를 준다.
+  즉 "hitTest 거리 기반" 이 맞고, 원근 계산은 hitTest 내부(ARCore)에서 처리된다.
+
+### 2. 카메라-사물 거리 차이는 반영되는가 → **이미 올바르게 반영됨**
+
+실제 크기를 **삭제 당시 hitTest 로 잰 미터값**으로 저장하고(`patchWidthM/HeightM`),
+새 위치의 quad 도 `Size(baseW, baseH)` = **월드 미터** 로 만든다. 월드 미터 quad 는
+보는 거리가 달라지면 화면상 크기가 원근으로 자동 조정된다 — 실제 사물과 동일.
+따라서 "삭제 거리 ↔ 이동 거리" 차이는 **재계산할 필요가 없고, 이미 맞다.**
+(사용자가 제안한 "원래 거리 기준 cm 저장 후 유지" 는 현재 코드가 이미 하는 일.)
+
+남는 오차는 **측정 자체의 원근 과대추정**이다: bbox 좌/우 변을 지나는 광선이
+사물 앞면이 아니라 그 뒤 지지면(책상)에 맞아, 두 교点 간격이 사물 실제 폭보다
+약간 넓게 나온다. 깊이 없이는 정밀 보정이 어려워 임시 노브로 처리(아래 4).
+
+### 3. 512px 다운스케일 → **크기 버그와 무관**
+
+`MovedObjectController.downscale()` 는 가장 긴 변을 512(`MAX_TEX`)로 맞추되 **가로/세로에
+같은 계수 `f`** 를 곱한다 → 종횡비 보존. 게다가 quad 월드 크기(`Size(baseW, baseH)`)와
+**독립**이다(텍스처 해상도만 바뀜). `EdgeFade.feather` 도 치수 불변(가장자리 alpha 램프
+뿐, 오히려 불투명 영역이 ~16% 작아 보이게 함).
+다만 `baseW/baseH` 를 이미지 종횡비와 무관하게 **각각 hitTest 로** 재던 탓에 quad 비율이
+이미지와 어긋나 늘어나 보일 수 있었다 → 이번에 세로를 이미지 종횡비로 유도하도록 수정.
+
+### 원인 정리
+
+| 요인 | 영향 | 조치 |
+|---|---|---|
+| **`MARKER_SCALE = 1.35`** (commit a5d089e, "터치하기 쉽게") | quad 를 항상 1.35× 확대. 마커는 `isTouchable=false` 고 드래그는 화면 좌표 기반이라 **터치 이득 0** — 순수 부작용 | `1.0` 으로 되돌림 (주 원인) |
+| `patchWidthM/HeightM` `coerceIn(0.2, 4)` + `baseW/baseH` `coerceIn(0.15, 3)` | 텀블러(~7–9cm)가 15–20cm 로 바닥 클램프 → 최대 2–3× 과대 | 하한 `0.05m` 로 낮춤 |
+| `baseW`·`baseH` 를 각각 독립 hitTest | quad 종횡비 ≠ 이미지 종횡비 → 늘어남 | 폭만 실측, 세로는 크롭 이미지 종횡비로 유도 |
+| bbox 가장자리 hitTest 의 원근 과대추정 | 폭이 실제보다 약간 큼(잔차) | `MOVED_SCALE_CORRECTION` 노브 |
+
+### 적용 (수정)
+
+- **`MovedObjectController`**
+  - `MARKER_SCALE = 1.35f → 1f`. `applyChildTransforms` 의 `disp = scaleF * MARKER_SCALE
+    * MOVED_SCALE_CORRECTION`.
+  - `MOVED_SCALE_CORRECTION = 1f` 추가 (companion 상수). **크기 계산이 전부 클라이언트라
+    서버 env 가 아니라 앱 상수다.** 실기기에서 크게 나오면 `0.67` 등으로 내리고
+    `:app:assembleDebug`(증분 ~40s) 재설치.
+  - `arm()`: `baseW = (widthM * MOVED_SCALE_CORRECTION).coerceIn(0.05, 3)`,
+    `baseH = baseW * cropBmp.height / cropBmp.width` (이미지 종횡비 유지, 없으면
+    `heightM` 폴백). 하한 0.05m. 계산값 `Log.d(TAG, "arm size: …")` 로 남김.
+- **`RemovalController.resolveWall`**: `patchWidthM/HeightM` `coerceIn(0.2,4) → coerceIn(0.05,4)`.
+  `Log.d(TAG, "resolveWall: patchW=… patchH=… edges=…")` 추가.
+- 빌드 `:app:assembleDebug` 성공.
+
+### 알려진 잔여 이슈 (이번 범위 밖)
+
+- **서버 배치 복원 시 실제 크기 유실**: `savePlacementNow` 는 `scaleF` 만 저장하고
+  `baseW/baseH` 는 저장/복원하지 않는다 → `restoreFromServer` 후 `baseW=baseH=0.6`(필드
+  기본값)으로 뜬다. 같은 세션 내 삭제→이동에는 영향 없음. 서버 스키마에 `base_w/base_h`
+  (또는 `source_region` + `plane_distance`)를 추가하면 근본 해결.
+
+## 정리 — "배경 촬영 / 배경 표시" 기능 데모 UI 에서 숨김 (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 피드백: 이 기능 효과가 잘 안 느껴진다.
+
+### 확인한 것
+
+1. **켜졌을 때 실제 효과** — `BackgroundKeyframe.capture()` 가 현재 카메라
+   프레임(가구 AR 노드만 숨김, 실제 물리 가구는 그대로)을 `PixelCopy` 로 찍어
+   `empty_background.png` 저장 → `배경 표시` 를 누르면 그 **정지 이미지**를
+   `backgroundOverlay`(match_parent ImageView) 에 `alpha≈0.5` 로 겹친다.
+   - 문제 (a): 같은 방의 정지 사진 ↔ 같은 방의 라이브 영상을 반투명 블렌딩 →
+     차이가 거의 없어 "아무 일도 안 일어난 것"처럼 보인다.
+   - 문제 (b): 오버레이가 **카메라를 안 따라간다**(2D 고정). 폰을 조금만 움직여도
+     프레임이 어긋나 유령처럼 겹친다 — 시연에서 오히려 버그처럼 보인다.
+   - 문제 (c): "변경 전/후 비교" 목적은 이미 `RemovalController` 의 **`삭제 전/후`**
+     토글(`btnToggleRemoval`)이 담당한다 — 그쪽은 실제 AI 결과와 원본을 비교하므로
+     훨씬 설득력 있다. 배경 오버레이는 그와 중복.
+
+2. **`opacitySeekBar` 가 화면에 보이나?** — 버그로 숨은 게 아니다.
+   `BackgroundKeyframe.show(visible)` 가 `opacityBar.visibility = VISIBLE` 로
+   토글하므로 `배경 표시` 를 누르면 나타난다. 다만 위치가 나쁘다 — 상단
+   컨트롤 스택(안내문 → 배경/가구 버튼 → **슬라이더** → 서버주소 입력 → 스피너 →
+   삭제 버튼들 → 상태문)에 끼어 있어 라벨도 없고 눈에 안 띈다. (이번에 숨김 처리로 무의미해짐.)
+
+3. **PHASE 9 / 2분 시연에 필요한가? — 아니다.**
+   현재 제출 문서 `experiments/shinym87/interior/NOTION_SUBMISSION.md` 의 2분 시연
+   시나리오(0:00–2:00)에 배경 촬영/표시 단계가 **없다**. "전후 비교와 가치"(1:52–2:00)는
+   삭제 결과 토글 + 이동/카탈로그 흐름으로 전달된다. PHASE 0 `phase-0.md` 시연
+   시나리오 6번("`배경 표시` 토글로 변경 전/후 비교")의 잔재이며, 그 역할은
+   `삭제 전/후` 로 대체됐다.
+
+### 적용
+
+- `activity_main.xml`: `btnCaptureBg` · `btnToggleBg` · `opacitySeekBar` 를
+  `visibility="gone"`. `backgroundOverlay` 는 원래 gone. 되돌리는 법을 주석에 명시.
+- `BackgroundKeyframe.kt` 와 `MainActivity` 배선은 **그대로 유지** — 세 위젯을
+  `visible` 로만 바꾸면 부활. `MainActivity` 에 이유 주석.
+- `README.md` 사용 방법 7번 / 기능표 갱신.
+- 빌드: `:app:assembleDebug` 성공.
+
+### 남은 판단 (원하면)
+
+되살릴 가치가 있으려면 오버레이를 **카메라 추적**에 얹거나(정지 프레임이 아니라
+캡처 시점 pose 기준 빌보드/평면 투영), 애초에 이 기능을 접고 완전 제거(옵션 3)해도
+된다. 지금은 코드만 남기고 UI 만 숨긴 상태.
+
+## 진단 + 수정 — "삭제 완료 후 이동이 안 먹힘 / 화면이 멈춘 듯" (2026-09-08)
+
+Branch `agent/shinym87/interior_dev`. 증상: 사물 삭제가 끝난 화면에서 탭·드래그가
+무반응, 화면이 정지한 것처럼 보이고 바닥 평면 점(dot)도 새로 안 뜬다.
+
+goguma-salad 가 다른 브랜치에서 같은 건을 이미 보고했다
+(`docs/handoffs/interior-removal-fallback.md`, Severity High). 원인 분석이 일치한다.
+
+### 요청한 4가지 확인
+
+1. **ARCore 세션 / onFrame 이 계속 도는가? → 돈다.**
+   `ArSpaceController.onSessionUpdated` 는 SceneView GL 렌더 스레드가 돌리며 어떤
+   View 오버레이와도 무관하다. 삭제/이동 흐름 어디에서도 세션·lifecycle 을 멈추지
+   않는다. 화면이 "멈춘 것처럼" 보이는 건 **정지 이미지가 카메라를 덮고 있어서**다.
+   → 확인용으로 `onFrame heartbeat #N tracking=… planes=…` 로그를 약 2초마다 찍게 했다
+   (tag `InteriorAR`). 삭제 후에도 이 줄이 계속 나오면 세션은 살아있다.
+
+2. **오버레이/패치가 터치를 가로채는가? → `resultOverlay` 가 화면을 덮는 게 핵심.**
+   `activity_main.xml` 의 `@id/resultOverlay` 는 `match_parent` × `match_parent`
+   `ImageView`. `RemovalController.applyResult()` 는 **벽/바닥 앵커(`wallAnchor`)를
+   못 잡았을 때** 서버가 준 전체 결과 Bitmap 을 이 오버레이에 넣고 `VISIBLE` 로
+   만들고, 그대로 무기한 남는다. `clickable=false` 라 터치 이벤트 자체는 아래
+   `sceneView` 로 통과하지만, **라이브 카메라·평면 격자/점·삭제 후 뜨는 이동 마커가
+   전부 이 정지 이미지에 가려진다.**
+   - `movedObjectPanel` 은 `wrap_content` 하단 패널이라 버튼 영역만 차지 — 무관.
+   - `backgroundOverlay`(gone), `bboxSelectionView`(선택 후 gone) — 무관.
+
+3. **"여기로 옮기기 버튼 → 탭" → "삭제 즉시 드래그" 변경이 제대로 적용됐는가? → 됐다. 충돌 없음.**
+   커밋 `a5d089e` 확인: `btnMovedPlace` 레이아웃에서 제거, `MovedObjectController`
+   의 `placing`/`onTap()` 경로 삭제, `MainActivity.onSingleTapConfirmed` 에서
+   `moved.onTap` 제거, `space.onFrame` 에 `moved.onFrame()` 추가, `canManipulate()`
+   에서 `!placing` 제거. 드래그 경로(`onDragBegin/onDrag/onDragEnd`)는 살아 있다.
+   → 진짜 문제는 로직 충돌이 아니라, **앵커가 없는 경로에서 `arm()` 이 마커를 못
+   띄운다**는 것: `originalPose == null`(= `wallAnchor?.pose`) + `source_region`
+   hitTest 도 평면이 없어 실패 → `node == null` → `canManipulate()` 가 false →
+   마커에 대한 탭·드래그가 전부 no-op. 여기에 2번의 전체화면 오버레이가 겹쳐
+   "완전히 멈춘 화면"으로 보인다.
+
+4. **logcat 진단 로그 (임시, tag `InteriorAR`, 코드에 `TEMP-DIAG` 주석)**
+   - `MainActivity` 제스처: `[gesture] tap …`, `[gesture] moveBegin … movedTook=`,
+     `[gesture] move #N … movedTook=`(15회마다), `[gesture] moveEnd movedTook=`.
+     → 터치가 앱에 도달하는지, 이동 컨트롤러가 먹는지.
+   - `MovedObjectController`: `arm: … markerPlaced= awaitingPlane=`,
+     `placeMarkerNow: …`(어느 경로로 마커를 놓/못 놓았는지), `onDragBegin … canManipulate=`,
+     `onDrag: hitTest 없음 …`, `onFrame: 이동 마커 배치 성공`.
+   - `RemovalController`: `runFlow done → onRemovalApplied(… hasPose=)`,
+     `applyResult: 벽 앵커 quad 경로` / `applyResult: 벽 앵커 없음 → …`.
+   - `ArSpaceController`: 위 heartbeat.
+
+### 적용한 수정
+
+- **`RemovalController.applyResult()`** — 앵커가 없어도 전체화면으로 덮지 않는다.
+  결과 Bitmap 은 `resultOverlay` 에 넣어두되 `GONE` 으로 두고, 라이브 카메라를
+  유지한다. `btnToggleRemoval` 이 "삭제 결과 보기" ↔ "결과 닫기 (라이브로)" 로
+  동작해 필요할 때만 프리뷰를 연다. 앵커가 있으면(벽 quad) 기존 동작 그대로.
+- **`MovedObjectController.placeMarkerNow()`** — 마지막 fallback 추가: 평면을 전혀
+  못 잡으면 **카메라 앞 ~1.2m** 에 마커를 띄운다. 평면 고정은 아니지만 사용자가
+  바로 붙잡아 끌 수 있고, `onDrag` 의 hitTest 가 평면 위에서 다시 재고정한다.
+  이로써 삭제 직후 거의 항상 `node != null` → `canManipulate()` true → 드래그가 먹는다.
+- 위 진단 로그. **데모 안정화 후 `TEMP-DIAG` 표시 줄은 제거할 것.**
+
+### 빌드
+
+`JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug`
+→ **BUILD SUCCESSFUL**. APK: `experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk` (약 47MB).
+
+### 실기기에서 좁힐 것
+
+- 삭제 완료 직후 `onFrame heartbeat` 가 계속 찍히는지 (세션 생존 확인).
+- `applyResult:` 로그가 "벽 앵커 quad 경로" 인지 "벽 앵커 없음" 인지 → 어느 경로 버그인지 확정.
+- `arm: … markerPlaced=true` 인지, `placeMarkerNow:` 가 어느 단계에서 성공/실패하는지.
+- 드래그 시 `[gesture] moveBegin … movedTook=true` + `onDragBegin … canManipulate=true` 가 뜨는지.
+- 마커가 눈에 보이는지(전체화면 오버레이 제거 후) — 안 보이면 마커 배치 좌표/스케일 문제로 좁힌다.
+
 ## PHASE 5 — 가구 카탈로그 썸네일 서빙 (2026-09-03)
 
 사용자 1 이 카탈로그 배치 UI 를 만들었지만 서버가 `/assets/*` 를 안 줘서 5종 모두 큐브

@@ -124,6 +124,38 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
   1건 → `GET /catalog/{id}` 크기 → 화면 기준 hitTest 재배치). `InteriorApiClient` 확장
   (createPlacement source/catalogItemId 하위호환, listPlacements, getCatalogItem, Placement DTO).
   removed_object 복원과 독립 공존. 실서버 스모크 OK. `docs/handoffs/user1.md`.
+- [DONE] 진단/수정: "삭제 완료 후 이동이 안 먹는다(화면이 멈춘 듯)" — 원인은 세션 정지가
+  아니라 `RemovalController.applyResult` 의 **전체화면 fallback**. 벽/바닥 앵커를 못 잡으면
+  결과 Bitmap 을 `resultOverlay`(match_parent ImageView) 로 덮어 라이브 카메라·평면 점·삭제 후
+  뜨는 이동 마커가 전부 가려졌다. 앵커 없을 때 전체화면 대신 라이브 유지 + "삭제 결과 보기"
+  버튼으로만 열람하도록 변경. `MovedObjectController.placeMarkerNow` 에 카메라 앞 1.2m
+  마지막 fallback 추가(평면 미인식이어도 마커가 떠서 바로 끌 수 있음). 제스처/hitTest/onFrame
+  임시 진단 로그(tag `InteriorAR`) 추가. `docs/handoffs/user2.md`,
+  루트 `docs/handoffs/interior-removal-fallback.md`(goguma-salad 보고서)와 동일 건.
+- [진행] 진단 로그: 이동 후 원래 자리에 반투명 "잔상"(실제 사물 + 커버 quad 어긋나 겹침).
+  A(드래그 잔여 노드) / B(평면 이미지 재투영 시야각 어긋남 · 스테일 화면좌표 앵커) 를
+  로그로 구분. 코드상 A 는 아님(이동 마커 node 1개, onDragEnd 는 anchor 만 교체).
+  `[cover B]`/`[moved A]`/`hitTestSourceRegion`/`buildResultNode`/`setNode` 로그 추가
+  (tag `InteriorAR`, `TEMP-DIAG`). 실기기 재현으로 원인 확정 후 수정 예정. `docs/handoffs/user2.md`.
+- [DONE] 진단/수정: "결과 닫기 (라이브로)" 시 삭제 자리 커버 quad 도 같이 꺼져 실제
+  사물 + 이동 사물이 겹쳐 2개로 보임. 원인: 전체화면 프리뷰 표시와 앵커 고정 결과
+  quad(`resultNode`) 표시를 `showingAfter` 하나로 묶어서 토글. 수정: 둘을 분리 —
+  커버 quad 는 결과가 있는 한 항상 렌더링(`onFrame` 이 추적 상태만 관리), 선택 시점에
+  평면이 없었으면 사물 영역 hitTest 로 재확보(`hitTestSourceRegion`/`awaitingCoverAnchor`,
+  `onFrame` 재시도). `toggleBeforeAfter` 는 전체화면 프리뷰만 on/off. 이동 마커
+  (`MovedObjectController.node`)와 커버 quad 는 독립 → 지운 자리 가림 + 새 자리 사물
+  동시 표시 정상. `docs/handoffs/user2.md`.
+- [DONE] 진단/수정: 이동된 사물이 원본보다 ~1.5배 크게 표시. 주원인은 `MARKER_SCALE=1.35`
+  (터치 편의 목적이었으나 마커 `isTouchable=false` + 드래그가 화면 좌표 기반이라 이득 0)
+  → `1.0`. 부수: `patchWidthM/HeightM`·`baseW/baseH` 하한을 0.2/0.15m → 0.05m (텀블러가
+  20cm 로 부풀던 것), `baseH` 를 크롭 이미지 종횡비로 유도(quad 늘어남 방지). 임시 노브
+  `MOVED_SCALE_CORRECTION`(기본 1.0, 앱 상수) 추가 — 원근 과대추정 잔차용. 512 다운스케일은
+  종횡비 보존·quad 크기와 독립이라 무관. `docs/handoffs/user2.md`.
+- [DONE] 정리: "배경 촬영/배경 표시"(BackgroundKeyframe) 데모 UI 숨김 — 효과 미미(정지
+  2D 스냅샷, 카메라 미추적) + 2분 시연 시나리오에 없음. "변경 전/후"는 "삭제 전/후" 담당.
+  `activity_main.xml` 3개 위젯 `visibility=gone`, 코드/배선 유지. `docs/handoffs/user2.md`.
+- [TODO] 서버 배치 복원 시 실제 크기 유실 — placements 에 `base_w/base_h` (또는 source_region
+  + 거리) 저장/복원 추가. 지금은 `scaleF` 만 저장돼 복원 후 0.6m 로 뜬다.
 - [TODO] 바닥/벽 자동 스냅(가까이 가면 붙기), 벽지/색상 변경. 썸네일을 실제 제품 사진으로 교체.
 
 ## PHASE 2 이후 (개요만)

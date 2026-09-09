@@ -6,6 +6,13 @@
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- 저장해 둔 "빈 배경" 대표 이미지를 카메라 위에 반투명으로 겹친다.
+         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다.
+         PHASE 5 데모에서는 비활성 — 카메라를 안 따라가는 2D 스냅샷이라 폰을 움직이면
+         어긋나 보이고, "변경 전/후"는 삭제 결과의 '삭제 전/후' 토글이 담당한다.
+         BackgroundKeyframe 코드/배선은 남겨두어 되돌리기 쉽게 한다
+         (아래 btnCaptureBg / btnToggleBg / opacitySeekBar 를 visibility="visible" 로). -->
     <ImageView
         android:id="@+id/backgroundOverlay"
         android:layout_width="match_parent"
@@ -320,12 +327,14 @@
                 <Button
                     android:id="@+id/btnCaptureBg"
                     style="@style/WorkspaceButton"
+                    android:visibility="gone"
                     android:text="배경 촬영" />
                 <Button
                     android:id="@+id/btnToggleBg"
                     style="@style/WorkspaceButton"
                     android:text="배경 표시"
-                    android:enabled="false" />
+                    android:enabled="false"
+                    android:visibility="gone" />
             </LinearLayout>
             <SeekBar
                 android:id="@+id/opacitySeekBar"

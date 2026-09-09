@@ -1,6 +1,7 @@
 package com.hackathon.interior
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -26,6 +27,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
     private lateinit var settings: AppSettings
+
+    /** TEMP-DIAG: onMove 는 초당 수십 번 → 15회마다 한 줄만 찍는다. */
+    private var moveEventLog = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +61,8 @@ class MainActivity : AppCompatActivity() {
             space.setPlaneVisualizationEnabled(true)
         }
 
+        // "빈 배경" 오버레이. PHASE 5 데모에서는 버튼/슬라이더를 layout 에서 gone 처리해
+        // 사실상 비활성이다(효과 미미 + 시나리오에 없음). 배선은 되돌리기 쉽게 남겨둔다.
         keyframe = BackgroundKeyframe(
             activity = this,
             sceneView = binding.sceneView,
@@ -103,14 +109,31 @@ class MainActivity : AppCompatActivity() {
         }
         space.isIdle = { furniture.isIdle() }
 
+        // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
+        // TEMP-DIAG: 제스처가 앱에 실제로 도달하는지 / 이동 마커가 먹는지 logcat 추적 (tag InteriorAR).
         binding.sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { event, node -> furniture.handleTap(event, node) },
+            onSingleTapConfirmed = { event, node ->
+                Log.d(TAG, "[gesture] tap @(${event.x.toInt()},${event.y.toInt()}) → furniture.handleTap")
+                furniture.handleTap(event, node)
+            },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
             onMoveBegin = { _, event, node ->
-                if (!moved.onDragBegin(event.x, event.y)) furniture.beginDrag(node)
+                val byMoved = moved.onDragBegin(event.x, event.y)
+                Log.d(TAG, "[gesture] moveBegin @(${event.x.toInt()},${event.y.toInt()}) movedTook=$byMoved")
+                if (!byMoved) furniture.beginDrag(node)
             },
-            onMove = { _, event, _ -> if (!moved.onDrag(event.x, event.y)) furniture.drag(event) },
-            onMoveEnd = { _, event, _ -> if (!moved.onDragEnd()) furniture.endDrag(event) },
+            onMove = { _, event, _ ->
+                val byMoved = moved.onDrag(event.x, event.y)
+                if (++moveEventLog % 15 == 0) {
+                    Log.d(TAG, "[gesture] move #$moveEventLog @(${event.x.toInt()},${event.y.toInt()}) movedTook=$byMoved")
+                }
+                if (!byMoved) furniture.drag(event)
+            },
+            onMoveEnd = { _, event, _ ->
+                val byMoved = moved.onDragEnd()
+                Log.d(TAG, "[gesture] moveEnd movedTook=$byMoved")
+                if (!byMoved) furniture.endDrag(event)
+            },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },
@@ -213,5 +236,9 @@ class MainActivity : AppCompatActivity() {
             scale,
             item.rotationDeg,
         )
+    }
+
+    private companion object {
+        const val TAG = "InteriorAR"
     }
 }
