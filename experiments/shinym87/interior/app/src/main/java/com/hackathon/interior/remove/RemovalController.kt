@@ -274,26 +274,26 @@ class RemovalController(
             wallPlaneJson = planeToJson(plane)
         }
 
+        // --- 커버 quad 크기 = "화면에서 그린 사각형" 그대로 ---
+        // 폭: 선택 사각형 좌·우 변을 평면에 hitTest 한 실제 거리(m). 둘 다 맞아야 신뢰.
+        //     한쪽만 맞으면 중심~그쪽 거리의 2배. 둘 다 실패하면 기본값 유지.
+        // 높이: 평면 상/하단 hitTest 로 재지 않는다 — 수평면에서 위쪽 레이가 지평선으로
+        //     향하면 교점이 4m 로 폭발했고, 일부만 맞으면 종횡비가 깨졌다. 대신 **화면
+        //     선택 사각형의 종횡비**를 폭에 곱한다 → 커버 quad 가 항상 내가 그린 박스 모양.
         val left = space.hitTest(rect.left, rect.centerY())?.hitPose
         val right = space.hitTest(rect.right, rect.centerY())?.hitPose
-        val top = space.hitTest(rect.centerX(), rect.top)?.hitPose
-        val bottom = space.hitTest(rect.centerX(), rect.bottom)?.hitPose
-        // 하한을 0.05m 로 (기존 0.2m). 텀블러/컵 같은 소품이 20cm 로 부풀던 문제.
-        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.05f, 4f)
-        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.05f, 4f)
-        // 바닥(수평) 평면에서는 위쪽 엣지 레이가 지평선에 가까울수록 바닥 교점이 급격히
-        // 멀어져, patchHeightM 이 실제 사물과 무관하게 상한(4m)까지 부푼다 → 커버 quad 가
-        // 바닥을 뒤덮어 화면이 깨져 보인다. 폭의 3배를 넘으면 비정상으로 보고, 바로 뒤
-        // arm 경로처럼 폭 기준으로 되돌린다(대략 정사각 footprint).
-        if (!planeIsVertical && patchHeightM > patchWidthM * 3f) {
-            val capped = (patchWidthM * 1.2f).coerceIn(0.05f, 3f)
-            Log.d(TAG, "resolveWall: patchH %.2f→%.2f m (수평면 지평선 레이 폭발 방지)".format(patchHeightM, capped))
-            patchHeightM = capped
+        val centerHit = center?.hitPose
+        when {
+            left != null && right != null -> patchWidthM = distance(left, right).coerceIn(0.05f, 3f)
+            centerHit != null && left != null -> patchWidthM = (distance(centerHit, left) * 2f).coerceIn(0.05f, 3f)
+            centerHit != null && right != null -> patchWidthM = (distance(centerHit, right) * 2f).coerceIn(0.05f, 3f)
         }
+        val screenAspect = rect.height() / rect.width().coerceAtLeast(1f)
+        patchHeightM = (patchWidthM * screenAspect).coerceIn(0.05f, 3f)
         Log.d(
             TAG,
-            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b T=%b B=%b)".format(
-                patchWidthM, patchHeightM, left != null, right != null, top != null, bottom != null,
+            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b · screenAspect=%.2f · center=%b)".format(
+                patchWidthM, patchHeightM, left != null, right != null, screenAspect, center != null,
             ),
         )
     }
@@ -438,20 +438,9 @@ class RemovalController(
                 planeIsVertical = isVertical
             }
         }
-        // 평면을 전혀 못 잡았으면(작은 소품 · 반사 심한 테이블 등) 카메라 앞 고정 앵커로라도
-        // 가림막을 세운다 — 마커의 "카메라 앞 fallback" 과 같은 발상. 빌보드라 위치만 맞으면 된다.
-        if (anchor == null) {
-            val camPose = space.latestFrame?.camera?.pose
-            val front = camPose?.compose(Pose.makeTranslation(0f, 0f, -FALLBACK_COVER_DIST))
-            val fresh = front?.let { runCatching { sceneView.session?.createAnchor(it) }.getOrNull() }
-            if (fresh != null) {
-                anchor = fresh
-                isVertical = false
-                wallAnchor = fresh
-                planeIsVertical = false
-                Log.d(TAG, "applyResult: 평면 미인식 → 카메라 앞 %.1fm fallback 가림막 앵커".format(FALLBACK_COVER_DIST))
-            }
-        }
+        // 평면을 전혀 못 잡으면 붙일 자리도, 크기 기준도 없다 → 카메라 앞에 임의로 세우면
+        // (예전 시도) 기본값 1.2×0.7 짜리 판이 얼굴 앞 0.8m 에 떠서 화면을 다 덮었다.
+        // 그런 경우는 아래 else 에서 전체화면 정지 프리뷰로만 보여준다.
 
         // 커버 quad 처리:
         // - 벽걸이 사물(수직 평면) → 평면에 납작하게 붙인다 (기존 방식, 라이브 유지).
@@ -611,8 +600,10 @@ class RemovalController(
         node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
 
         if (coverIsBillboard) {
-            // 가림막을 매 프레임 카메라 정면으로 돌린다 → 현재 시야각에서 서 있는 실물을 덮는다.
-            resultImageNode?.worldQuaternion = sceneView.cameraNode.worldQuaternion
+            // 가림막(부모 AnchorNode)을 매 프레임 카메라 정면으로 돌린다. 위치는 앵커에서,
+            // 회전만 카메라에서 — 자식 quad(Rotation 0)가 이걸 물려받아 정면을 본다.
+            // 자식에 worldQuaternion 을 걸면 부모 pose 갱신에 밀려 안 먹는 경우가 있어 부모에 건다.
+            node.worldQuaternion = sceneView.cameraNode.worldQuaternion
         }
 
         // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
@@ -834,11 +825,8 @@ class RemovalController(
         /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
 
-        /** 빌보드 가림막을 선택 영역보다 이 배율만큼 키운다(가장자리 삐져나옴 방지). */
-        const val COVER_MARGIN = 1.35f
-
-        /** 평면을 못 잡았을 때 가림막을 세울 카메라 앞 거리(m). 실물보다 앞이어야 가려진다. */
-        const val FALLBACK_COVER_DIST = 0.8f
+        /** 빌보드 가림막을 선택 영역보다 이 배율만큼 살짝 키운다(하드 엣지 방지, 크게는 안 함). */
+        const val COVER_MARGIN = 1.12f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"

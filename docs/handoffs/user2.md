@@ -13,6 +13,38 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 가림막(빌보드) 회귀 수정 — 크기를 화면 선택 종횡비로 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 증상 (빌보드 도입 후):
+1. 평면 미인식 시 삭제 완료 후 화면 전체가 거대 반투명 판으로 뒤덮임.
+2. 컵 삭제 시 엉뚱한 위치에 세로로 긴 막대형 가림막, 컵은 안 가려짐.
+
+**원인 = merge/Depth 아님. 이 세션의 빌보드 커밋(`c44bc4a` + `e2f0033`) 자체.**
+- Depth 코드(`DepthPlacementController`, `depth-placement-*` 모듈, 패키지
+  `com.project.depthplacement`)는 `RemovalController`/`patchWidthM`/`resolveWall`/
+  `wallAnchor` 를 **한 군데도 참조 안 함** — `FurnitureController.validatePlacement`
+  전용 검증기. 좌표계·스케일 공유 없음.
+- `RemovalController.kt` 는 `f3f291e` merge 이후 **이 세션 4커밋(`683a9ea`
+  `35340fb` `c44bc4a` `e2f0033`)만** 건드림. merge 가 바꾼 게 아님.
+- 증상1 = `e2f0033` 의 "평면 미인식 → 카메라 앞 0.8m fallback 앵커": 크기가
+  선택값이 아니라 기본 1.2×0.7 인데 얼굴 앞 0.8m 에 세워 화면을 다 덮음.
+- 증상2 = (a) 자식 ImageNode 에 `worldQuaternion` 을 걸었더니 부모 pose 갱신에
+  밀려 빌보드 회전이 안 먹고 평면 앵커 로컬프레임의 세로 quad 로 남음(막대),
+  (b) `resolveWall` 이 상/하단 평면 hitTest 로 높이를 재 지평선 근처에서 폭발/
+  종횡비 붕괴.
+
+**수정 (commit `<이번>`):**
+- `resolveWall`: 폭 = 좌·우 변 hitTest 실거리(한쪽만이면 중심~그쪽×2), **높이 =
+  폭 × 화면 선택 사각형 종횡비**(`rect.height()/rect.width()`). 상/하단 평면
+  hitTest 와 4m 폭발 캡(`683a9ea`) 제거 — 커버 quad 가 항상 "내가 그린 박스" 모양.
+- `applyResult`: 카메라 앞 fallback 앵커 삭제 → 평면 없으면 전체화면 프리뷰만.
+- `onFrame`: 빌보드 회전을 **부모 AnchorNode** 에 건다(`node.worldQuaternion`).
+- `COVER_MARGIN` 1.35 → 1.12 (살짝만).
+- 빌드 `:app:assembleDebug` 성공.
+
+기대 로그: `resolveWall: patchW=... patchH=... (edges L R · screenAspect=... · center=)`,
+`buildResultNode ... billboard=true cover=WxH` (W:H = 선택 박스 비율).
+
 ## 조사 — "화면에 두 UI가 겹쳐 보인다" 는 레이아웃 버그 아님 (2026-09-09)
 
 Branch `integration-interior-demo-temp`. 리포트: 상단 "화보 / 내 공간에 배치" 와
