@@ -36,7 +36,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 화면 터치 위치 획득 (hitTest) | `ar/ArSpaceController.hitTest()` |
 | 임시 가구 배치 (탭 → 이름/실물 크기 입력) | `furniture/FurnitureController.kt`, `ui/FurnitureInfoDialog.kt` |
 | 첫 화면 샘플 브로셔 → `우리 집에 적용` | `furniture/CatalogController.kt` |
-| TV·소파·테이블·의자·선반 저폴리 3D 모델 | `furniture/ProceduralFurnitureFactory.kt` |
+| TV·소파·테이블·의자·선반 GLB 3D 모델 (미지원 항목은 저폴리 대체) | `res/raw/*.glb`, `furniture/GlbFurnitureFactory.kt`, `furniture/ProceduralFurnitureFactory.kt` |
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
 | 가구 회전 (`회전 ⟳`) | `furniture/FurnitureController.rotateSelectedBy()` |
@@ -50,7 +50,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 `localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,
 서버는 `uvicorn app.main:app --host 0.0.0.0` 로 띄운다.
 
-미구현: 외부 고해상도 glTF/GLB 에셋, 결과 정합 다듬기, 가림(occlusion).
+미구현: GLB 실제 기기 비율·재질 검증, 결과 정합 다듬기, 가림(occlusion).
 
 ## 프로젝트 구조
 
@@ -80,6 +80,7 @@ experiments/shinym87/interior/
 │     │  └─ ui/
 │     │     └─ FurnitureInfoDialog.kt    # 이름/실물 크기 입력 팝업
 │     └─ res/
+│        ├─ raw/                         # APK에 내장한 가구 GLB
 │        ├─ layout/activity_main.xml
 │        ├─ layout/dialog_furniture_info.xml
 │        ├─ values/strings.xml

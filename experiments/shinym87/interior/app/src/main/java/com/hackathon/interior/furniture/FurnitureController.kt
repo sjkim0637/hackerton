@@ -475,7 +475,10 @@ class FurnitureController(
         objectType: String = "other",
         autoSelect: Boolean = true,
     ): FurnitureItem {
-        val model = ProceduralFurnitureFactory.create(sceneView, objectType, baseSize)
+        // 카탈로그에 맞는 GLB가 있으면 원본 재질을 보존해 사용하고, 없는 종류만 절차형 모델로 둔다.
+        val glbRoot = GlbFurnitureFactory.createOrNull(sceneView, objectType, baseSize)
+        val fallback = if (glbRoot == null) ProceduralFurnitureFactory.create(sceneView, objectType, baseSize) else null
+        val modelRoot = glbRoot ?: fallback!!.root
 
         val labelBitmap = LabelRenderer.make(name)
         val labelNode = ImageNode(
@@ -489,14 +492,14 @@ class FurnitureController(
 
         val anchorNode = AnchorNode(sceneView.engine, anchor).apply {
             isPositionEditable = false // 이동은 직접 제어한다.
-            addChildNode(model.root)
+            addChildNode(modelRoot)
             addChildNode(labelNode)
         }
         sceneView.addChildNode(anchorNode)
 
         val item = FurnitureItem(
-            anchorNode, model.root, labelNode, baseSize, 1f, name, isVertical,
-            primaryMaterial = model.primaryMaterial,
+            anchorNode, modelRoot, labelNode, baseSize, 1f, name, isVertical,
+            primaryMaterial = fallback?.primaryMaterial,
             catalogItemId = catalogItemId,
             objectType = objectType,
         )
@@ -552,17 +555,22 @@ class FurnitureController(
         if (selected == item) return
         deselect()
         selected = item
-        item.primaryMaterial.setColor(FurnitureItem.COLOR_SELECTED)
-        item.primaryMaterial.setRoughness(0.1f)
-        item.primaryMaterial.setReflectance(1.0f)
+        // GLB는 여러 PBR 텍스처를 포함하므로 기존 단일 재질 색상으로 덮어쓰지 않는다.
+        item.primaryMaterial?.apply {
+            setColor(FurnitureItem.COLOR_SELECTED)
+            setRoughness(0.1f)
+            setReflectance(1.0f)
+        }
         onSelectionChanged(item)
     }
 
     fun deselect() {
         selected?.let {
-            it.primaryMaterial.setColor(FurnitureItem.colorFor(it.objectType))
-            it.primaryMaterial.setRoughness(0.55f)
-            it.primaryMaterial.setReflectance(0.35f)
+            it.primaryMaterial?.apply {
+                setColor(FurnitureItem.colorFor(it.objectType))
+                setRoughness(0.55f)
+                setReflectance(0.35f)
+            }
         }
         selected = null
         onSelectionChanged(null)

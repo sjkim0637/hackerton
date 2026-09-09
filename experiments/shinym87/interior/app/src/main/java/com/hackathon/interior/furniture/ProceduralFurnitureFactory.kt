@@ -18,7 +18,7 @@ object ProceduralFurnitureFactory {
 
     data class Result(
         val root: Node,
-        val primaryMaterial: MaterialInstance,
+        val primaryMaterial: MaterialInstance?,
     )
 
     fun create(sceneView: ARSceneView, category: String, size: Size): Result {

@@ -29,6 +29,8 @@ INTEGRATION
 - 기준 Commit은 `f3f291e`이다. 이 Commit에는 삭제 후 이동, 이동 객체 크기, 라이브 배경 전환, 데모 UI, 진단 로그 관련 변경이 포함된다.
 - 기본 빌드 Task는 `:app:assembleDebug`이며 JDK 21(`C:\\Program Files\\Java\\jdk-21.0.12`)을 사용한다.
 - 설치와 실행은 각각 `:app:installDebug`, `adb shell am start -n com.hackathon.interior/.CatalogActivity`를 사용한다.
+- 카탈로그의 `sofa`, `chair`, `table`, `tv`, `shelf`는 APK의 `res/raw` GLB를 우선 사용한다. 대상은 각각 `GlamVelvetSofa`, `SheenChair`, `tableCoffee`, `televisionModern`, `bookcaseOpen`이다.
+- GLB는 원본 PBR 재질을 보존한다. 따라서 선택 강조에서 단일 색상 재질을 덮어쓰지 않는다.
 
 ## Verification
 
@@ -37,6 +39,7 @@ INTEGRATION
 - 패키지: `com.hackathon.interior`, `versionName 1.0`, `minSdk 24`, `targetSdk 35`
 - AR 우선 UI 컴파일 및 APK 재생성 완료: `:app:compileDebugKotlin :app:processDebugResources`, `:app:assembleDebug`
 - 상단 설정 단일 버튼, 도구 FAB 겹침 방지, `3D 조정` 패드 적용 후 `:app:assembleDebug` 성공
+- GLB 5종 내장 및 모델 로더 연결 후 `:app:assembleDebug` 성공
 
 ## UI Direction
 
@@ -49,6 +52,8 @@ INTEGRATION
 ## Known Issues
 
 - 현재 연결된 Android 기기가 없어 설치 및 실제 AR 동작은 검증하지 못했다.
+- GLB는 정상적인 glTF 2.0 바이너리 형식을 확인했지만, 실제 기기에서 PBR 재질·그림자·첫 로딩 시간과 카탈로그 치수 대비 비율을 확인해야 한다.
+- 외부 에셋의 재배포 라이선스는 원본 제공처 기준으로 별도 확인이 필요하다.
 - Android Studio 기본 JBR은 Gradle 8.11.1과 호환되지 않아, Task에서 JDK 21을 명시한다.
 
 ## Next
