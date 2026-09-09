@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
 
     /** TEMP-DIAG: onMove 는 초당 수십 번 → 15회마다 한 줄만 찍는다. */
     private var moveEventLog = 0
+    private var toolsExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,7 +144,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnShrink.setOnClickListener { furniture.scaleSelectedBy(1f / FurnitureItem.SCALE_STEP) }
         binding.btnRotateLeft.setOnClickListener { furniture.rotateSelectedBy(-15f) }
         binding.btnRotateRight.setOnClickListener { furniture.rotateSelectedBy(15f) }
-        binding.btnDeselect.setOnClickListener { furniture.deselect() }
+        binding.btnDeselect.setOnClickListener {
+            furniture.deselect()
+            setToolsExpanded(false)
+        }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
 
         setupUnifiedWorkspace()
@@ -159,9 +163,16 @@ class MainActivity : AppCompatActivity() {
         binding.removalSelectionRow.visibility = View.VISIBLE
         binding.removalRequestRow.visibility = View.VISIBLE
         binding.removalStatusText.visibility = View.VISIBLE
+        setToolsExpanded(false)
 
         binding.serverUrlInput.setText(settings.serverBaseUrl)
         binding.btnWorkspaceHome.setOnClickListener { finish() }
+        binding.btnArTools.setOnClickListener { setToolsExpanded(!toolsExpanded) }
+        binding.movedObjectPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (binding.movedObjectPanel.visibility == View.VISIBLE && !toolsExpanded) {
+                setToolsExpanded(true)
+            }
+        }
         binding.btnAddFurniture.text = "다른 가구"
         binding.btnRemovalTools.setOnClickListener {
             val expanded = binding.removalTools.visibility != View.VISIBLE
@@ -189,6 +200,8 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (binding.settingsScreen.visibility == View.VISIBLE) {
                     binding.settingsScreen.visibility = View.GONE
+                } else if (toolsExpanded) {
+                    setToolsExpanded(false)
                 } else finish()
             }
         })
@@ -227,6 +240,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.selectionPanel.visibility = View.VISIBLE
+        setToolsExpanded(true)
         val scale = item.scaleFactor
         binding.selectedNameText.text = "%s\n%.0f × %.0f × %.0f cm  ·  배율 %.2f  ·  %.0f°".format(
             item.name,
@@ -236,6 +250,14 @@ class MainActivity : AppCompatActivity() {
             scale,
             item.rotationDeg,
         )
+    }
+
+    private fun setToolsExpanded(expanded: Boolean) {
+        if (!expanded && binding.bboxSelectionView.isSelecting) removal.toggleSelectionMode()
+        toolsExpanded = expanded
+        binding.arToolsPanel.visibility = if (expanded) View.VISIBLE else View.GONE
+        binding.btnArTools.contentDescription = if (expanded) "AR 도구 접기" else "AR 도구 펼치기"
+        binding.btnArTools.isSelected = expanded
     }
 
     private companion object {

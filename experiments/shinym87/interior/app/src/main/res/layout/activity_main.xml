@@ -45,7 +45,7 @@
         android:layout_gravity="top"
         android:layout_margin="12dp"
         android:background="@drawable/bg_workspace_panel"
-        android:padding="12dp"
+        android:padding="8dp"
         android:clickable="true">
         <LinearLayout
             android:layout_width="match_parent"
@@ -81,11 +81,14 @@
             android:layout_height="wrap_content"
             android:text="@string/instruction_scan"
             android:textColor="#F8F5F0"
-            android:textSize="15sp"
-            android:paddingVertical="6dp"
+            android:textSize="14sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:paddingVertical="2dp"
             android:accessibilityLiveRegion="polite" />
     </LinearLayout>
     <com.hackathon.interior.ui.WorkspaceScrollView
+        android:id="@+id/arToolsPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
@@ -93,7 +96,8 @@
         android:layout_marginBottom="24dp"
         android:background="@drawable/bg_workspace_panel"
         android:scrollbars="vertical"
-        android:clipToPadding="false">
+        android:clipToPadding="false"
+        android:visibility="gone">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -346,6 +350,17 @@
                 android:contentDescription="배경 투명도" />
         </LinearLayout>
     </com.hackathon.interior.ui.WorkspaceScrollView>
+    <ImageButton
+        android:id="@+id/btnArTools"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/bg_workspace_tool_fab"
+        android:contentDescription="AR 도구 펼치기"
+        android:padding="18dp"
+        android:src="@drawable/ic_workspace_tools" />
     <!-- 첫 화면 가구 브로셔. 항목을 선택하고 "우리 집에 적용"을 누른 뒤
          해당 종류에 맞는 평면(벽/바닥)을 탭하면 저폴리 3D 가구가 배치된다. -->
     <LinearLayout

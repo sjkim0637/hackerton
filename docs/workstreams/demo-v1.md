@@ -35,6 +35,13 @@ INTEGRATION
 - Debug APK 생성: `app/build/outputs/apk/debug/app-debug.apk`
 - APK 서명 검증 완료
 - 패키지: `com.hackathon.interior`, `versionName 1.0`, `minSdk 24`, `targetSdk 35`
+- AR 우선 UI 컴파일 및 APK 재생성 완료: `:app:compileDebugKotlin :app:processDebugResources`, `:app:assembleDebug`
+
+## UI Direction
+
+- 기본 화면에서는 하단 도구 시트를 숨기고 우하단 원형 도구 버튼만 표시한다.
+- 원형 버튼을 누르거나 가구·이동된 사물을 선택하면 도구 시트를 펼친다.
+- `편집 완료` 또는 뒤로가기로 도구 시트를 다시 접어 카메라와 AR 객체가 가려지지 않게 한다.
 
 ## Known Issues
 
