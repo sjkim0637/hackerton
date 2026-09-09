@@ -30,6 +30,10 @@ IN_PROGRESS
 
 ## Current Direction
 
+- `interior-mobilesam` 브랜치는 서버 ONNX/LaMa 구조이므로 병합하지 않고, 개별 사물 마스크를 고르는 방식만 온디바이스 ML Kit에 반영한다.
+- 선택 bbox와 가장 많이 겹치는 ML Kit `Subject` 하나의 마스크만 Telea 입력으로 쓴다. 삭제한 사물은 투명 cutout으로 만들어 AR 이동 마커에 넘긴다.
+- 삭제 후 전체 정지 이미지 프리뷰는 열지 않고, 복원 패치와 이동 마커를 AR 라이브 화면에만 표시한다.
+
 - ML Kit Subject Segmentation으로 사람이 지정한 bbox 안의 전경 사물 마스크를 만든다.
 - 마스크가 없거나 품질이 낮으면 bbox를 유지한다.
 - OpenCV `INPAINT_TELEA`로 캡처 이미지의 선택 영역을 즉시 복원한다.
@@ -53,6 +57,8 @@ IN_PROGRESS
 TBD
 
 ## Verification
+
+- JDK 21에서 `:app:assembleDebug --no-daemon` 성공 (2026-09-09). 기본 JDK 25에서는 포함 프로젝트의 Gradle 테스트 리포트 생성 호환성 오류가 발생한다.
 
 - `:app:assembleDebug` 성공
 - ML Kit Subject Segmentation 의존성은 Play services가 기기에서 내려받도록 Manifest에 등록

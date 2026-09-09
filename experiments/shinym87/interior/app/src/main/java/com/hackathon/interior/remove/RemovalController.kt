@@ -314,7 +314,13 @@ class RemovalController(
                 source = source,
                 bbox = bbox,
                 onSuccess = { result ->
+                    result.removedObjectBitmap?.let { capturedObjectBitmap = it }
                     applyResult(result.bitmap, bbox)
+                    onRemovalApplied(
+                        "local-${System.currentTimeMillis()}", null, objectType,
+                        capturedObjectBitmap, originalObjectPose, bbox,
+                        patchWidthM, patchHeightM,
+                    )
                     status(
                         "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
                             if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
@@ -405,11 +411,11 @@ class RemovalController(
         val patch = EdgeFade.feather(cropNormalized(full, region))
 
         // 전체화면 프리뷰용 이미지는 앵커 유무와 무관하게 항상 준비(기본은 꺼짐).
-        binding.resultOverlay.setImageBitmap(full)
+        binding.resultOverlay.setImageDrawable(null)
         binding.resultOverlay.visibility = View.GONE
         showingAfter = false
         binding.btnToggleRemoval.text = "삭제 결과 보기"
-        binding.btnToggleRemoval.visibility = View.VISIBLE
+        binding.btnToggleRemoval.visibility = View.GONE
 
         // 커버 quad 앵커: 선택 시점 것이 있으면 그대로, 없으면 지금(결과 도착 시점) 사물
         // 영역에서 재시도 — 대개 이 무렵엔 평면이 잡혀 있다.
