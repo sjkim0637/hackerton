@@ -13,6 +13,38 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 조사 — "화면에 두 UI가 겹쳐 보인다" 는 레이아웃 버그 아님 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 리포트: 상단 "화보 / 내 공간에 배치" 와
+하단 "지운 사물 편집 / 사물 종류: 의자" 가 동시에 떠서 Activity/Fragment 두 개가
+겹쳐 렌더링되는 것으로 의심.
+
+**결론: 버그 아님. `MainActivity` 하나 · `activity_main.xml`(FrameLayout) 하나인
+통합 워크스페이스이고, 이 두 패널 동시 표시는 설계된 동작이다. 의자 삭제도 정상 처리됨.**
+
+- **상단 "화보 / 내 공간에 배치" = `arTopPanel`** — 고정 헤더 바(`‹ 화보` 뒤로가기 +
+  "내 공간에 배치" 제목 TextView + 설정 톱니 + `instructionText`). user1(goguma-salad)
+  이 `9bbea8c`/`697b1ed` 에서 만든 통합 AR 화면의 상단 바. **카탈로그/화보 화면이 아님** —
+  `catalogPanel`·`homeScreen` 은 `setupUnifiedWorkspace()` + XML 기본값으로 둘 다 `GONE`,
+  `CatalogController` 는 `MainActivity` 에 인스턴스화조차 안 됨(화보 브라우징은 별도
+  `CatalogActivity` 런처 담당).
+- **하단 "지운 사물 편집" = `movedObjectPanel`** (+ `removalTools`>`removalTypeRow` "사물 종류").
+  `MovedObjectController.arm()` 이 삭제 성공 직후 띄운다 → **삭제 성공 신호**이지 잔상 아님.
+- `WorkspaceScrollView.onMeasure` 가 높이를 화면 48% 로 제한 → 카메라 시야 확보. `arTopPanel`
+  (top-gravity) + `WorkspaceScrollView`(bottom-gravity) 가 위·아래 띠로 공존 = 설계.
+- **merge 로 빠진 로직 없음**: `agent/shinym87/interior_dev` 는 `MainActivity` 의 패널
+  visibility 를 한 줄도 안 건드렸고(`git diff 3b98b9a..interior_dev` visibility/Panel 라인 0건),
+  merge(`f3f291e`) 결과에 `setupUnifiedWorkspace()` 온전. 두 패널 사이 상호배제 로직은
+  애초에 없었다(통합 설계 전제).
+- **의자 삭제 = 성공** (logcat 13:48:01): `runFlow done → onRemovalApplied(type=chair
+  hasBmp=true hasPose=true)` → `applyResult: 빌보드 커버 quad` → `buildResultNode
+  billboard=true cover=1.58x0.94m` → `arm: type=chair markerPlaced=true`. `runFlow` 는
+  서버 job `done` + 결과 이미지 디코드까지 끝나야 `onRemovalApplied` 를 부르므로 서버
+  remove-object 정상 완료. UI 겹침이 삭제를 막지 않았다.
+
+**후속(선택, 미적용)**: UX 산만함은 사실 — `movedObjectPanel` 표시 중엔 `removalTools`
+자동 접기 같은 상호배제를 넣을 수 있으나 user1 통합 워크스페이스 설계라 합의 후 반영.
+
 ## 진단 로그 추가 — 이동 후 원래 자리에 남는 "반투명 잔상" (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 증상: 모니터 삭제→이동 후 화면에 3개가 동시에
