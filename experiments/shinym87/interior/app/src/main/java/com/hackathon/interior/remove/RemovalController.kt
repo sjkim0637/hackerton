@@ -89,6 +89,13 @@ class RemovalController(
     private var pendingCoverPatch: Bitmap? = null
     private var pendingCoverRegion: FloatArray? = null
 
+    /**
+     * 수평면(바닥/테이블) 사물이라 커버 quad 를 아예 포기하고 전체화면 프리뷰만 쓰는 상태.
+     * 평면에 납작하게 깐 quad 는 표면 위로 서 있는 사물(컵·의자 등)을 못 가리고 사각형
+     * 패치만 남기므로, 그런 경우엔 [buildResultNode] 를 건너뛰고 [showFrozenResult] 를 켠다.
+     */
+    private var coverQuadDisabled = false
+
     /** TEMP-DIAG(B): 커버 quad 를 만든 시점의 카메라 pose. 지금 카메라와의 차이를 로그로 본다. */
     private var coverCamPoseAtBuild: Pose? = null
     private var coverFrameLog = 0L
@@ -423,18 +430,41 @@ class RemovalController(
             }
         }
 
-        if (anchor != null) {
-            buildResultNode(anchor, isVertical, patch)
-            status("완료 · 라이브 화면에서 삭제 자리가 가려집니다 · '삭제 결과 보기'로 전체 확인")
-            Log.d(TAG, "applyResult: 커버 quad 고정 (vertical=$isVertical)")
-        } else {
-            // 아직 평면 없음 → onFrame 에서 재시도. 전체화면으로 덮지 않는다(라이브 유지).
-            pendingCoverPatch = patch
-            pendingCoverRegion = region.copyOf()
-            awaitingCoverAnchor = true
-            status("완료 · 삭제 자리 평면이 인식되면 결과가 고정됩니다 · 그 방향을 잠깐 비춰주세요")
-            Log.d(TAG, "applyResult: 앵커 없음 → onFrame 에서 커버 quad 재시도")
+        // 커버 quad(평면에 붙이는 텍스처 1장)는 **벽걸이 사물**에만 쓸 만하다. 바닥/테이블
+        // 위 사물은 표면 위로 서 있어서 표면에 납작하게 깐 quad 가 실물을 못 가리고 사각형
+        // 패치 + 뿌연 페이드만 남는다. 그런 경우엔 quad 를 포기하고 전체화면 프리뷰를 켠다.
+        when {
+            anchor != null && isVertical -> {
+                buildResultNode(anchor, isVertical, patch)
+                status("완료 · 라이브 화면에서 삭제 자리가 가려집니다 · '삭제 결과 보기'로 전체 확인")
+                Log.d(TAG, "applyResult: 커버 quad 고정 (vertical=true)")
+            }
+            anchor == null && isVertical -> {
+                // 벽 사물인데 아직 평면을 못 잡음 → onFrame 에서 재시도 (라이브 유지).
+                pendingCoverPatch = patch
+                pendingCoverRegion = region.copyOf()
+                awaitingCoverAnchor = true
+                status("완료 · 삭제 자리 평면이 인식되면 결과가 고정됩니다 · 그 방향을 잠깐 비춰주세요")
+                Log.d(TAG, "applyResult: 앵커 없음(벽) → onFrame 에서 커버 quad 재시도")
+            }
+            else -> {
+                // 수평면(바닥/테이블) 사물 또는 평면 정보 없음 → 전체화면 정지 프리뷰 자동 표시.
+                coverQuadDisabled = true
+                showFrozenResult()
+                val why = if (anchor == null) "평면 정보 없음" else "바닥/테이블 위 사물"
+                status("완료 · $why 이라 결과를 전체화면으로 표시합니다 · '결과 닫기 (라이브로)'로 카메라 복귀")
+                Log.d(TAG, "applyResult: 커버 quad 생략 ($why) → 전체화면 프리뷰")
+            }
         }
+    }
+
+    /** 전체화면 정지 결과 프리뷰([R.id.resultOverlay])를 켠다. 커버 quad 를 못/안 쓸 때. */
+    private fun showFrozenResult() {
+        if (binding.resultOverlay.drawable == null) return
+        showingAfter = true
+        binding.resultOverlay.visibility = View.VISIBLE
+        binding.btnToggleRemoval.text = "결과 닫기 (라이브로)"
+        binding.btnToggleRemoval.visibility = View.VISIBLE
     }
 
     /** 사물 영역([region] = 정규화 [x,y,w,h]) 중심에서 평면 hitTest. */
@@ -497,7 +527,7 @@ class RemovalController(
      *    - 위치에 이동 평균(EMA)을 걸어 재추적 지터를 완화한다.
      */
     fun onFrame() {
-        if (awaitingCoverAnchor && resultNode == null) {
+        if (awaitingCoverAnchor && resultNode == null && !coverQuadDisabled) {
             val region = pendingCoverRegion
             val patch = pendingCoverPatch
             if (region != null && patch != null) {
@@ -603,6 +633,7 @@ class RemovalController(
         resultNode = null
         smoothedPos = null
         awaitingCoverAnchor = false
+        coverQuadDisabled = false
         pendingCoverPatch = null
         pendingCoverRegion = null
         coverCamPoseAtBuild = null
