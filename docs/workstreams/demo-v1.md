@@ -31,6 +31,7 @@ INTEGRATION
 - 설치와 실행은 각각 `:app:installDebug`, `adb shell am start -n com.hackathon.interior/.CatalogActivity`를 사용한다.
 - 카탈로그의 `sofa`, `chair`, `table`, `tv`, `shelf`는 APK의 `res/raw` GLB를 우선 사용한다. 대상은 각각 `GlamVelvetSofa`, `SheenChair`, `tableCoffee`, `televisionModern`, `bookcaseOpen`이다.
 - GLB는 원본 PBR 재질을 보존한다. 따라서 선택 강조에서 단일 색상 재질을 덮어쓰지 않는다.
+- 화보의 가구 점을 누르면 `AR로 배치` 또는 `구매하기`를 고른다. 구매 흐름은 상품별 Mock 가격을 보여 주고 `주문하기` 후 접수 Toast를 표시한다.
 
 ## Verification
 
@@ -40,6 +41,7 @@ INTEGRATION
 - AR 우선 UI 컴파일 및 APK 재생성 완료: `:app:compileDebugKotlin :app:processDebugResources`, `:app:assembleDebug`
 - 상단 설정 단일 버튼, 도구 FAB 겹침 방지, `3D 조정` 패드 적용 후 `:app:assembleDebug` 성공
 - GLB 5종 내장 및 모델 로더 연결 후 `:app:assembleDebug` 성공
+- 화보 AR/구매 분기와 주문 Mock 적용 후 `:app:assembleDebug` 성공
 
 ## UI Direction
 

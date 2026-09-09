@@ -3,7 +3,6 @@ package com.hackathon.interior
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
@@ -11,9 +10,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.hackathon.interior.databinding.ActivityCatalogBinding
@@ -31,7 +30,6 @@ class CatalogActivity : AppCompatActivity() {
     private val provider: MagazineFeedProvider = MockMagazineFeedProvider()
     private var pages: List<MagazinePage> = emptyList()
     private var pageIndex = 0
-    private var openTag: View? = null
     private val pulseAnimators = mutableListOf<AnimatorSet>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,8 +75,6 @@ class CatalogActivity : AppCompatActivity() {
             }
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                // 마커나 태그가 아닌 화보 여백을 눌렀을 때는 열려 있던 태그만 닫는다.
-                closeOpenTag()
                 return false
             }
         })
@@ -111,14 +107,13 @@ class CatalogActivity : AppCompatActivity() {
     }
 
     /**
-     * 화보 위에는 텍스트 버튼을 바로 노출하지 않는다. 대신 은은하게 숨쉬는 점 마커만 두고,
-     * 마커를 누르면 그 옆에 가구 이름과 "AR로 보기" 태그가 떠오른다. 태그를 다시 누르면 AR로 이동한다.
+     * 화보 위에는 텍스트 버튼을 바로 노출하지 않는다. 은은하게 숨쉬는 점 마커를 누르면
+     * 해당 가구를 AR에 배치하거나 구매하는 두 가지 다음 행동을 고르게 한다.
      */
     private fun renderHotspots(page: MagazinePage) {
         binding.hotspotLayer.removeAllViews()
         pulseAnimators.forEach { it.cancel() }
         pulseAnimators.clear()
-        openTag = null
 
         page.objects.forEach { item ->
             val markerSize = dp(48f).toInt()
@@ -141,40 +136,10 @@ class CatalogActivity : AppCompatActivity() {
             }
             marker.addView(dot, FrameLayout.LayoutParams(dotSize, dotSize, android.view.Gravity.CENTER))
 
-            val tag = TextView(this).apply {
-                text = "${item.name}  ·  AR로 보기 ›"
-                textSize = 15f
-                minHeight = dp(48f).toInt()
-                maxWidth = (binding.hotspotLayer.width - dp(24f)).toInt().coerceAtLeast(1)
-                setTextColor(Color.WHITE)
-                setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(14f).toInt(), dp(10f).toInt())
-                setBackgroundResource(com.hackathon.interior.R.drawable.bg_magazine_hotspot)
-                alpha = 0f
-                visibility = View.INVISIBLE
-                setOnClickListener { openObjectInAr(item) }
-            }
-
-            binding.hotspotLayer.addView(
-                tag,
-                FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT),
-            )
             binding.hotspotLayer.addView(marker, FrameLayout.LayoutParams(markerSize, markerSize))
-
-            tag.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                tag.x = (marker.x + marker.width / 2f - tag.width / 2f)
-                    .coerceIn(0f, (binding.hotspotLayer.width - tag.width).coerceAtLeast(0).toFloat())
-                val preferredY = if (marker.y > tag.height + dp(12f)) marker.y - tag.height - dp(10f)
-                    else marker.y + marker.height + dp(10f)
-                tag.y = preferredY.coerceIn(0f, (binding.hotspotLayer.height - tag.height).coerceAtLeast(0).toFloat())
-            }
             marker.setOnClickListener {
                 marker.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                if (openTag === tag && tag.visibility == View.VISIBLE) {
-                    closeOpenTag()
-                } else {
-                    closeOpenTag()
-                    showTag(tag)
-                }
+                showObjectActions(item)
             }
 
             marker.post {
@@ -185,37 +150,37 @@ class CatalogActivity : AppCompatActivity() {
                     .coerceIn(0f, (binding.hotspotLayer.height - marker.height).coerceAtLeast(0).toFloat())
                 startPulse(ring)
 
-                tag.post {
-                    val tagX = (marker.x + marker.width / 2f - tag.width / 2f)
-                        .coerceIn(0f, (binding.hotspotLayer.width - tag.width).coerceAtLeast(0).toFloat())
-                    val spaceAbove = marker.y
-                    val tagY = if (spaceAbove > tag.height + dp(12f)) {
-                        marker.y - tag.height - dp(10f)
-                    } else {
-                        marker.y + marker.height + dp(10f)
-                    }
-                    tag.x = tagX
-                    tag.y = tagY.coerceIn(0f, (binding.hotspotLayer.height - tag.height).coerceAtLeast(0).toFloat())
-                }
             }
         }
     }
 
-    private fun showTag(tag: View) {
-        tag.animate().cancel()
-        tag.animate().withEndAction(null)
-        tag.visibility = View.VISIBLE
-        tag.alpha = 0f
-        tag.scaleX = 0.9f
-        tag.scaleY = 0.9f
-        tag.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start()
-        openTag = tag
+    private fun showObjectActions(item: MagazineObject) {
+        AlertDialog.Builder(this)
+            .setTitle(item.name)
+            .setMessage("내 공간에 먼저 배치해 보거나, 바로 구매할 수 있어요.")
+            .setNegativeButton("AR로 배치") { _, _ -> openObjectInAr(item) }
+            .setPositiveButton("구매하기") { _, _ -> showPurchaseDialog(item) }
+            .show()
     }
 
-    private fun closeOpenTag() {
-        val tag = openTag ?: return
-        tag.animate().alpha(0f).setDuration(120).withEndAction { tag.visibility = View.INVISIBLE }.start()
-        openTag = null
+    private fun showPurchaseDialog(item: MagazineObject) {
+        AlertDialog.Builder(this)
+            .setTitle("주문 확인")
+            .setMessage("${item.name}\n${mockPrice(item)}\n\n배송지와 결제는 데모에서 처리되지 않습니다.")
+            .setNegativeButton("취소", null)
+            .setPositiveButton("주문하기") { _, _ ->
+                Toast.makeText(this, "${item.name} 주문이 접수되었습니다. (Mock)", Toast.LENGTH_LONG).show()
+            }
+            .show()
+    }
+
+    private fun mockPrice(item: MagazineObject): String = when (item.category) {
+        "sofa" -> "₩ 1,290,000"
+        "table" -> "₩ 349,000"
+        "chair" -> "₩ 189,000"
+        "tv" -> "₩ 1,890,000"
+        "shelf" -> "₩ 429,000"
+        else -> "₩ 129,000"
     }
 
     private fun startPulse(ring: View) {

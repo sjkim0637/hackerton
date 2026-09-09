@@ -36,6 +36,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 화면 터치 위치 획득 (hitTest) | `ar/ArSpaceController.hitTest()` |
 | 임시 가구 배치 (탭 → 이름/실물 크기 입력) | `furniture/FurnitureController.kt`, `ui/FurnitureInfoDialog.kt` |
 | 첫 화면 샘플 브로셔 → `우리 집에 적용` | `furniture/CatalogController.kt` |
+| 화보 가구 선택 → `AR로 배치` / `구매하기` → 주문 Mock | `CatalogActivity.kt` |
 | TV·소파·테이블·의자·선반 GLB 3D 모델 (미지원 항목은 저폴리 대체) | `res/raw/*.glb`, `furniture/GlbFurnitureFactory.kt`, `furniture/ProceduralFurnitureFactory.kt` |
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
