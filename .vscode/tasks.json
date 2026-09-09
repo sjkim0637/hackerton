@@ -2,14 +2,20 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Depth: Verify All",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "Depth: Core Unit Test",
-        "Depth: Android Lint",
-        "Depth: Build Release AARs",
-        "Depth: Build Debug APK"
+      "label": "Interior Demo v1: Build Debug APK",
+      "type": "process",
+      "command": "${workspaceFolder}\\experiments\\shinym87\\interior\\gradlew.bat",
+      "args": [
+        ":app:assembleDebug",
+        "--console=plain",
+        "--no-daemon"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}\\experiments\\shinym87\\interior",
+        "env": {
+          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
+        }
+      },
       "group": {
         "kind": "build",
         "isDefault": true
@@ -17,121 +23,48 @@
       "problemMatcher": []
     },
     {
-      "label": "Depth: Core Unit Test",
+      "label": "Interior Demo v1: Install Debug APK",
       "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
+      "command": "${workspaceFolder}\\experiments\\shinym87\\interior\\gradlew.bat",
       "args": [
-        ":depth-placement-core:test",
+        ":app:installDebug",
         "--console=plain",
         "--no-daemon"
       ],
       "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
+        "cwd": "${workspaceFolder}\\experiments\\shinym87\\interior",
         "env": {
           "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
         }
       },
-      "group": "test",
+      "dependsOn": "Interior Demo v1: Build Debug APK",
       "problemMatcher": []
     },
     {
-      "label": "Depth: Android Lint",
+      "label": "Interior Demo v1: Run on Device",
       "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
-      "args": [
-        ":test-app:lintDebug",
-        "--console=plain",
-        "--no-daemon"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
-        "env": {
-          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
-        }
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Depth: Build Release AARs",
-      "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
-      "args": [
-        ":depth-placement-arcore:assembleRelease",
-        ":depth-placement-debug:assembleRelease",
-        "--console=plain",
-        "--no-daemon"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
-        "env": {
-          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
-        }
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Depth: Build Debug APK",
-      "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
-      "args": [
-        ":test-app:assembleDebug",
-        "--console=plain",
-        "--no-daemon"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
-        "env": {
-          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
-        }
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Depth: Install Debug APK",
-      "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
-      "args": [
-        ":test-app:installDebug",
-        "--console=plain",
-        "--no-daemon"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
-        "env": {
-          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
-        }
-      },
-      "dependsOn": "Depth: Build Debug APK",
-      "problemMatcher": []
-    },
-    {
-      "label": "Depth: Run Test App",
-      "type": "process",
-      "command": "${env:ANDROID_HOME}\\platform-tools\\adb.exe",
+      "command": "${env:LOCALAPPDATA}\\Android\\Sdk\\platform-tools\\adb.exe",
       "args": [
         "shell",
         "am",
         "start",
         "-n",
-        "com.project.depthplacement.lab/.MainActivity",
-        "--ez",
-        "open_point_cloud",
-        "true"
+        "com.hackathon.interior/.CatalogActivity"
       ],
-      "dependsOn": "Depth: Install Debug APK",
+      "dependsOn": "Interior Demo v1: Install Debug APK",
       "problemMatcher": []
     },
     {
-      "label": "Depth: Clean",
+      "label": "Interior Demo v1: Clean",
       "type": "process",
-      "command": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement\\gradlew.bat",
+      "command": "${workspaceFolder}\\experiments\\shinym87\\interior\\gradlew.bat",
       "args": [
         "clean",
         "--console=plain",
         "--no-daemon"
       ],
       "options": {
-        "cwd": "${workspaceFolder}\\experiments\\goguma-salad\\interior-depth-placement",
+        "cwd": "${workspaceFolder}\\experiments\\shinym87\\interior",
         "env": {
           "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
         }
