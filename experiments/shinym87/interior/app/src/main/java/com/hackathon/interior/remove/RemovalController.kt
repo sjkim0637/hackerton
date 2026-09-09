@@ -265,6 +265,15 @@ class RemovalController(
         // 하한을 0.05m 로 (기존 0.2m). 텀블러/컵 같은 소품이 20cm 로 부풀던 문제.
         if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.05f, 4f)
         if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.05f, 4f)
+        // 바닥(수평) 평면에서는 위쪽 엣지 레이가 지평선에 가까울수록 바닥 교점이 급격히
+        // 멀어져, patchHeightM 이 실제 사물과 무관하게 상한(4m)까지 부푼다 → 커버 quad 가
+        // 바닥을 뒤덮어 화면이 깨져 보인다. 폭의 3배를 넘으면 비정상으로 보고, 바로 뒤
+        // arm 경로처럼 폭 기준으로 되돌린다(대략 정사각 footprint).
+        if (!planeIsVertical && patchHeightM > patchWidthM * 3f) {
+            val capped = (patchWidthM * 1.2f).coerceIn(0.05f, 3f)
+            Log.d(TAG, "resolveWall: patchH %.2f→%.2f m (수평면 지평선 레이 폭발 방지)".format(patchHeightM, capped))
+            patchHeightM = capped
+        }
         Log.d(
             TAG,
             "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b T=%b B=%b)".format(
