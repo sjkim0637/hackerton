@@ -6,6 +6,13 @@
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- 저장해 둔 "빈 배경" 대표 이미지를 카메라 위에 반투명으로 겹친다.
+         clickable=false 라 터치는 아래 sceneView 로 그대로 전달된다.
+         PHASE 5 데모에서는 비활성 — 카메라를 안 따라가는 2D 스냅샷이라 폰을 움직이면
+         어긋나 보이고, "변경 전/후"는 삭제 결과의 '삭제 전/후' 토글이 담당한다.
+         BackgroundKeyframe 코드/배선은 남겨두어 되돌리기 쉽게 한다
+         (아래 btnCaptureBg / btnToggleBg / opacitySeekBar 를 visibility="visible" 로). -->
     <ImageView
         android:id="@+id/backgroundOverlay"
         android:layout_width="match_parent"
@@ -32,16 +39,15 @@
         android:visibility="gone" />
     <LinearLayout
         android:id="@+id/arTopPanel"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_gravity="top"
+        android:layout_gravity="top|end"
         android:layout_margin="12dp"
-        android:background="@drawable/bg_workspace_panel"
-        android:padding="12dp"
+        android:background="@android:color/transparent"
         android:clickable="true">
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
@@ -49,11 +55,12 @@
                 android:id="@+id/btnWorkspaceHome"
                 style="@style/WorkspaceButton"
                 android:text="‹  화보"
+                android:visibility="gone"
                 android:contentDescription="화보로 돌아가기" />
             <TextView
                 android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:visibility="gone"
                 android:text="내 공간에 배치"
                 android:gravity="center"
                 android:textColor="#F8F5F0"
@@ -63,9 +70,9 @@
                 android:id="@+id/btnWorkspaceSettings"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:background="@drawable/bg_workspace_panel"
+                android:background="@drawable/bg_workspace_tool_fab"
                 android:contentDescription="설정"
-                android:padding="12dp"
+                android:padding="13dp"
                 android:src="@drawable/ic_settings" />
         </LinearLayout>
         <TextView
@@ -74,11 +81,15 @@
             android:layout_height="wrap_content"
             android:text="@string/instruction_scan"
             android:textColor="#F8F5F0"
-            android:textSize="15sp"
-            android:paddingVertical="6dp"
+            android:textSize="14sp"
+            android:visibility="gone"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:paddingVertical="2dp"
             android:accessibilityLiveRegion="polite" />
     </LinearLayout>
     <com.hackathon.interior.ui.WorkspaceScrollView
+        android:id="@+id/arToolsPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
@@ -86,12 +97,13 @@
         android:layout_marginBottom="24dp"
         android:background="@drawable/bg_workspace_panel"
         android:scrollbars="vertical"
-        android:clipToPadding="false">
+        android:clipToPadding="false"
+        android:visibility="gone">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp"
+            android:padding="10dp"
             android:clickable="true">
             <LinearLayout
                 android:id="@+id/selectionPanel"
@@ -99,7 +111,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone"
-                android:paddingBottom="8dp">
+                android:paddingBottom="0dp">
                 <TextView
                     android:id="@+id/selectedNameText"
                     android:layout_width="match_parent"
@@ -107,34 +119,56 @@
                     android:text="선택한 가구"
                     android:textColor="#F8F5F0"
                     android:textSize="15sp"
-                    android:paddingVertical="6dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:paddingBottom="4dp"
                     android:textStyle="bold" />
-                <LinearLayout
+                <!-- 가구 가까이에 떠 있는 조이스틱처럼 보이도록, 네 조작점을 한 덩어리로 묶는다.
+                     위/아래는 크기, 좌/우는 평면 위 회전이다. -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-                    <Button
-                        android:id="@+id/btnShrink"
-                        style="@style/WorkspaceButton"
-                        android:text="−"
-                        android:contentDescription="가구 크기 줄이기" />
-                    <Button
-                        android:id="@+id/btnGrow"
-                        style="@style/WorkspaceButton"
-                        android:text="＋"
-                        android:contentDescription="가구 크기 키우기" />
-                    <Button
-                        android:id="@+id/btnRotateLeft"
-                        style="@style/WorkspaceButton"
-                        android:text="↶ 15°"
-                        android:contentDescription="왼쪽으로 15도 회전" />
-                    <Button
-                        android:id="@+id/btnRotateRight"
-                        style="@style/WorkspaceButton"
-                        android:text="15° ↷"
-                        android:contentDescription="오른쪽으로 15도 회전" />
-                </LinearLayout>
+                    android:layout_height="100dp"
+                    android:layout_gravity="center">
+                    <FrameLayout
+                        android:layout_width="176dp"
+                        android:layout_height="100dp"
+                        android:layout_gravity="center">
+                        <TextView
+                            android:layout_width="58dp"
+                            android:layout_height="58dp"
+                            android:layout_gravity="center"
+                            android:background="@drawable/bg_workspace_control"
+                            android:gravity="center"
+                            android:text="크기\n회전"
+                            android:textColor="#E7D6B8"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                        <Button
+                            android:id="@+id/btnGrow"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="top|center_horizontal"
+                            android:text="＋"
+                            android:contentDescription="가구 크기 키우기" />
+                        <Button
+                            android:id="@+id/btnShrink"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="bottom|center_horizontal"
+                            android:text="−"
+                            android:contentDescription="가구 크기 줄이기" />
+                        <Button
+                            android:id="@+id/btnRotateLeft"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="start|center_vertical"
+                            android:text="↶"
+                            android:contentDescription="왼쪽으로 15도 회전" />
+                        <Button
+                            android:id="@+id/btnRotateRight"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="end|center_vertical"
+                            android:text="↷"
+                            android:contentDescription="오른쪽으로 15도 회전" />
+                    </FrameLayout>
+                </FrameLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -143,12 +177,12 @@
                     <Button
                         android:id="@+id/btnDelete"
                         style="@style/WorkspaceButton"
-                        android:text="가구 삭제"
+                        android:text="삭제"
                         android:textColor="#FFB4AB" />
                     <Button
                         android:id="@+id/btnDeselect"
                         style="@style/WorkspaceButton"
-                        android:text="편집 완료" />
+                        android:text="완료" />
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout
@@ -217,6 +251,7 @@
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout
+                android:id="@+id/arQuickActions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
@@ -320,12 +355,14 @@
                 <Button
                     android:id="@+id/btnCaptureBg"
                     style="@style/WorkspaceButton"
+                    android:visibility="gone"
                     android:text="배경 촬영" />
                 <Button
                     android:id="@+id/btnToggleBg"
                     style="@style/WorkspaceButton"
                     android:text="배경 표시"
-                    android:enabled="false" />
+                    android:enabled="false"
+                    android:visibility="gone" />
             </LinearLayout>
             <SeekBar
                 android:id="@+id/opacitySeekBar"
@@ -337,6 +374,17 @@
                 android:contentDescription="배경 투명도" />
         </LinearLayout>
     </com.hackathon.interior.ui.WorkspaceScrollView>
+    <ImageButton
+        android:id="@+id/btnArTools"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/bg_workspace_tool_fab"
+        android:contentDescription="AR 도구 펼치기"
+        android:padding="18dp"
+        android:src="@drawable/ic_workspace_tools" />
     <!-- 첫 화면 가구 브로셔. 항목을 선택하고 "우리 집에 적용"을 누른 뒤
          해당 종류에 맞는 평면(벽/바닥)을 탭하면 저폴리 3D 가구가 배치된다. -->
     <LinearLayout

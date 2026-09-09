@@ -1,6 +1,7 @@
 package com.hackathon.interior
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -26,6 +27,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var removal: RemovalController
     private lateinit var moved: MovedObjectController
     private lateinit var settings: AppSettings
+
+    /** TEMP-DIAG: onMove 는 초당 수십 번 → 15회마다 한 줄만 찍는다. */
+    private var moveEventLog = 0
+    private var toolsExpanded = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +62,8 @@ class MainActivity : AppCompatActivity() {
             space.setPlaneVisualizationEnabled(true)
         }
 
+        // "빈 배경" 오버레이. PHASE 5 데모에서는 버튼/슬라이더를 layout 에서 gone 처리해
+        // 사실상 비활성이다(효과 미미 + 시나리오에 없음). 배선은 되돌리기 쉽게 남겨둔다.
         keyframe = BackgroundKeyframe(
             activity = this,
             sceneView = binding.sceneView,
@@ -103,14 +110,31 @@ class MainActivity : AppCompatActivity() {
         }
         space.isIdle = { furniture.isIdle() }
 
+        // 이동 마커는 탭이 아니라 드래그로만 옮긴다 → 탭은 그대로 큐브/카탈로그 몫.
+        // TEMP-DIAG: 제스처가 앱에 실제로 도달하는지 / 이동 마커가 먹는지 logcat 추적 (tag InteriorAR).
         binding.sceneView.setOnGestureListener(
-            onSingleTapConfirmed = { event, node -> furniture.handleTap(event, node) },
+            onSingleTapConfirmed = { event, node ->
+                Log.d(TAG, "[gesture] tap @(${event.x.toInt()},${event.y.toInt()}) → furniture.handleTap")
+                furniture.handleTap(event, node)
+            },
             onLongPress = { _, node -> furniture.handleLongPress(node) },
             onMoveBegin = { _, event, node ->
-                if (!moved.onDragBegin(event.x, event.y)) furniture.beginDrag(node)
+                val byMoved = moved.onDragBegin(event.x, event.y)
+                Log.d(TAG, "[gesture] moveBegin @(${event.x.toInt()},${event.y.toInt()}) movedTook=$byMoved")
+                if (!byMoved) furniture.beginDrag(node)
             },
-            onMove = { _, event, _ -> if (!moved.onDrag(event.x, event.y)) furniture.drag(event) },
-            onMoveEnd = { _, event, _ -> if (!moved.onDragEnd()) furniture.endDrag(event) },
+            onMove = { _, event, _ ->
+                val byMoved = moved.onDrag(event.x, event.y)
+                if (++moveEventLog % 15 == 0) {
+                    Log.d(TAG, "[gesture] move #$moveEventLog @(${event.x.toInt()},${event.y.toInt()}) movedTook=$byMoved")
+                }
+                if (!byMoved) furniture.drag(event)
+            },
+            onMoveEnd = { _, event, _ ->
+                val byMoved = moved.onDragEnd()
+                Log.d(TAG, "[gesture] moveEnd movedTook=$byMoved")
+                if (!byMoved) furniture.endDrag(event)
+            },
             onScale = { detector, _, _ ->
                 if (!moved.onScale(detector.scaleFactor)) furniture.scaleSelectedBy(detector.scaleFactor)
             },
@@ -120,7 +144,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnShrink.setOnClickListener { furniture.scaleSelectedBy(1f / FurnitureItem.SCALE_STEP) }
         binding.btnRotateLeft.setOnClickListener { furniture.rotateSelectedBy(-15f) }
         binding.btnRotateRight.setOnClickListener { furniture.rotateSelectedBy(15f) }
-        binding.btnDeselect.setOnClickListener { furniture.deselect() }
+        binding.btnDeselect.setOnClickListener {
+            furniture.deselect()
+            setToolsExpanded(false)
+        }
         binding.btnDelete.setOnClickListener { furniture.deleteSelected() }
 
         setupUnifiedWorkspace()
@@ -136,9 +163,16 @@ class MainActivity : AppCompatActivity() {
         binding.removalSelectionRow.visibility = View.VISIBLE
         binding.removalRequestRow.visibility = View.VISIBLE
         binding.removalStatusText.visibility = View.VISIBLE
+        setToolsExpanded(false)
 
         binding.serverUrlInput.setText(settings.serverBaseUrl)
         binding.btnWorkspaceHome.setOnClickListener { finish() }
+        binding.btnArTools.setOnClickListener { setToolsExpanded(!toolsExpanded) }
+        binding.movedObjectPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (binding.movedObjectPanel.visibility == View.VISIBLE && !toolsExpanded) {
+                setToolsExpanded(true)
+            }
+        }
         binding.btnAddFurniture.text = "다른 가구"
         binding.btnRemovalTools.setOnClickListener {
             val expanded = binding.removalTools.visibility != View.VISIBLE
@@ -166,6 +200,8 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (binding.settingsScreen.visibility == View.VISIBLE) {
                     binding.settingsScreen.visibility = View.GONE
+                } else if (toolsExpanded) {
+                    setToolsExpanded(false)
                 } else finish()
             }
         })
@@ -201,17 +237,34 @@ class MainActivity : AppCompatActivity() {
     private fun renderSelectionPanel(item: FurnitureItem?) {
         if (item == null) {
             binding.selectionPanel.visibility = View.GONE
+            binding.arQuickActions.visibility = View.VISIBLE
             return
         }
         binding.selectionPanel.visibility = View.VISIBLE
+        // 가구를 고르는 동안에는 관련 없는 전역 메뉴를 감춰 편집 바만 남긴다.
+        binding.arQuickActions.visibility = View.GONE
+        setToolsExpanded(true)
         val scale = item.scaleFactor
-        binding.selectedNameText.text = "%s\n%.0f × %.0f × %.0f cm  ·  배율 %.2f  ·  %.0f°".format(
+        binding.selectedNameText.text = "%s  ·  %.0f × %.0f × %.0f cm  ·  %.0f°".format(
             item.name,
             item.baseSize.x * 100f * scale,
             item.baseSize.y * 100f * scale,
             item.baseSize.z * 100f * scale,
-            scale,
             item.rotationDeg,
         )
+    }
+
+    private fun setToolsExpanded(expanded: Boolean) {
+        if (!expanded && binding.bboxSelectionView.isSelecting) removal.toggleSelectionMode()
+        toolsExpanded = expanded
+        binding.arToolsPanel.visibility = if (expanded) View.VISIBLE else View.GONE
+        // 열린 도구 시트와 FAB가 같은 우하단 영역을 차지하지 않도록 한다.
+        binding.btnArTools.visibility = if (expanded) View.GONE else View.VISIBLE
+        binding.btnArTools.contentDescription = if (expanded) "AR 도구 접기" else "AR 도구 펼치기"
+        binding.btnArTools.isSelected = expanded
+    }
+
+    private companion object {
+        const val TAG = "InteriorAR"
     }
 }

@@ -23,8 +23,9 @@ class FurnitureItem(
     var name: String,
     /** 수직 평면(벽)에 붙어 있으면 true. 모델 방향/오프셋이 달라진다. */
     var onVerticalPlane: Boolean,
-    /** 선택 강조에 사용하는 대표 Material. 나머지 Part의 색상은 그대로 유지한다. */
-    val primaryMaterial: MaterialInstance,
+    /** 절차형 모델의 선택 강조에 사용하는 대표 Material.
+     * GLB는 자체 텍스처·여러 Material을 보존해야 하므로 null이다. */
+    val primaryMaterial: MaterialInstance?,
     /** 회전 버튼으로 누적되는 평면 내 회전각(도). 모델 전체에 적용. */
     var rotationDeg: Float = 0f,
     /** PHASE 5: 카탈로그에서 온 가구면 그 항목 id (`GET /catalog` 의 id). 서버 저장/복원 키. */

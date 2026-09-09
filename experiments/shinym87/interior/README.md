@@ -36,11 +36,11 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 화면 터치 위치 획득 (hitTest) | `ar/ArSpaceController.hitTest()` |
 | 임시 가구 배치 (탭 → 이름/실물 크기 입력) | `furniture/FurnitureController.kt`, `ui/FurnitureInfoDialog.kt` |
 | 첫 화면 샘플 브로셔 → `우리 집에 적용` | `furniture/CatalogController.kt` |
-| TV·소파·테이블·의자·선반 저폴리 3D 모델 | `furniture/ProceduralFurnitureFactory.kt` |
+| TV·소파·테이블·의자·선반 GLB 3D 모델 (미지원 항목은 저폴리 대체) | `res/raw/*.glb`, `furniture/GlbFurnitureFactory.kt`, `furniture/ProceduralFurnitureFactory.kt` |
 | 가구 이동 (드래그 후 평면에 재고정) | `furniture/FurnitureController.kt` (`beginDrag`/`drag`/`endDrag`) |
 | 가구 크기 조절 (**핀치** + `＋`/`－` 버튼) | `furniture/FurnitureController.scaleSelectedBy()` |
 | 가구 회전 (`회전 ⟳`) | `furniture/FurnitureController.rotateSelectedBy()` |
-| 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` |
+| 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` (PHASE 5 데모에서 UI 숨김) |
 | 제거할 물체 영역 드래그 지정 (bbox) + 선택 취소 | `remove/BboxSelectionView.kt`, `RemovalController.clearSelection()` |
 | 지울 사물 종류 선택 (TV/소파/테이블/의자/선반) → 요청 `objectType` 반영 | `objectTypeSpinner`, `RemovalController.selectedObjectType()` |
 | 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
@@ -50,7 +50,7 @@ PHASE 0 산출물은 `docs/` 에 있다.
 `localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,
 서버는 `uvicorn app.main:app --host 0.0.0.0` 로 띄운다.
 
-미구현: 외부 고해상도 glTF/GLB 에셋, 결과 정합 다듬기, 가림(occlusion).
+미구현: GLB 실제 기기 비율·재질 검증, 결과 정합 다듬기, 가림(occlusion).
 
 ## 프로젝트 구조
 
@@ -80,6 +80,7 @@ experiments/shinym87/interior/
 │     │  └─ ui/
 │     │     └─ FurnitureInfoDialog.kt    # 이름/실물 크기 입력 팝업
 │     └─ res/
+│        ├─ raw/                         # APK에 내장한 가구 GLB
 │        ├─ layout/activity_main.xml
 │        ├─ layout/dialog_furniture_info.xml
 │        ├─ values/strings.xml
@@ -127,8 +128,11 @@ Play 스토어 설치 안내를 따른다.
 4. 선택 상태에서 **드래그** 하면 평면을 따라 이동, 떼면 그 자리에 고정된다.
 5. **두 손가락 핀치** 또는 패널의 `＋`/`－` 로 크기를 조절하고 `회전 ⟳`로 방향을 바꾼다.
 6. `삭제`로 가구를 제거하거나 `가구 추가`로 브로셔를 다시 연다.
-7. `배경 촬영` 으로 가구가 없는 현재 화면을 저장하고, `배경 표시` + 불투명도
-   슬라이더로 "가구가 사라진 것처럼" 겹쳐 본다.
+7. 사물 제거 결과는 `삭제 전/후` 토글로 원본과 비교한다.
+
+> "빈 배경" 캡처 오버레이(`배경 촬영`/`배경 표시`/투명도 슬라이더)는 효과가 미미하고
+> 카메라를 따라가지 않아 PHASE 5 데모에서 UI 를 숨겨 뒀다(`BackgroundKeyframe.kt` 는
+> 유지 — `activity_main.xml` 의 세 위젯을 `visibility="visible"` 로 되돌리면 다시 쓸 수 있다).
 
 ## 알려진 제약
 
