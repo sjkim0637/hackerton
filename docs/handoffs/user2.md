@@ -13,6 +13,41 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 삭제한 사물을 "투명 배경 컷아웃"으로 재배치 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 문제: 삭제한 사물을 다시 배치하면 선택
+사각형이 그대로 잘려 흰/배경 모서리까지 딸려와 매끄럽지 않았다. `agent/goguma-salad/
+interior-mobilesam` 브랜치의 MobileSAM 세그멘테이션을 참조해 서버가 **RGBA 컷아웃**을
+만들도록 하고, 앱이 그걸 이동 마커 이미지로 쓴다.
+
+**서버:**
+- `app/ai/mobilesam.py` 를 mobilesam 브랜치에서 그대로 이식(단, `numpy`/`onnxruntime`
+  을 **지연 import** 로 바꿔 모델 없이도 서버가 뜨게 함). 모델 파일이 있으면
+  실루엣 마스크, 없으면 `None` 반환 → 호출부가 대체.
+- `app/ai/imageops.py::cutout_rgba_png(source, rect, mask_png=None)` — bbox 크롭에
+  alpha 를 씌워 투명 배경 PNG. mask 있으면 실루엣, 없으면 크롭 **안쪽으로** 페더링
+  (인페인팅용 `region_to_mask_png` 와 달리 밖으로 안 키움).
+- `scenes.py::_run_job`: `{job}_object.jpg`(기존, 네모 크롭) 옆에 `{job}_object.png`
+  (컷아웃) 도 저장. mask 는 MobileSAM(bbox 중심점) → 없으면 페더링.
+- 라우트 `GET /scenes/{id}/results/{job}_object.png` (`.jpg` 라우트들보다 먼저 등록).
+- `store.jobs` 에 `removed_object_cutout_path/url` 컬럼(+`_EXTRA_COLUMNS` ALTER).
+- `JobOut`/`ResultInfoOut` 에 `removed_object_cutout_image_url`. `cleanup.py` 가 동반
+  `_object.png` 도 함께 정리.
+- `config.py`: `mobilesam_encoder_path`/`mobilesam_decoder_path`/`mobilesam_fallback_box_frac`.
+- `requirements-onnx.txt`: `numpy` + `onnxruntime` (모델 켤 때만). `pytest` 47 통과
+  (`test_api.py` 에 컷아웃 RGBA 검증 추가).
+
+**앱:**
+- `InteriorApiClient.JobStatus.cutoutImageUrl` 추가 (`removed_object_cutout_image_url` 파싱).
+- `RemovalController.runFlow`: job done 후 `cutoutImageUrl` 이 있으면 다운로드·디코드해
+  이동 마커 비트맵으로 사용(실패 시 로컬 bbox 크롭으로 대체).
+- `MovedObjectController.restoreFromServer`: `{job}_object.png` → `{job}_object.jpg` 순으로 시도.
+- `:app:assembleDebug` 성공.
+
+**실물 세그멘테이션을 켜려면**: `pip install -r requirements-onnx.txt`, MobileSAM
+encoder/decoder ONNX 를 받아 `INTERIOR_MOBILESAM_ENCODER_PATH`/`..._DECODER_PATH` 설정.
+안 켜도 페더링 컷아웃으로 흰 모서리는 사라진다(실루엣은 아님).
+
 ## 가림막(빌보드) 회귀 수정 — 크기를 화면 선택 종횡비로 (2026-09-09)
 
 Branch `integration-interior-demo-temp`. 증상 (빌보드 도입 후):

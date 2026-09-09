@@ -78,6 +78,17 @@ def test_full_remove_object_flow(client):
     assert img.status_code == 200
     assert img.headers["content-type"] == "image/jpeg"
 
+    # 삭제한 사물의 투명 배경 컷아웃(RGBA PNG) 이 만들어지고 서빙된다 (이동 배치용).
+    cutout_url = job["removed_object_cutout_image_url"]
+    assert cutout_url.endswith(f"/results/{job_id}_object.png")
+    cut = client.get(cutout_url)
+    assert cut.status_code == 200
+    assert cut.headers["content-type"] == "image/png"
+    from PIL import Image as _Img
+    import io as _io
+    px = _Img.open(_io.BytesIO(cut.content))
+    assert px.mode == "RGBA"  # 알파 채널이 있어야 배경이 투명
+
     # 같은 (keyframe, target) 재요청은 캐시된 job 을 그대로 돌려준다.
     again = client.post(
         f"/scenes/{scene_id}/remove-object",

@@ -383,15 +383,27 @@ class RemovalController(
             }
         applyResult(bitmap, job.changedRect ?: bbox)
 
+        // 이동 마커에 쓸 이미지: 서버가 만든 **투명 배경 컷아웃**(RGBA PNG) 을 우선 쓴다.
+        // 없거나 실패하면 로컬 bbox 크롭(capturedObjectBitmap) 으로 대체 — 그 경우 네모/흰
+        // 배경이 딸려온다.
+        var markerBitmap = capturedObjectBitmap
+        job.cutoutImageUrl?.let { cutUrl ->
+            runCatching {
+                val cutBytes = client.downloadBytes(cutUrl)
+                BitmapFactory.decodeByteArray(cutBytes, 0, cutBytes.size)
+            }.getOrNull()?.let { markerBitmap = it }
+        }
+
         // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
         Log.d(
             TAG,
             "runFlow done → onRemovalApplied(scene=$sceneId type=$objectType " +
-                "hasBmp=${capturedObjectBitmap != null} hasPose=${originalObjectPose != null})",
+                "hasBmp=${markerBitmap != null} cutout=${job.cutoutImageUrl != null} " +
+                "hasPose=${originalObjectPose != null})",
         )
         onRemovalApplied(
             sceneId, jobId, objectType,
-            capturedObjectBitmap, originalObjectPose, bbox,
+            markerBitmap, originalObjectPose, bbox,
             patchWidthM, patchHeightM,
         )
     }

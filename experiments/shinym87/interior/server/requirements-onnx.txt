@@ -1,0 +1,10 @@
+# MobileSAM 점 프롬프트 세그멘테이션을 실제로 켤 때만 필요하다.
+# INTERIOR_MOBILESAM_ENCODER_PATH / INTERIOR_MOBILESAM_DECODER_PATH 를 설정하지 않으면
+# app/ai/mobilesam.py 는 numpy/onnxruntime 을 import 하지 않으므로(지연 import) 이 파일
+# 없이도 서버가 뜨고, 사물 컷아웃은 bbox 가장자리 페더링으로 대체된다.
+#
+# 설치: pip install -r requirements.txt -r requirements-onnx.txt
+# 모델(encoder/decoder ONNX)은 저장소에 커밋하지 않는다 — 수동 다운로드 후 위 경로로 지정.
+# 참고: agent/goguma-salad/interior-mobilesam 브랜치 (docs/workstreams/interior-mobilesam.md).
+numpy>=1.24
+onnxruntime>=1.17

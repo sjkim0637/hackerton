@@ -43,11 +43,12 @@ def prune_scene_results(scenes_dir: Path, scene_id: str, keep_max: int) -> int:
             old.unlink()
             removed += 1
             _log.info("[scene %s] 오래된 결과 정리(개수 초과): %s", scene_id, old.name)
-            # 동반 크롭({job}_object.jpg)도 같이 지운다.
-            companion = old.with_name(f"{old.stem}_object.jpg")
-            if companion.is_file():
-                companion.unlink()
-                _log.info("[scene %s] 동반 크롭 정리: %s", scene_id, companion.name)
+            # 동반 크롭({job}_object.jpg)과 컷아웃({job}_object.png)도 같이 지운다.
+            for suffix in ("_object.jpg", "_object.png"):
+                companion = old.with_name(f"{old.stem}{suffix}")
+                if companion.is_file():
+                    companion.unlink()
+                    _log.info("[scene %s] 동반 파일 정리: %s", scene_id, companion.name)
         except OSError as exc:  # noqa: PERF203
             _log.warning("[scene %s] 결과 삭제 실패 %s: %s", scene_id, old.name, exc)
     return removed
@@ -62,7 +63,9 @@ def sweep_old_results(scenes_dir: Path, max_age_hours: float) -> int:
         return 0
     cutoff = time.time() - max_age_hours * 3600.0
     removed = 0
-    for f in Path(scenes_dir).glob("*/results/*.jpg"):
+    stale = list(Path(scenes_dir).glob("*/results/*.jpg"))
+    stale += Path(scenes_dir).glob("*/results/*_object.png")
+    for f in stale:
         try:
             if f.is_file() and f.stat().st_mtime < cutoff:
                 f.unlink()

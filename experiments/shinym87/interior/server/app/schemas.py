@@ -118,6 +118,8 @@ class JobOut(BaseModel):
     keyframe_id: str
     status: Literal["queued", "running", "done", "failed"]
     result_image_url: str | None = None
+    # 삭제한 사물의 투명 배경 컷아웃(RGBA PNG). 이동 배치 시 네모/흰배경 없이 재사용.
+    removed_object_cutout_image_url: str | None = None
     changed_region: dict | None = None
     error: str | None = None
 
@@ -176,6 +178,8 @@ class ResultInfoOut(BaseModel):
     result_image_url: str | None = None
     # 제거된 사물을 원본 키프레임에서 그대로 오려낸 크롭(배경 포함). 이동 배치 재사용용.
     removed_object_image_url: str | None = None
+    # 투명 배경 컷아웃(RGBA PNG). 이동 배치 시 네모/흰배경 없이 재사용.
+    removed_object_cutout_image_url: str | None = None
     changed_region: dict | None = None
     error: str | None = None
     created_at: str

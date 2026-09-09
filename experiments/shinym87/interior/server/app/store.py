@@ -44,8 +44,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     status               TEXT NOT NULL,
     result_path          TEXT,
     result_url           TEXT,
-    removed_object_path  TEXT,
-    removed_object_url   TEXT,
+    removed_object_path         TEXT,
+    removed_object_url          TEXT,
+    removed_object_cutout_path  TEXT,
+    removed_object_cutout_url   TEXT,
     changed_region_json  TEXT,
     error                TEXT,
     created_at           TEXT NOT NULL,
@@ -83,6 +85,8 @@ _EXTRA_COLUMNS = {
     "jobs": {
         "removed_object_path": "TEXT",
         "removed_object_url": "TEXT",
+        "removed_object_cutout_path": "TEXT",
+        "removed_object_cutout_url": "TEXT",
     },
     # 기존 placements 행은 전부 "삭제 후 재배치"였으므로 그 기본값으로 채운다.
     "placements": {
@@ -243,6 +247,8 @@ class Store:
             "result_url",
             "removed_object_path",
             "removed_object_url",
+            "removed_object_cutout_path",
+            "removed_object_cutout_url",
             "changed_region_json",
             "error",
         }

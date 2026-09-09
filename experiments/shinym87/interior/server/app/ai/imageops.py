@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import io
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 
 def ensure_jpeg_size(image_bytes: bytes, size: tuple[int, int], quality: int = 90) -> bytes:
@@ -48,6 +48,51 @@ def crop_normalized_jpeg(
         crop = rgb.crop((left, top, right, bottom))
         out = io.BytesIO()
         crop.save(out, format="JPEG", quality=quality)
+        return out.getvalue()
+
+
+def cutout_rgba_png(
+    image_bytes: bytes,
+    rect: tuple[float, float, float, float],
+    *,
+    mask_png: bytes | None = None,
+    feather_frac: float = 0.14,
+) -> bytes:
+    """`rect`(정규화 x, y, w, h)로 사물을 오려 **투명 배경 RGBA PNG** 로 돌려준다.
+
+    삭제한 사물을 다시 배치할 때 네모 크롭 + 흰/배경 모서리가 딸려오지 않게 한다.
+    - `mask_png`(원본 크기 흑백, 사물=255)이 오면 그 실루엣을 alpha 로 쓴다(MobileSAM).
+    - 없으면 크롭 사각형 가장자리를 **안쪽으로** 페더링해 모서리를 투명하게 뺀다
+      (`region_to_mask_png` 의 인페인팅용 마스크와 달리 밖으로 키우지 않는다).
+    """
+    x, y, w, h = rect
+    with Image.open(io.BytesIO(image_bytes)) as im:
+        rgb = im.convert("RGB")
+        width, height = rgb.size
+        left = max(0, min(int(round(x * width)), width - 1))
+        top = max(0, min(int(round(y * height)), height - 1))
+        right = max(left + 1, min(int(round((x + w) * width)), width))
+        bottom = max(top + 1, min(int(round((y + h) * height)), height))
+        crop = rgb.crop((left, top, right, bottom)).convert("RGBA")
+        cw, ch = crop.size
+
+        if mask_png is not None:
+            with Image.open(io.BytesIO(mask_png)) as m:
+                alpha = m.convert("L")
+            if alpha.size != (width, height):
+                alpha = alpha.resize((width, height), Image.BILINEAR)
+            alpha = alpha.crop((left, top, right, bottom))
+        else:
+            feather = max(3, round(min(cw, ch) * max(0.0, feather_frac)))
+            alpha = Image.new("L", (cw, ch), 0)
+            ImageDraw.Draw(alpha).rectangle(
+                [feather, feather, cw - 1 - feather, ch - 1 - feather], fill=255
+            )
+            alpha = alpha.filter(ImageFilter.GaussianBlur(feather))
+
+        crop.putalpha(alpha)
+        out = io.BytesIO()
+        crop.save(out, format="PNG")
         return out.getvalue()
 
 
