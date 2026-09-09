@@ -39,16 +39,15 @@
         android:visibility="gone" />
     <LinearLayout
         android:id="@+id/arTopPanel"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_gravity="top"
-        android:layout_margin="12dp"
-        android:background="@drawable/bg_workspace_panel"
-        android:padding="8dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:background="@android:color/transparent"
         android:clickable="true">
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
@@ -56,11 +55,12 @@
                 android:id="@+id/btnWorkspaceHome"
                 style="@style/WorkspaceButton"
                 android:text="‹  화보"
+                android:visibility="gone"
                 android:contentDescription="화보로 돌아가기" />
             <TextView
                 android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:visibility="gone"
                 android:text="내 공간에 배치"
                 android:gravity="center"
                 android:textColor="#F8F5F0"
@@ -68,11 +68,11 @@
                 android:textSize="16sp" />
             <ImageButton
                 android:id="@+id/btnWorkspaceSettings"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@drawable/bg_workspace_panel"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_workspace_tool_fab"
                 android:contentDescription="설정"
-                android:padding="12dp"
+                android:padding="15dp"
                 android:src="@drawable/ic_settings" />
         </LinearLayout>
         <TextView
@@ -82,6 +82,7 @@
             android:text="@string/instruction_scan"
             android:textColor="#F8F5F0"
             android:textSize="14sp"
+            android:visibility="gone"
             android:maxLines="2"
             android:ellipsize="end"
             android:paddingVertical="2dp"
@@ -102,7 +103,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp"
+            android:padding="10dp"
             android:clickable="true">
             <LinearLayout
                 android:id="@+id/selectionPanel"
@@ -118,34 +119,67 @@
                     android:text="선택한 가구"
                     android:textColor="#F8F5F0"
                     android:textSize="15sp"
-                    android:paddingVertical="6dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:paddingBottom="4dp"
                     android:textStyle="bold" />
-                <LinearLayout
+                <!-- 화면을 덜 가리는 십자형 3D 조정 패드.
+                     위/아래는 크기, 좌/우는 평면 위 회전이며 중앙은 기능을 설명한다. -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-                    <Button
-                        android:id="@+id/btnShrink"
-                        style="@style/WorkspaceButton"
-                        android:text="−"
-                        android:contentDescription="가구 크기 줄이기" />
+                    android:layout_height="112dp"
+                    android:layout_gravity="center">
+                    <TextView
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_workspace_control"
+                        android:gravity="center"
+                        android:text="3D\n조정"
+                        android:textColor="#F8F5F0"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
                     <Button
                         android:id="@+id/btnGrow"
-                        style="@style/WorkspaceButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="top|center_horizontal"
+                        android:background="@drawable/bg_workspace_control"
                         android:text="＋"
+                        android:textColor="#F8F5F0"
+                        android:textSize="18sp"
                         android:contentDescription="가구 크기 키우기" />
                     <Button
+                        android:id="@+id/btnShrink"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:background="@drawable/bg_workspace_control"
+                        android:text="−"
+                        android:textColor="#F8F5F0"
+                        android:textSize="18sp"
+                        android:contentDescription="가구 크기 줄이기" />
+                    <Button
                         android:id="@+id/btnRotateLeft"
-                        style="@style/WorkspaceButton"
-                        android:text="↶ 15°"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center_vertical|start"
+                        android:background="@drawable/bg_workspace_control"
+                        android:text="↶"
+                        android:textColor="#F8F5F0"
+                        android:textSize="19sp"
                         android:contentDescription="왼쪽으로 15도 회전" />
                     <Button
                         android:id="@+id/btnRotateRight"
-                        style="@style/WorkspaceButton"
-                        android:text="15° ↷"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center_vertical|end"
+                        android:background="@drawable/bg_workspace_control"
+                        android:text="↷"
+                        android:textColor="#F8F5F0"
+                        android:textSize="19sp"
                         android:contentDescription="오른쪽으로 15도 회전" />
-                </LinearLayout>
+                </FrameLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -154,12 +188,12 @@
                     <Button
                         android:id="@+id/btnDelete"
                         style="@style/WorkspaceButton"
-                        android:text="가구 삭제"
+                        android:text="삭제"
                         android:textColor="#FFB4AB" />
                     <Button
                         android:id="@+id/btnDeselect"
                         style="@style/WorkspaceButton"
-                        android:text="편집 완료" />
+                        android:text="완료" />
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout

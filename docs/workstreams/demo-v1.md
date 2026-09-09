@@ -36,12 +36,15 @@ INTEGRATION
 - APK 서명 검증 완료
 - 패키지: `com.hackathon.interior`, `versionName 1.0`, `minSdk 24`, `targetSdk 35`
 - AR 우선 UI 컴파일 및 APK 재생성 완료: `:app:compileDebugKotlin :app:processDebugResources`, `:app:assembleDebug`
+- 상단 설정 단일 버튼, 도구 FAB 겹침 방지, `3D 조정` 패드 적용 후 `:app:assembleDebug` 성공
 
 ## UI Direction
 
 - 기본 화면에서는 하단 도구 시트를 숨기고 우하단 원형 도구 버튼만 표시한다.
-- 원형 버튼을 누르거나 가구·이동된 사물을 선택하면 도구 시트를 펼친다.
-- `편집 완료` 또는 뒤로가기로 도구 시트를 다시 접어 카메라와 AR 객체가 가려지지 않게 한다.
+- 도구 시트를 열면 원형 도구 버튼을 숨겨 같은 우하단 영역에서 겹치지 않게 한다.
+- AR 화면 상단은 설정 버튼만 남기고, 가구 이름·배치 안내는 화면을 가리지 않도록 숨긴다.
+- 가구를 선택하면 크기·회전을 위·아래·좌·우의 `3D 조정` 패드로 조작한다. 삭제와 완료는 짧은 두 버튼으로 유지한다.
+- `완료` 또는 뒤로가기로 도구 시트를 다시 접어 카메라와 AR 객체가 가려지지 않게 한다.
 
 ## Known Issues
 

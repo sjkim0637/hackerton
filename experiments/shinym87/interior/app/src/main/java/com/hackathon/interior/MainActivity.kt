@@ -242,12 +242,11 @@ class MainActivity : AppCompatActivity() {
         binding.selectionPanel.visibility = View.VISIBLE
         setToolsExpanded(true)
         val scale = item.scaleFactor
-        binding.selectedNameText.text = "%s\n%.0f × %.0f × %.0f cm  ·  배율 %.2f  ·  %.0f°".format(
+        binding.selectedNameText.text = "%s  ·  %.0f × %.0f × %.0f cm  ·  %.0f°".format(
             item.name,
             item.baseSize.x * 100f * scale,
             item.baseSize.y * 100f * scale,
             item.baseSize.z * 100f * scale,
-            scale,
             item.rotationDeg,
         )
     }
@@ -256,6 +255,8 @@ class MainActivity : AppCompatActivity() {
         if (!expanded && binding.bboxSelectionView.isSelecting) removal.toggleSelectionMode()
         toolsExpanded = expanded
         binding.arToolsPanel.visibility = if (expanded) View.VISIBLE else View.GONE
+        // 열린 도구 시트와 FAB가 같은 우하단 영역을 차지하지 않도록 한다.
+        binding.btnArTools.visibility = if (expanded) View.GONE else View.VISIBLE
         binding.btnArTools.contentDescription = if (expanded) "AR 도구 접기" else "AR 도구 펼치기"
         binding.btnArTools.isSelected = expanded
     }
