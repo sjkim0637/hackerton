@@ -23,21 +23,14 @@
       "problemMatcher": []
     },
     {
-      "label": "Interior Demo v1: Install Debug APK",
+      "label": "Interior Demo v1: Install APK Only",
       "type": "process",
-      "command": "${workspaceFolder}\\experiments\\shinym87\\interior\\gradlew.bat",
+      "command": "${env:LOCALAPPDATA}\\Android\\Sdk\\platform-tools\\adb.exe",
       "args": [
-        ":app:installDebug",
-        "--console=plain",
-        "--no-daemon"
+        "install",
+        "-r",
+        "${workspaceFolder}\\experiments\\shinym87\\interior\\app\\build\\outputs\\apk\\debug\\app-debug.apk"
       ],
-      "options": {
-        "cwd": "${workspaceFolder}\\experiments\\shinym87\\interior",
-        "env": {
-          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12"
-        }
-      },
-      "dependsOn": "Interior Demo v1: Build Debug APK",
       "problemMatcher": []
     },
     {
@@ -51,7 +44,7 @@
         "-n",
         "com.hackathon.interior/.CatalogActivity"
       ],
-      "dependsOn": "Interior Demo v1: Install Debug APK",
+      "dependsOn": "Interior Demo v1: Install APK Only",
       "problemMatcher": []
     },
     {
