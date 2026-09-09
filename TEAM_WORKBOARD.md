@@ -6,6 +6,7 @@
 
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
+| goguma-salad + Codex | `agent/goguma-salad/lightweight-remove` | `experiments/shinym87/interior/` | 경량 사물 제거 실험 | 온디바이스 사물 분할 마스크와 OpenCV Telea 복원으로 Gemini 없이 빠른 사물 제거를 검증한다. | `IN_PROGRESS` | [lightweight-remove](docs/workstreams/lightweight-remove.md) | 2026-09-09 |
 | goguma-salad + Codex | `agent/goguma-salad/demo-v1` | `experiments/shinym87/interior/` | Interior Demo v1 APK | 최신 통합 데모를 기준으로 VS Code 빌드·설치·실행 Task와 Debug APK를 검증한다. | `INTEGRATION` | [demo-v1](docs/workstreams/demo-v1.md) | 2026-09-09 |
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
 | shinym87 + Claude + Codex | `integration-interior-demo` | `experiments/shinym87/interior/` | 카메라 기반 공간 편집 / AR 가구 재배치 | 카메라·AI 제거·카탈로그 배치 흐름에 Depth 표면 검증을 통합한다. | `INTEGRATION` | [interior](docs/workstreams/interior.md) | 2026-09-08 |

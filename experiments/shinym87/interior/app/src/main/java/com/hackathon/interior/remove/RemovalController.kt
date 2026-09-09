@@ -41,7 +41,7 @@ import kotlin.math.acos
 import kotlin.math.sqrt
 
 /**
- * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 서버 호출 → job 폴링 →
+ * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 온디바이스 마스크·Telea 복원 →
  * 결과 이미지를 벽 평면에 붙이기 → "삭제 전/후" 전환.
  *
  * PHASE 1 목표는 흐름 연결이다. 3D 배치의 방향/스케일은 대략치이며 실기기에서 다듬는다.
@@ -94,6 +94,7 @@ class RemovalController(
     private var coverFrameLog = 0L
 
     private var busy = false
+    private val localRemoval = LocalRemovalProcessor()
 
     /** PHASE 4: 삭제 요청 시점의 "원래 사물" 스냅샷(이동 기능이 재사용). */
     private var capturedObjectBitmap: Bitmap? = null
@@ -273,7 +274,7 @@ class RemovalController(
         )
     }
 
-    // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
+    // ----------------------------------------------- 2·3. 캡처 → 온디바이스 복원 → 적용
 
     private fun requestRemoval() {
         if (busy) return
@@ -285,7 +286,6 @@ class RemovalController(
             status("지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')")
             return
         }
-        val client = InteriorApiClient(serverBaseUrl())
         busy = true
         setControlsEnabled(false)
         status("현재 화면 캡처 중…")
@@ -302,17 +302,32 @@ class RemovalController(
                 BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, bbox) }
             }.getOrNull()
             originalObjectPose = wallAnchor?.pose
-            val meta = buildMetaJson(imageW, imageH, bbox, objectType)
-            scope.launch {
-                try {
-                    runFlow(client, jpeg, meta, bbox, objectType)
-                } catch (e: Exception) {
-                    status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
-                } finally {
+            val source = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+            if (source == null) {
+                status("캡처 이미지 디코드 실패")
+                busy = false
+                setControlsEnabled(true)
+                return@captureSceneJpeg
+            }
+            status("사물 윤곽 분석·즉시 복원 중…")
+            localRemoval.remove(
+                source = source,
+                bbox = bbox,
+                onSuccess = { result ->
+                    applyResult(result.bitmap, bbox)
+                    status(
+                        "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
+                            if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
+                    )
                     busy = false
                     setControlsEnabled(true)
-                }
-            }
+                },
+                onFailure = { error ->
+                    status("로컬 복원 실패: ${error.message ?: error.javaClass.simpleName}")
+                    busy = false
+                    setControlsEnabled(true)
+                },
+            )
         }
     }
 
@@ -741,6 +756,10 @@ class RemovalController(
         binding.btnClearSelection.isEnabled = enabled
         binding.objectTypeSpinner.isEnabled = enabled
         refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
+    }
+
+    fun release() {
+        localRemoval.close()
     }
 
     private companion object {

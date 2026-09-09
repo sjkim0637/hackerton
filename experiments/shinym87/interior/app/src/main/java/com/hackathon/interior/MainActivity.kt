@@ -230,6 +230,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (::removal.isInitialized) removal.release()
         if (::depthPlacement.isInitialized) depthPlacement.release()
         super.onDestroy()
     }
