@@ -43,7 +43,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:layout_gravity="top|end"
-        android:layout_margin="16dp"
+        android:layout_margin="12dp"
         android:background="@android:color/transparent"
         android:clickable="true">
         <LinearLayout
@@ -68,11 +68,11 @@
                 android:textSize="16sp" />
             <ImageButton
                 android:id="@+id/btnWorkspaceSettings"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="@drawable/bg_workspace_tool_fab"
                 android:contentDescription="설정"
-                android:padding="15dp"
+                android:padding="13dp"
                 android:src="@drawable/ic_settings" />
         </LinearLayout>
         <TextView
@@ -111,7 +111,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone"
-                android:paddingBottom="8dp">
+                android:paddingBottom="0dp">
                 <TextView
                     android:id="@+id/selectedNameText"
                     android:layout_width="match_parent"
@@ -123,62 +123,51 @@
                     android:ellipsize="end"
                     android:paddingBottom="4dp"
                     android:textStyle="bold" />
-                <!-- 화면을 덜 가리는 십자형 3D 조정 패드.
-                     위/아래는 크기, 좌/우는 평면 위 회전이며 중앙은 기능을 설명한다. -->
+                <!-- 가구 가까이에 떠 있는 조이스틱처럼 보이도록, 네 조작점을 한 덩어리로 묶는다.
+                     위/아래는 크기, 좌/우는 평면 위 회전이다. -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="112dp"
+                    android:layout_height="100dp"
                     android:layout_gravity="center">
-                    <TextView
-                        android:layout_width="60dp"
-                        android:layout_height="60dp"
-                        android:layout_gravity="center"
-                        android:background="@drawable/bg_workspace_control"
-                        android:gravity="center"
-                        android:text="3D\n조정"
-                        android:textColor="#F8F5F0"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-                    <Button
-                        android:id="@+id/btnGrow"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="top|center_horizontal"
-                        android:background="@drawable/bg_workspace_control"
-                        android:text="＋"
-                        android:textColor="#F8F5F0"
-                        android:textSize="18sp"
-                        android:contentDescription="가구 크기 키우기" />
-                    <Button
-                        android:id="@+id/btnShrink"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="bottom|center_horizontal"
-                        android:background="@drawable/bg_workspace_control"
-                        android:text="−"
-                        android:textColor="#F8F5F0"
-                        android:textSize="18sp"
-                        android:contentDescription="가구 크기 줄이기" />
-                    <Button
-                        android:id="@+id/btnRotateLeft"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="center_vertical|start"
-                        android:background="@drawable/bg_workspace_control"
-                        android:text="↶"
-                        android:textColor="#F8F5F0"
-                        android:textSize="19sp"
-                        android:contentDescription="왼쪽으로 15도 회전" />
-                    <Button
-                        android:id="@+id/btnRotateRight"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="center_vertical|end"
-                        android:background="@drawable/bg_workspace_control"
-                        android:text="↷"
-                        android:textColor="#F8F5F0"
-                        android:textSize="19sp"
-                        android:contentDescription="오른쪽으로 15도 회전" />
+                    <FrameLayout
+                        android:layout_width="176dp"
+                        android:layout_height="100dp"
+                        android:layout_gravity="center">
+                        <TextView
+                            android:layout_width="58dp"
+                            android:layout_height="58dp"
+                            android:layout_gravity="center"
+                            android:background="@drawable/bg_workspace_control"
+                            android:gravity="center"
+                            android:text="크기\n회전"
+                            android:textColor="#E7D6B8"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                        <Button
+                            android:id="@+id/btnGrow"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="top|center_horizontal"
+                            android:text="＋"
+                            android:contentDescription="가구 크기 키우기" />
+                        <Button
+                            android:id="@+id/btnShrink"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="bottom|center_horizontal"
+                            android:text="−"
+                            android:contentDescription="가구 크기 줄이기" />
+                        <Button
+                            android:id="@+id/btnRotateLeft"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="start|center_vertical"
+                            android:text="↶"
+                            android:contentDescription="왼쪽으로 15도 회전" />
+                        <Button
+                            android:id="@+id/btnRotateRight"
+                            style="@style/WorkspaceControlButton"
+                            android:layout_gravity="end|center_vertical"
+                            android:text="↷"
+                            android:contentDescription="오른쪽으로 15도 회전" />
+                    </FrameLayout>
                 </FrameLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -262,6 +251,7 @@
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout
+                android:id="@+id/arQuickActions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"

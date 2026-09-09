@@ -237,9 +237,12 @@ class MainActivity : AppCompatActivity() {
     private fun renderSelectionPanel(item: FurnitureItem?) {
         if (item == null) {
             binding.selectionPanel.visibility = View.GONE
+            binding.arQuickActions.visibility = View.VISIBLE
             return
         }
         binding.selectionPanel.visibility = View.VISIBLE
+        // 가구를 고르는 동안에는 관련 없는 전역 메뉴를 감춰 편집 바만 남긴다.
+        binding.arQuickActions.visibility = View.GONE
         setToolsExpanded(true)
         val scale = item.scaleFactor
         binding.selectedNameText.text = "%s  ·  %.0f × %.0f × %.0f cm  ·  %.0f°".format(
