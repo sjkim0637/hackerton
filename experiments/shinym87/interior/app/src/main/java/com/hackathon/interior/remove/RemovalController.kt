@@ -438,6 +438,20 @@ class RemovalController(
                 planeIsVertical = isVertical
             }
         }
+        // 평면을 전혀 못 잡았으면(작은 소품 · 반사 심한 테이블 등) 카메라 앞 고정 앵커로라도
+        // 가림막을 세운다 — 마커의 "카메라 앞 fallback" 과 같은 발상. 빌보드라 위치만 맞으면 된다.
+        if (anchor == null) {
+            val camPose = space.latestFrame?.camera?.pose
+            val front = camPose?.compose(Pose.makeTranslation(0f, 0f, -FALLBACK_COVER_DIST))
+            val fresh = front?.let { runCatching { sceneView.session?.createAnchor(it) }.getOrNull() }
+            if (fresh != null) {
+                anchor = fresh
+                isVertical = false
+                wallAnchor = fresh
+                planeIsVertical = false
+                Log.d(TAG, "applyResult: 평면 미인식 → 카메라 앞 %.1fm fallback 가림막 앵커".format(FALLBACK_COVER_DIST))
+            }
+        }
 
         // 커버 quad 처리:
         // - 벽걸이 사물(수직 평면) → 평면에 납작하게 붙인다 (기존 방식, 라이브 유지).
@@ -502,10 +516,14 @@ class RemovalController(
 
     /** 커버 quad(AnchorNode + ImageNode)를 만들어 씬에 붙인다. */
     private fun buildResultNode(anchor: Anchor, isVertical: Boolean, patch: Bitmap) {
+        // 빌보드 가림막은 선택 영역 딱 그 크기면 실물 가장자리가 삐져나온다 → 여유를 더한다.
+        // 측정값(patchWidthM/HeightM) 자체는 안 건드린다(마커 크기는 실측 그대로 써야 하므로).
+        val coverW = if (coverIsBillboard) patchWidthM * COVER_MARGIN else patchWidthM
+        val coverH = if (coverIsBillboard) patchHeightM * COVER_MARGIN else patchHeightM
         val image = ImageNode(
             materialLoader = sceneView.materialLoader,
             bitmap = patch,
-            size = Size(patchWidthM, patchHeightM),
+            size = Size(coverW, coverH),
         ).apply {
             isTouchable = false
             // 수직 평면(벽): 앵커 로컬 +Y 가 벽 바깥이므로 quad 를 X축 -90° 세운다.
@@ -527,9 +545,9 @@ class RemovalController(
         coverCamPoseAtBuild = space.latestFrame?.camera?.pose
         Log.d(
             TAG,
-            "buildResultNode: node#%d anchorPose=%s vertical=%b billboard=%b patch=%.2fx%.2fm camAtBuild=%s".format(
+            "buildResultNode: node#%d anchorPose=%s vertical=%b billboard=%b patch=%.2fx%.2fm cover=%.2fx%.2fm camAtBuild=%s".format(
                 node.hashCode(), poseStr(anchor.pose), isVertical, coverIsBillboard,
-                patchWidthM, patchHeightM, poseStr(coverCamPoseAtBuild),
+                patchWidthM, patchHeightM, coverW, coverH, poseStr(coverCamPoseAtBuild),
             ),
         )
     }
@@ -815,6 +833,12 @@ class RemovalController(
 
         /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
+
+        /** 빌보드 가림막을 선택 영역보다 이 배율만큼 키운다(가장자리 삐져나옴 방지). */
+        const val COVER_MARGIN = 1.35f
+
+        /** 평면을 못 잡았을 때 가림막을 세울 카메라 앞 거리(m). 실물보다 앞이어야 가려진다. */
+        const val FALLBACK_COVER_DIST = 0.8f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"
