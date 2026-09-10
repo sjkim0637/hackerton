@@ -13,6 +13,59 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 가림막 크기·어두운 경계선 + 이동 사물에 파란 테두리 박힘 수정 (2026-09-10)
+
+Branch `integration-interior-demo`. 실기기 리포트 2건.
+
+### 문제 1 — 빌보드 가림막이 선택 영역보다 크고 가장자리에 어두운 띠
+
+**1-a. 크기 (`RemovalController.COVER_MARGIN` 1.12 → 1.08)**
+빌보드 커버 quad 는 `patchWidthM/HeightM × COVER_MARGIN` 으로 그린다(측정값 자체는
+안 건드림 — 이동 마커가 실측 그대로 써야 하므로). 가로·세로 둘 다 1.12 를 곱하면
+면적이 1.25배라 "과하게 크다"로 읽혔다. 실물 가장자리가 안 삐져나올 최소 여유
+8% 로 낮췄다. 벽걸이(수직 평면) 경로는 원래 여유 없이 `patchWidthM` 그대로라
+영향 없음.
+
+**1-b. 어두운 경계선 (`EdgeFade.kt` 전면 재작성)**
+원인 = **premultiplied alpha 이중 곱**. 기존 `EdgeFade` 는 `Canvas` +
+`PorterDuff.DST_IN` 그라데이션으로 alpha 를 깎았는데, Android 비트맵은 내부적으로
+premultiplied 저장이라 페이드 밴드의 RGB 까지 `rgb × α` 로 어두워졌다. 게다가
+SceneView `imageTextureMaterial`(Filament `blending: transparent`) 은 straight-alpha
+텍스처를 받아 셰이더에서 다시 `rgb *= α` 를 한다 → 페이드 구간이 `rgb × α²` 로
+이중으로 죽어 가장자리에 어두운 그림자선이 생겼다.
+- 이제 픽셀을 직접 순회하며 **RGB 는 그대로 두고 alpha 만** 선형 램프로 낮춘다.
+  출력 비트맵은 `isPremultiplied = false` + `setHasAlpha(true)` → straight-alpha
+  텍스처를 straight-alpha 로 블렌딩하므로 색이 검게 죽지 않는다.
+- 검은 패딩 우려에 대해: `applyResult` 의 `cropNormalized(full, region)` 는 이미
+  x/y/w/h 를 비트맵 경계로 `coerceIn` 클램프한다 → 원본 이미지 밖을 읽지 않는다.
+  `COVER_MARGIN` 은 crop 사각형이 아니라 **3D quad 크기**만 키우므로(같은 텍스처를
+  늘일 뿐) 여백에 이미지 밖 영역이 섞이지 않는다. 어두운 띠는 패딩이 아니라 위의
+  alpha 이중 곱이 원인이었다.
+- `EdgeFade.feather` 시그니처(`src`, `featherFrac=0.08`)·호출부 동일. 이동 마커
+  경로(`MovedObjectController` 의 RGBA 컷아웃/크롭/플레이스홀더)도 같은 함수를 타므로
+  그쪽 가장자리 어두움도 함께 개선된다.
+
+### 문제 2 — "여기로 옮기기" 사물 이미지에 선택 영역 파란 테두리가 찍힘
+
+`capturedObjectBitmap` 은 `RemovalController.captureSceneJpeg` 의 `PixelCopy` 결과를
+bbox 크롭한 것이다. `PixelCopy.request(sceneView, …)` 는 `SurfaceView` 서피스만 읽어
+이론상 상위 오버레이(`bboxSelectionView`)는 안 찍혀야 하지만, 실기기에서 파란
+사각형이 그대로 박혀 나왔다(기기/합성 경로 차이로 추정).
+- 조치: ARCore 평면/특징점 오버레이를 `onBeforeCapture`/`onAfterCapture` 로 껐다 켜는
+  것과 **같은 방식**으로, `captureSceneJpeg` 가 캡처 직전 `bboxSelectionView` 와
+  `resultOverlay` 를 `INVISIBLE` 로 숨기고 `PixelCopy` 콜백에서 원래 visibility 로
+  복구한다. 캡처 중 "현재 화면 캡처 중…" 동안 파란 사각형이 잠깐 사라졌다 돌아온다
+  (평면 격자가 깜빡이는 것과 동일, 정상).
+- 서버 RGBA 컷아웃(`{job}_object.png`) 경로는 원래부터 키프레임(오버레이 없는 JPEG)
+  기반이라 무관 — 이 수정은 컷아웃이 없어 로컬 bbox 크롭으로 폴백하는 경우를 고친다.
+
+### 빌드
+
+`JAVA_HOME=C:\Users\User\.jdks\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug`
+→ **BUILD SUCCESSFUL** (30s). APK:
+`experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk` (약 59MB).
+실기기 육안 확인(가림막 크기/경계선, 이동 사물 이미지 테두리) 대기.
+
 ## 이동 다이얼을 상하좌우 회전 십자로 + 대리석 벽 평면 인식 완화 (2026-09-10)
 
 Branch `integration-interior-demo`.

@@ -703,13 +703,24 @@ class RemovalController(
         }
         val bitmap = Bitmap.createBitmap(vw, vh, Bitmap.Config.ARGB_8888)
 
-        // 큐브/결과 quad 는 키프레임에서 뺀다. bboxSelectionView/resultOverlay 는 서피스 밖이라 무관.
+        // 큐브/결과 quad 는 키프레임에서 뺀다.
         resultNode?.isVisible = false
+        // 선택 영역의 파란 사각형(bboxSelectionView)과 전체화면 결과 오버레이도 캡처에서
+        // 제외한다. 이론상 이들은 SurfaceView 밖의 별도 View 지만, 일부 기기에서
+        // PixelCopy(SurfaceView) 결과에 상위 오버레이가 함께 찍혀 "여기로 옮기기" 사물
+        // 이미지에 파란 테두리가 박히는 문제가 있었다. ARCore 평면/특징점 오버레이를
+        // onBeforeCapture 로 껐다 켜는 것과 같은 방식으로, 캡처 직전에 숨기고 완료 후 복구한다.
+        val prevBboxVisibility = binding.bboxSelectionView.visibility
+        val prevOverlayVisibility = binding.resultOverlay.visibility
+        binding.bboxSelectionView.visibility = View.INVISIBLE
+        binding.resultOverlay.visibility = View.INVISIBLE
         onBeforeCapture()
 
         sceneView.postDelayed({
             PixelCopy.request(sceneView, bitmap, { copyResult ->
                 onAfterCapture()
+                binding.bboxSelectionView.visibility = prevBboxVisibility
+                binding.resultOverlay.visibility = prevOverlayVisibility
                 // 커버 quad 는 캡처 후 다시 항상 보이게 (onFrame 이 재확인하지만 즉시 복구).
                 resultNode?.isVisible = true
                 if (copyResult == PixelCopy.SUCCESS) {
@@ -841,8 +852,12 @@ class RemovalController(
         /** 회전 없음 쿼터니언 (x,y,z,w). 빌보드일 때 부모 AnchorNode 에 위치만 주려고 쓴다. */
         val IDENTITY_QUAT = floatArrayOf(0f, 0f, 0f, 1f)
 
-        /** 빌보드 가림막을 선택 영역보다 이 배율만큼 살짝 키운다(하드 엣지 방지, 크게는 안 함). */
-        const val COVER_MARGIN = 1.12f
+        /**
+         * 빌보드 가림막을 선택 영역보다 이 배율만큼만 살짝 키운다 — 실물 가장자리가
+         * 삐져나오지 않을 정도의 최소 여유(8%). EdgeFade 가 가장자리를 부드럽게 지우므로
+         * 이 값을 더 키우면 가림막만 과하게 커 보인다. (예전 1.35 → 1.12 → 1.08)
+         */
+        const val COVER_MARGIN = 1.08f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"
