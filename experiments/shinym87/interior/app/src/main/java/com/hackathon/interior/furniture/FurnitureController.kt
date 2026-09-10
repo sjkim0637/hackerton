@@ -349,6 +349,7 @@ class FurnitureController(
                 applyPlacement(item)
                 dragStartPose = null
             },
+            planeFallback = { hitTestPreferring(motionEvent.x, motionEvent.y, item.onVerticalPlane) },
             onAccepted = { decision ->
                 decision.pose?.let { item.anchorNode.pose = it }
                 dragIsVertical = decision.isVertical ?: item.onVerticalPlane
@@ -456,7 +457,10 @@ class FurnitureController(
             placementValidationPending = false
             when {
                 decision.accepted -> onAccepted(decision)
-                decision.allowPlaneFallback && planeFallback?.invoke() != null ->
+                // 데모에서는 Depth 품질 경고가 있어도 이미 인식된 ARCore 평면 위 배치는
+                // 계속 허용한다. 결과적으로 실제 기기 노이즈가 가구를 사라지게 하거나
+                // 드래그를 원위치로 되돌리는 일을 막고, 판정 자체는 백그라운드에서 유지한다.
+                planeFallback?.invoke() != null ->
                     onAccepted(DepthPlacementDecision(depthAvailable = false, accepted = true))
                 else -> {
                     onRejected()
@@ -504,7 +508,14 @@ class FurnitureController(
             objectType = objectType,
         )
         items += item
-        if (autoSelect) select(item)   // 방금 놓은 가구를 바로 선택 → 조작 패널 표시
+        if (autoSelect) {
+            select(item)   // 방금 놓은 가구를 바로 선택 → 조작 패널 표시
+            Toast.makeText(
+                activity,
+                "$name 배치 완료 · 드래그로 옮기고 조이스틱으로 크기·방향을 조절하세요",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
         applyPlacement(item)
         Log.d(
             TAG,
