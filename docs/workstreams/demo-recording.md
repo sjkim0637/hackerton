@@ -33,7 +33,7 @@ IN_PROGRESS
 ## Current Result
 
 - `origin/integration-interior-demo`를 fetch했으며 최신 커밋은 `3028fb7`이다. 원격에 추가 변경은 없다.
-- Depth 지원 기기에서도 평면 가이드를 표시하고, Depth 품질 판정이 거절되어도 이미 인식된 ARCore 평면이 있으면 배치와 드래그를 계속 허용하도록 변경했다.
+- 기존의 평면 격자 노출 정책은 유지하고, Depth 품질 판정이 거절되어도 이미 인식된 ARCore 평면이 있으면 배치와 드래그를 계속 허용하도록 변경했다.
 - 가구를 놓으면 선택 조작 시트와 함께 배치 완료 안내를 표시한다.
 
 ## Scope

@@ -67,9 +67,7 @@ class ArSpaceController(
             // 지원 기기에서는 가구 footprint 검증에 사용할 dense Depth를 함께 활성화한다.
             usesDepthPlacement = ArCoreDepthAdapter.isDepthSupported(session)
             ArCoreDepthAdapter.prepareConfig(session, config)
-            // 촬영/시연에서는 탭 가능한 표면을 즉시 알 수 있게 Depth 지원 기기에서도
-            // ARCore 평면 가이드를 표시한다. Depth는 배치 품질 진단에 계속 사용한다.
-            sceneView.planeRenderer.isEnabled = true
+            sceneView.planeRenderer.isEnabled = !usesDepthPlacement
         }
 
         sceneView.onSessionFailed = { exception ->
@@ -113,7 +111,7 @@ class ArSpaceController(
      * 캡처가 끝나면 다시 켠다. (인식 자체는 계속 동작하고, 화면 표시만 멈춘다.)
      */
     fun setPlaneVisualizationEnabled(enabled: Boolean) {
-        runCatching { sceneView.planeRenderer.isEnabled = enabled }
+        runCatching { sceneView.planeRenderer.isEnabled = enabled && !usesDepthPlacement }
     }
 
     private fun logTrackingState(session: Session, frame: Frame) {
