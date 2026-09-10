@@ -13,8 +13,14 @@ from pydantic import ValidationError
 
 from ..ai import ProviderError, is_known, normalize_object_type
 from ..ai.colormatch import check_result_anomaly, match_to_source
-from ..ai.imageops import cap_jpeg_bytes, crop_normalized_jpeg, ensure_jpeg_size, image_size
-from ..ai.mask import region_bbox
+from ..ai.imageops import (
+    cap_jpeg_bytes,
+    crop_normalized_jpeg,
+    ensure_jpeg_size,
+    image_size,
+)
+from ..ai.mask import data_url_b64, region_bbox
+from ..ai.mobilesam import fallback_box_mask_png, point_to_mask_png
 from ..cleanup import prune_scene_results
 from ..config import get_settings
 from ..deps import get_provider, get_store
@@ -48,6 +54,36 @@ def _cache_key(keyframe_id: str, region: dict, object_type: str) -> str:
         ensure_ascii=False,
     )
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def _resolve_point_region(image_path: str, region: dict) -> dict:
+    """`PointRegion`(탭 한 점)을 `MaskRegion`(실제 마스크 PNG)으로 바꾼다.
+
+    MobileSAM(D5)이 준비돼 있으면 정밀 마스크를, 아니면 점 중심 정사각형으로
+    대체한다(품질은 낮지만 항상 동작). 변환 후에는 이후 파이프라인
+    (`region_bbox`, `region_to_mask_png`, 크롭, 색감 보정)이 그대로 `mask` 타입으로 처리한다.
+    """
+    settings = get_settings()
+    source_bytes = Path(image_path).read_bytes()
+    width, height = image_size(source_bytes)
+    x_norm, y_norm = region["point"]
+
+    mask_png = point_to_mask_png(
+        source_bytes, x_norm, y_norm,
+        encoder_path=settings.mobilesam_encoder_path,
+        decoder_path=settings.mobilesam_decoder_path,
+    )
+    if mask_png is None:
+        _log.info("MobileSAM 미사용/미가용 → 점(%.3f, %.3f) 중심 bbox 근사로 대체", x_norm, y_norm)
+        mask_png = fallback_box_mask_png(
+            source_bytes, x_norm, y_norm, settings.mobilesam_fallback_box_frac
+        )
+
+    return {
+        "type": "mask",
+        "png": data_url_b64(mask_png),
+        "size": {"width": width, "height": height},
+    }
 
 
 def _job_out(job: dict) -> JobOut:
@@ -311,6 +347,8 @@ def remove_object(
         )
 
     region = body.target.model_dump()
+    if region.get("type") == "point":
+        region = _resolve_point_region(kf["image_path"], region)
     cache_key = _cache_key(body.keyframe_id, region, object_type)
 
     # 중복 호출 방지: 완료됐거나 아직 처리 중인 동일 요청이 있으면 그 job 을 그대로 돌려준다.

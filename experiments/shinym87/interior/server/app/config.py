@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20
 
+    # 점 프롬프트(PointRegion) 사물 선택 — MobileSAM ONNX (encoder + decoder).
+    # 경로가 비어있거나 파일이 없으면 자동으로 bbox 근사(점 중심 정사각형)로 대체한다.
+    # 모델은 저장소에 커밋하지 않는다 (수동 다운로드, docs/workstreams/interior-mobilesam.md 참고).
+    mobilesam_encoder_path: Path | None = None
+    mobilesam_decoder_path: Path | None = None
+    # MobileSAM 입력 없이 점만 왔을 때 대체용 정사각형 한 변 길이 (이미지 짧은 변 대비 비율)
+    mobilesam_fallback_box_frac: float = 0.28
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "interior.db"

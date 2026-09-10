@@ -90,6 +90,53 @@ def test_full_remove_object_flow(client):
     assert again.json()["job_id"] == job_id
 
 
+def test_point_region_resolves_to_mask_without_mobilesam_configured(client):
+    """MobileSAM 미설정(테스트 기본값) 환경에서도 point 요청이 bbox 근사로 처리된다.
+
+    D5: `target.type == "point"` 은 `remove-object` 처리 전에 서버가 `mask` 로
+    바꿔서 이후 파이프라인(캐시 키, changed_region, 크롭)에 넘긴다.
+    """
+    scene_id = client.post("/scenes", json={"device": "android"}).json()["scene_id"]
+    meta = _meta()
+    meta.pop("targetObject", None)
+    upload = client.post(
+        f"/scenes/{scene_id}/keyframes",
+        files={"image": ("kf.jpg", _jpeg(), "image/jpeg")},
+        data={"meta": json.dumps(meta)},
+    )
+    keyframe_id = upload.json()["keyframe_id"]
+
+    started = client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={
+            "keyframe_id": keyframe_id,
+            "object_type": "tv",
+            "target": {"type": "point", "point": [0.5, 0.5]},
+        },
+    )
+    assert started.status_code == 202, started.text
+    job_id = started.json()["job_id"]
+
+    job = client.get(f"/scenes/{scene_id}/jobs/{job_id}").json()
+    assert job["status"] == "done", job
+    # changed_region 은 프로바이더가 실제 변경한 사각 범위(항상 bbox 로 보고).
+    assert job["changed_region"]["type"] == "bbox"
+    # 점(point) 자체는 remove-object 처리 전에 mask 로 변환되어 저장/캐시된다.
+    objs = client.get(f"/scenes/{scene_id}/objects").json()
+    assert objs[-1]["region"]["type"] == "mask"
+
+    # 같은 점 재요청은 (변환된 mask 도 동일하므로) 캐시된 job 을 재사용한다.
+    again = client.post(
+        f"/scenes/{scene_id}/remove-object",
+        json={
+            "keyframe_id": keyframe_id,
+            "object_type": "tv",
+            "target": {"type": "point", "point": [0.5, 0.5]},
+        },
+    )
+    assert again.json()["job_id"] == job_id
+
+
 def _new_scene_with_keyframe(client) -> tuple[str, str]:
     scene_id = client.post("/scenes", json={"device": "t"}).json()["scene_id"]
     meta = _meta()
