@@ -44,8 +44,8 @@ PHASE 0 산출물은 `docs/` 에 있다.
 | 대표 이미지 캡처 / 변경 전·후 비교 | `keyframe/BackgroundKeyframe.kt` (PHASE 5 데모에서 UI 숨김) |
 | 제거할 물체 영역 드래그 지정 (bbox) + 선택 취소 | `remove/BboxSelectionView.kt`, `RemovalController.clearSelection()` |
 | 지울 사물 종류 선택 (TV/소파/테이블/의자/선반) → 요청 `objectType` 반영 | `objectTypeSpinner`, `RemovalController.selectedObjectType()` |
-| 키프레임 캡처 + 서버 호출 (`/scenes` `/keyframes` `/remove-object`) | `remove/RemovalController.kt`, `remove/InteriorApiClient.kt` |
-| job 폴링 → 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
+| 키프레임 캡처 + 온디바이스 사물 마스크/Telea 복원 | `remove/RemovalController.kt`, `remove/LocalRemovalProcessor.kt` |
+| 복원 결과 이미지를 벽 quad 로 적용 + "삭제 전/후" 전환 | `remove/RemovalController.kt` |
 
 서버 주소는 **화면 상단 입력창**에서 지정한다(값은 저장돼 유지). 실기기에서는
 `localhost` 가 아니라 서버 PC 의 LAN IP(예 `http://192.168.0.10:8000`)를 넣어야 하고,

@@ -9,15 +9,12 @@ import android.os.Looper
 import android.util.Log
 import android.view.PixelCopy
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import com.google.ar.core.Anchor
 import com.google.ar.core.HitResult
 import com.google.ar.core.Plane
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingState
-import com.hackathon.interior.R
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
 import io.github.sceneview.ar.ARSceneView
@@ -41,7 +38,7 @@ import kotlin.math.acos
 import kotlin.math.sqrt
 
 /**
- * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 서버 호출 → job 폴링 →
+ * 사물(TV 등) 제거 흐름: 영역 지정 → 키프레임 캡처 → 온디바이스 마스크·Telea 복원 →
  * 결과 이미지를 벽 평면에 붙이기 → "삭제 전/후" 전환.
  *
  * PHASE 1 목표는 흐름 연결이다. 3D 배치의 방향/스케일은 대략치이며 실기기에서 다듬는다.
@@ -94,27 +91,13 @@ class RemovalController(
     private var coverFrameLog = 0L
 
     private var busy = false
+    private val localRemoval = LocalRemovalProcessor()
 
     /** PHASE 4: 삭제 요청 시점의 "원래 사물" 스냅샷(이동 기능이 재사용). */
     private var capturedObjectBitmap: Bitmap? = null
     private var originalObjectPose: Pose? = null
 
-    /** 결과 quad 위치의 이동 평균값(지터 완화). onFrame 에서 갱신. */
-    private var smoothedPos: FloatArray? = null
-
     init {
-        // 0번은 "선택 안 함" 안내 항목. 사용자가 실제 종류를 고르기 전엔 삭제 요청을 막는다.
-        binding.objectTypeSpinner.adapter = ArrayAdapter(
-            activity,
-            R.layout.spinner_item_light,
-            listOf(SPINNER_PROMPT) + OBJECT_TYPES.map { it.second },
-        ).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        binding.objectTypeSpinner.setSelection(0)
-        binding.objectTypeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = refreshRequestButton()
-            override fun onNothingSelected(p: AdapterView<*>?) = refreshRequestButton()
-        }
-
         binding.bboxSelectionView.onRectFinalized = ::onRectSelected
         binding.btnTvSelectMode.setOnClickListener { toggleSelectionMode() }
         binding.btnClearSelection.setOnClickListener { clearSelection() }
@@ -123,16 +106,9 @@ class RemovalController(
         refreshRequestButton()
     }
 
-    /** 스피너에서 고른 사물의 서버 키(tv / sofa / table / other …). 미선택이면 null. */
-    private fun selectedObjectTypeOrNull(): String? {
-        val pos = binding.objectTypeSpinner.selectedItemPosition
-        return OBJECT_TYPES.getOrNull(pos - 1)?.first   // pos 0 = SPINNER_PROMPT
-    }
-
-    /** bbox 도 있고 사물 종류도 골랐을 때만 "삭제 요청" 을 활성화한다. */
+    /** 촬영용 삭제는 선택 영역만으로 실행한다. 사물 종류 추정은 온디바이스 마스크가 맡는다. */
     private fun refreshRequestButton() {
-        binding.btnRequestRemove.isEnabled =
-            !busy && bboxNorm != null && selectedObjectTypeOrNull() != null
+        binding.btnRequestRemove.isEnabled = !busy && bboxNorm != null
     }
 
     // -------------------------------------------------------------- 1. 영역 지정 (P1-2)
@@ -143,8 +119,8 @@ class RemovalController(
             selectionMode = true
             binding.bboxSelectionView.isSelecting = true
             binding.bboxSelectionView.visibility = View.VISIBLE
-            binding.btnTvSelectMode.text = "선택 모드 끄기"
-            binding.btnClearSelection.visibility = View.VISIBLE
+            binding.btnTvSelectMode.text = "선택 취소"
+            binding.btnClearSelection.visibility = View.GONE
             status(
                 "지우고 싶은 사물에 딱 맞게 사각형을 그리면,\n" +
                     "결과 품질과 크기 측정 정확도가 모두 좋아집니다."
@@ -154,8 +130,8 @@ class RemovalController(
             binding.bboxSelectionView.isSelecting = false
             val hasSelection = bboxNorm != null
             binding.bboxSelectionView.visibility = if (hasSelection) View.VISIBLE else View.GONE
-            binding.btnTvSelectMode.text = "영역 선택 모드"
-            binding.btnClearSelection.visibility = if (hasSelection) View.VISIBLE else View.GONE
+            binding.btnTvSelectMode.text = "삭제할 사물 선택"
+            binding.btnClearSelection.visibility = View.GONE
             status(if (hasSelection) "영역 지정됨 · '삭제 요청'을 누르세요" else "")
         }
     }
@@ -172,7 +148,7 @@ class RemovalController(
         binding.bboxSelectionView.isSelecting = false
         binding.bboxSelectionView.clear()
         binding.bboxSelectionView.visibility = View.GONE
-        binding.btnTvSelectMode.text = "영역 선택 모드"
+        binding.btnTvSelectMode.text = "삭제할 사물 선택"
         binding.btnClearSelection.visibility = View.GONE
         refreshRequestButton()
         clearResult()
@@ -199,14 +175,9 @@ class RemovalController(
         binding.bboxSelectionView.isSelecting = false
         binding.bboxSelectionView.visibility = View.VISIBLE   // 그린 사각형은 확인용으로 유지
         binding.btnTvSelectMode.text = "영역 선택 모드"
-        binding.btnClearSelection.visibility = View.VISIBLE
+        binding.btnClearSelection.visibility = View.GONE
         refreshRequestButton()
-        status(
-            if (selectedObjectTypeOrNull() == null)
-                "영역 지정됨 · 위에서 '지울 사물' 종류를 고르면 삭제 요청이 활성화됩니다"
-            else
-                "영역 지정됨 · '삭제 요청'을 누르세요 (다시 그리려면 '영역 선택 모드')"
-        )
+        status("영역 지정됨 · 사물 지우기를 누르세요")
 
         // 선택 영역이 화면의 큰 비율을 덮으면 겹친 가구가 포함됐을 수 있다.
         // 삭제를 막지는 않고 경고만 잠깐 띄운다 (진단 실험: 겹침 시 결과 불안정).
@@ -273,7 +244,7 @@ class RemovalController(
         )
     }
 
-    // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
+    // ----------------------------------------------- 2·3. 캡처 → 온디바이스 복원 → 적용
 
     private fun requestRemoval() {
         if (busy) return
@@ -281,11 +252,7 @@ class RemovalController(
             status("먼저 '영역 선택 모드'로 지울 영역을 지정하세요")
             return
         }
-        val objectType = selectedObjectTypeOrNull() ?: run {
-            status("지울 사물 종류를 먼저 선택하세요 (목록에 없으면 '기타/소품')")
-            return
-        }
-        val client = InteriorApiClient(serverBaseUrl())
+        val objectType = "other"
         busy = true
         setControlsEnabled(false)
         status("현재 화면 캡처 중…")
@@ -302,17 +269,38 @@ class RemovalController(
                 BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)?.let { cropNormalized(it, bbox) }
             }.getOrNull()
             originalObjectPose = wallAnchor?.pose
-            val meta = buildMetaJson(imageW, imageH, bbox, objectType)
-            scope.launch {
-                try {
-                    runFlow(client, jpeg, meta, bbox, objectType)
-                } catch (e: Exception) {
-                    status("실패: ${e.message ?: e.javaClass.simpleName} · 서버 주소/같은 Wi-Fi/방화벽 확인")
-                } finally {
+            val source = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+            if (source == null) {
+                status("캡처 이미지 디코드 실패")
+                busy = false
+                setControlsEnabled(true)
+                return@captureSceneJpeg
+            }
+            status("사물 윤곽 분석·즉시 복원 중…")
+            localRemoval.remove(
+                source = source,
+                bbox = bbox,
+                onSuccess = { result ->
+                    result.removedObjectBitmap?.let { capturedObjectBitmap = it }
+                    applyResult(result.bitmap, bbox)
+                    onRemovalApplied(
+                        "local-${System.currentTimeMillis()}", null, objectType,
+                        capturedObjectBitmap, originalObjectPose, bbox,
+                        patchWidthM, patchHeightM,
+                    )
+                    status(
+                        "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
+                            if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
+                    )
                     busy = false
                     setControlsEnabled(true)
-                }
-            }
+                },
+                onFailure = { error ->
+                    status("로컬 복원 실패: ${error.message ?: error.javaClass.simpleName}")
+                    busy = false
+                    setControlsEnabled(true)
+                },
+            )
         }
     }
 
@@ -390,11 +378,11 @@ class RemovalController(
         val patch = EdgeFade.feather(cropNormalized(full, region))
 
         // 전체화면 프리뷰용 이미지는 앵커 유무와 무관하게 항상 준비(기본은 꺼짐).
-        binding.resultOverlay.setImageBitmap(full)
+        binding.resultOverlay.setImageDrawable(null)
         binding.resultOverlay.visibility = View.GONE
         showingAfter = false
         binding.btnToggleRemoval.text = "삭제 결과 보기"
-        binding.btnToggleRemoval.visibility = View.VISIBLE
+        binding.btnToggleRemoval.visibility = View.GONE
 
         // 커버 quad 앵커: 선택 시점 것이 있으면 그대로, 없으면 지금(결과 도착 시점) 사물
         // 영역에서 재시도 — 대개 이 무렵엔 평면이 잡혀 있다.
@@ -465,7 +453,6 @@ class RemovalController(
         }
         sceneView.addChildNode(node)
         resultNode = node
-        smoothedPos = null
         awaitingCoverAnchor = false
         pendingCoverPatch = null
         pendingCoverRegion = null
@@ -508,53 +495,9 @@ class RemovalController(
             }
         }
 
-        val node = resultNode ?: return
-        val anchor = wallAnchor ?: return
-        val ts = anchor.trackingState
-        if (ts == TrackingState.STOPPED) {
-            node.isVisible = false
-            return
-        }
-        if (ts != TrackingState.TRACKING) return  // PAUSED: 마지막 위치 유지
-
-        val p = anchor.pose
-        val prev = smoothedPos
-        val nx: Float
-        val ny: Float
-        val nz: Float
-        if (prev == null) {
-            nx = p.tx(); ny = p.ty(); nz = p.tz()
-        } else {
-            nx = prev[0] + (p.tx() - prev[0]) * SMOOTH_ALPHA
-            ny = prev[1] + (p.ty() - prev[1]) * SMOOTH_ALPHA
-            nz = prev[2] + (p.tz() - prev[2]) * SMOOTH_ALPHA
-        }
-        smoothedPos = floatArrayOf(nx, ny, nz)
-
-        val quat = FloatArray(4)
-        p.getRotationQuaternion(quat, 0)
-        node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
-        node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
-
-        // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
-        // 카메라의 위치·회전 차이가 클수록, 평면 이미지 1장으론 시차(parallax)를 못 살려
-        // 실제 사물과 quad 가 어긋나 보인다(반투명 잔상). anchorΔ 는 앵커 자체 표류.
-        if (++coverFrameLog % 60L == 0L) {
-            val camNow = space.latestFrame?.camera?.pose
-            val built = coverCamPoseAtBuild
-            if (camNow != null && built != null) {
-                Log.d(
-                    TAG,
-                    ("[cover B] 커버 생성시점 대비 카메라 Δ이동=%.2fm Δ회전=%.1f° · " +
-                        "현재 카메라→커버앵커=%.2fm · anchorΔ(pose vs 스무딩)=%.3fm · track=%s").format(
-                        distance(camNow, built), quatAngleDeg(camNow, built),
-                        distance(camNow, anchor.pose),
-                        distance(anchor.pose, Pose(floatArrayOf(nx, ny, nz), quat)),
-                        ts,
-                    ),
-                )
-            }
-        }
+        // 결과 patch는 생성 시점의 월드 pose에 그대로 둔다. 매 프레임 앵커 pose를
+        // 다시 쓰면 재추적 보정이 화면상 움직임으로 보여 삭제 영역이 흔들린다.
+        resultNode?.isVisible = true
     }
 
     /** 두 pose 회전의 각도 차(도). 커버 quad 재투영 어긋남 진단용. */
@@ -592,7 +535,6 @@ class RemovalController(
             runCatching { node.destroy() }
         }
         resultNode = null
-        smoothedPos = null
         awaitingCoverAnchor = false
         pendingCoverPatch = null
         pendingCoverRegion = null
@@ -739,8 +681,11 @@ class RemovalController(
     private fun setControlsEnabled(enabled: Boolean) {
         binding.btnTvSelectMode.isEnabled = enabled
         binding.btnClearSelection.isEnabled = enabled
-        binding.objectTypeSpinner.isEnabled = enabled
         refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
+    }
+
+    fun release() {
+        localRemoval.close()
     }
 
     private companion object {

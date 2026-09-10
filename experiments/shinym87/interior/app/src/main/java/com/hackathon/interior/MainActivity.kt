@@ -159,7 +159,6 @@ class MainActivity : AppCompatActivity() {
         binding.settingsScreen.visibility = View.GONE
         binding.arTopPanel.visibility = View.VISIBLE
         binding.arPrimaryActions.visibility = View.VISIBLE
-        binding.removalTypeRow.visibility = View.VISIBLE
         binding.removalSelectionRow.visibility = View.VISIBLE
         binding.removalRequestRow.visibility = View.VISIBLE
         binding.removalStatusText.visibility = View.VISIBLE
@@ -230,6 +229,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (::removal.isInitialized) removal.release()
         if (::depthPlacement.isInitialized) depthPlacement.release()
         super.onDestroy()
     }

@@ -273,34 +273,6 @@
                 android:orientation="vertical"
                 android:visibility="gone"
                 android:paddingTop="8dp">
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="1  지울 사물을 고르세요"
-                    android:textColor="#F8F5F0"
-                    android:textSize="15sp"
-                    android:paddingVertical="6dp" />
-                <LinearLayout
-                    android:id="@+id/removalTypeRow"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="사물 종류"
-                        android:textColor="#F8F5F0"
-                        android:textSize="14sp"
-                        android:layout_marginEnd="12dp" />
-                    <Spinner
-                        android:id="@+id/objectTypeSpinner"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="48dp"
-                        android:background="#403A34"
-                        android:popupBackground="#FFFFFF" />
-                </LinearLayout>
                 <LinearLayout
                     android:id="@+id/removalSelectionRow"
                     android:layout_width="match_parent"
@@ -310,7 +282,7 @@
                     <Button
                         android:id="@+id/btnTvSelectMode"
                         style="@style/WorkspaceButton"
-                        android:text="2  영역 선택" />
+                        android:text="삭제할 사물 선택" />
                     <Button
                         android:id="@+id/btnClearSelection"
                         style="@style/WorkspaceButton"
@@ -326,7 +298,7 @@
                     <Button
                         android:id="@+id/btnRequestRemove"
                         style="@style/WorkspaceButton"
-                        android:text="3  사물 지우기"
+                        android:text="사물 지우기"
                         android:enabled="false"
                         app:backgroundTint="@color/workspace_primary_tint"
                         android:textColor="@color/workspace_primary_text" />
