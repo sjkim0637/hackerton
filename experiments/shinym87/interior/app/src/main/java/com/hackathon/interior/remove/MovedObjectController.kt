@@ -510,7 +510,7 @@ class MovedObjectController(
      *   up 에 맞춰 roll 을 제거한다(hitPose 와 같은 "+Y = 법선" 규약이라 자식 회전은 그대로).
      */
     private fun uprightPose(position: FloatArray, normalIn: FloatArray, wantVertical: Boolean): Pose {
-        if (!wantVertical) return Pose(position, IDENTITY_QUAT)
+        if (!wantVertical) return Pose(position, PoseMath.IDENTITY_QUAT)
         val n = floatArrayOf(normalIn[0], 0f, normalIn[2])   // 수평 투영 = 완전 수직 벽 강제
         var len = sqrt(n[0] * n[0] + n[2] * n[2])
         if (len < 1e-4f) { n[0] = 0f; n[2] = 1f; len = 1f }
@@ -521,51 +521,7 @@ class MovedObjectController(
                 n[0] = -n[0]; n[2] = -n[2]
             }
         }
-        val up = floatArrayOf(0f, 1f, 0f)
-        val xAxis = normalize3(cross3(up, n))         // 수평, in-plane
-        val zAxis = normalize3(cross3(n, xAxis))      // ≈ 세계 up, in-plane
-        return Pose(position, quatFromBasis(xAxis, n, zAxis))
-    }
-
-    private fun cross3(a: FloatArray, b: FloatArray) = floatArrayOf(
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
-
-    private fun normalize3(v: FloatArray): FloatArray {
-        val l = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-        return if (l < 1e-6f) floatArrayOf(0f, 0f, 1f) else floatArrayOf(v[0] / l, v[1] / l, v[2] / l)
-    }
-
-    /** 정규직교 열벡터 3개(로컬 X/Y/Z 축)로 이뤄진 회전 → 쿼터니언 [x,y,z,w]. */
-    private fun quatFromBasis(x: FloatArray, y: FloatArray, z: FloatArray): FloatArray {
-        val m00 = x[0]; val m10 = x[1]; val m20 = x[2]
-        val m01 = y[0]; val m11 = y[1]; val m21 = y[2]
-        val m02 = z[0]; val m12 = z[1]; val m22 = z[2]
-        val tr = m00 + m11 + m22
-        val q = FloatArray(4)
-        when {
-            tr > 0f -> {
-                val s = sqrt(tr + 1f) * 2f
-                q[3] = 0.25f * s; q[0] = (m21 - m12) / s; q[1] = (m02 - m20) / s; q[2] = (m10 - m01) / s
-            }
-            m00 > m11 && m00 > m22 -> {
-                val s = sqrt(1f + m00 - m11 - m22) * 2f
-                q[3] = (m21 - m12) / s; q[0] = 0.25f * s; q[1] = (m01 + m10) / s; q[2] = (m02 + m20) / s
-            }
-            m11 > m22 -> {
-                val s = sqrt(1f + m11 - m00 - m22) * 2f
-                q[3] = (m02 - m20) / s; q[0] = (m01 + m10) / s; q[1] = 0.25f * s; q[2] = (m12 + m21) / s
-            }
-            else -> {
-                val s = sqrt(1f + m22 - m00 - m11) * 2f
-                q[3] = (m10 - m01) / s; q[0] = (m02 + m20) / s; q[1] = (m12 + m21) / s; q[2] = 0.25f * s
-            }
-        }
-        val l = sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
-        if (l > 1e-6f) { q[0] /= l; q[1] /= l; q[2] /= l; q[3] /= l }
-        return q
+        return Pose(position, PoseMath.uprightWallQuatFromNormal(n))
     }
 
     // ------------------------------------------------------ 서버: 저장 / 복원 / 취소
@@ -867,9 +823,6 @@ class MovedObjectController(
 
         /** 손을 뗀 뒤 최종 위치로 부드럽게 안착시키며 보간하는 프레임 수. */
         const val SETTLE_FRAMES = 8
-
-        /** 회전 없음 쿼터니언 (x,y,z,w). 바닥 배치의 부모 앵커에 회전을 안 줄 때. */
-        val IDENTITY_QUAT = floatArrayOf(0f, 0f, 0f, 1f)
         val OBJECT_LABELS = mapOf(
             "tv" to "TV", "sofa" to "소파", "table" to "테이블",
             "chair" to "의자", "shelf" to "선반", "other" to "사물",

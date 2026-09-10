@@ -611,8 +611,6 @@ class RemovalController(
         }
         smoothedPos = floatArrayOf(nx, ny, nz)
 
-        val quat = FloatArray(4)
-        p.getRotationQuaternion(quat, 0)
         if (coverIsBillboard) {
             // 빌보드: 부모는 **위치만**(회전 항등), 자식 quad 를 카메라 회전 전체(pitch/roll
             // 포함)에 직접 맞춘다 — FurnitureController.billboard() 의 라벨 처리와 동일.
@@ -620,7 +618,10 @@ class RemovalController(
             node.pose = Pose(floatArrayOf(nx, ny, nz), IDENTITY_QUAT)
             resultImageNode?.worldQuaternion = sceneView.cameraNode.worldQuaternion
         } else {
-            node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
+            // 벽(수직 평면): 앵커의 원시 회전은 in-plane 축이 임의라 quad 가 45° 기울어졌다.
+            // 법선(+Y)은 유지하고 in-plane 축을 세계 up 에 맞춘 회전으로 세운다 → 항상 반듯함.
+            val uprightQuat = PoseMath.uprightWallQuat(p, space.latestFrame?.camera?.pose)
+            node.pose = Pose(floatArrayOf(nx, ny, nz), uprightQuat)
         }
         node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
 
@@ -631,6 +632,7 @@ class RemovalController(
             val camNow = space.latestFrame?.camera?.pose
             val built = coverCamPoseAtBuild
             if (camNow != null && built != null) {
+                val quat = FloatArray(4).also { p.getRotationQuaternion(it, 0) }
                 Log.d(
                     TAG,
                     ("[cover B] 커버 생성시점 대비 카메라 Δ이동=%.2fm Δ회전=%.1f° · " +

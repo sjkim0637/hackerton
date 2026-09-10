@@ -13,6 +13,38 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 벽걸이 TV 삭제 가림막이 45° 기울어짐 — 커버 quad 수직 정렬 (2026-09-11)
+
+Branch `integration-interior-demo`. 실기기: 벽걸이 TV 삭제 시 가림막(커버 quad)이
+TV 를 똑바로 안 가리고 **왼쪽으로 45° 기울어짐**.
+
+### 원인 — `RemovalController.onFrame` 벽(비-빌보드) 경로가 앵커 원시 회전을 그대로 씀
+
+`applyResult` 에서 벽(수직 평면) + 앵커 있음 → `coverIsBillboard = false`. 이 경로의
+`onFrame` 은 `node.pose = Pose(smoothedPos, quat)` 로 **앵커 pose 의 원시 회전**을
+넣는다. ARCore 평면 앵커는 로컬 +Y = 법선이지만 **in-plane 축(±X/±Z)이 임의**라
+(hitTest 지점/각도마다 달라짐), 자식 `Rotation(x=-90)` 와 합쳐지면 quad 가 roll 돼
+45° 기울어 보인다. 이동 사물에서 방금 고친 것과 **같은 근본 원인**(원시 hitPose/앵커
+in-plane 축이 중력 정렬 안 됨).
+
+### 수정
+
+- 새 공유 헬퍼 `remove/PoseMath.kt` — `cross`/`normalize`/`quatFromBasis`(행렬→쿼터니언,
+  Shepperd) + `uprightWallQuatFromNormal(normal)` + `uprightWallQuat(anchorPose, towardCamera?)`.
+  `MovedObjectController` 의 사설 헬퍼 3개(+ companion `IDENTITY_QUAT`)를 여기로 이관해
+  중복 제거(동작 동일).
+- `RemovalController.onFrame` 비-빌보드 분기:
+  `node.pose = Pose(smoothedPos, PoseMath.uprightWallQuat(anchor.pose, 카메라pose))`.
+  앵커 +Y(법선)는 유지하고 수평 투영 후 in-plane 축을 세계 up 에 맞춘 회전으로 세운다
+  → **자식 `Rotation(x=-90)` 규약 그대로**, quad 는 항상 수평·수직. 법선이 거의 수직
+  (벽 아님)이면 원본 회전 유지. 빌보드(바닥/테이블) 경로는 손 안 댐.
+
+### 빌드
+
+`JAVA_HOME=...\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug` → **BUILD SUCCESSFUL**
+(57s). APK: `experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk`.
+실기기에서 벽걸이 TV 삭제 시 가림막이 반듯하게 서는지 확인 대기.
+
 ## 이동한 사물 이미지 — 수직 정렬(버튼 + 드래그 자동) + 드래그 스무딩 (2026-09-10)
 
 Branch `integration-interior-demo`. 리포트: 드래그로 옮긴 사물(TV 등) 이미지가 손
