@@ -84,8 +84,8 @@ class MainActivity : AppCompatActivity() {
             serverBaseUrl = { settings.serverBaseUrl },
             onBeforeCapture = beforeCapture,
             onAfterCapture = afterCapture,
-            onRemovalApplied = { sid, jid, type, bmp, pose, src, w, h ->
-                moved.arm(sid, jid, type, bmp, pose, src, w, h)
+            onRemovalApplied = { sid, type, object3d, pose, src ->
+                moved.armRgbd(sid, type, object3d, pose, src)
             },
             onRemovalCleared = { moved.disarm() },
         )

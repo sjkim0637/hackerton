@@ -15,6 +15,8 @@ import com.google.ar.core.Pose
 import com.hackathon.interior.ar.ArSpaceController
 import com.hackathon.interior.databinding.ActivityMainBinding
 import com.hackathon.interior.furniture.LabelRenderer
+import com.hackathon.interior.rgbd.PlaceableObject
+import com.hackathon.interior.rgbd.RgbdMeshNode
 import io.github.sceneview.ar.ARSceneView
 import io.github.sceneview.ar.arcore.createAnchorOrNull
 import io.github.sceneview.ar.node.AnchorNode
@@ -23,6 +25,7 @@ import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Scale
 import io.github.sceneview.math.Size
 import io.github.sceneview.node.ImageNode
+import io.github.sceneview.node.Node
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -70,6 +73,7 @@ class MovedObjectController(
 
     private var objectType = "other"
     private var objectBitmap: Bitmap? = null
+    private var rgbdObject: PlaceableObject? = null
     private var originalPose: Pose? = null           // 삭제 시점의 원래 위치
     private var baseW = 0.6f
     private var baseH = 0.6f
@@ -78,6 +82,8 @@ class MovedObjectController(
 
     private var node: AnchorNode? = null
     private var imageNode: ImageNode? = null
+    private var meshNode: RgbdMeshNode? = null
+    private var visualNode: Node? = null
     private var labelNode: ImageNode? = null
     private var onVertical = false
 
@@ -110,6 +116,17 @@ class MovedObjectController(
     // ------------------------------------------------------------- arm / disarm
 
     /** 삭제 완료 시점에 호출. 이동할 사물을 기억하고 **바로 드래그 가능한 마커**를 띄운다. */
+    fun armRgbd(
+        sceneId: String,
+        objectType: String,
+        object3d: PlaceableObject,
+        originalPose: Pose,
+        sourceRect: FloatArray?,
+    ) {
+        rgbdObject = object3d
+        arm(sceneId, null, objectType, object3d.texture, originalPose, sourceRect, object3d.widthMeters, object3d.heightMeters)
+    }
+
     fun arm(
         sceneId: String,
         jobId: String?,
@@ -120,6 +137,7 @@ class MovedObjectController(
         widthM: Float,
         heightM: Float,
     ) {
+        if (jobId != null) rgbdObject = null
         clearMovedNode()
         currentSceneId = sceneId
         currentJobId = jobId
@@ -366,7 +384,9 @@ class MovedObjectController(
 
     /** 변경이 잦아들면(디바운스) 한 번만 저장한다. 핀치처럼 연속 이벤트를 합친다. */
     private fun scheduleSave() {
-        if (currentSceneId == null || node == null) return
+        // RGB-D captures are local objects. They must not recreate the retired
+        // server placement flow merely because the user drags them.
+        if (currentSceneId == null || currentJobId == null || node == null) return
         handler.removeCallbacks(saveDebounce)
         handler.postDelayed(saveDebounce, SAVE_DEBOUNCE_MS)
     }
@@ -490,11 +510,20 @@ class MovedObjectController(
         clearMovedNode()
         this.onVertical = onVertical
 
-        val img = ImageNode(
-            materialLoader = sceneView.materialLoader,
-            bitmap = objectBitmap ?: EdgeFade.feather(placeholderBitmap()),
-            size = Size(baseW, baseH),
-        ).apply { isTouchable = false }
+        val captured = rgbdObject
+        val visual: Node = if (captured != null) {
+            RgbdMeshNode(sceneView, captured).apply {
+                // Move the capture-camera coordinate mesh so its physical pivot is
+                // at the AnchorNode origin. Dragging now moves a depth surface.
+                position = Position(-captured.pivotMeters[0], -captured.pivotMeters[1], -captured.pivotMeters[2])
+            }
+        } else {
+            ImageNode(
+                materialLoader = sceneView.materialLoader,
+                bitmap = objectBitmap ?: EdgeFade.feather(placeholderBitmap()),
+                size = Size(baseW, baseH),
+            ).apply { isTouchable = false }
+        }
 
         val lbl = ImageNode(
             materialLoader = sceneView.materialLoader,
@@ -505,17 +534,20 @@ class MovedObjectController(
         val n = AnchorNode(sceneView.engine, anchor).apply {
             isPositionEditable = false
             updateAnchorPose = true
-            addChildNode(img)
+            addChildNode(visual)
             addChildNode(lbl)
         }
         sceneView.addChildNode(n)
 
         node = n
-        imageNode = img
+        imageNode = visual as? ImageNode
+        meshNode = visual as? RgbdMeshNode
+        visualNode = visual
         labelNode = lbl
         awaitingPlane = false
         markerCamPoseAtCreate = space.latestFrame?.camera?.pose
-        enableButtons(home = originalPose != null, adjust = true, restore = true, undo = true, clear = true)
+        val persisted = currentJobId != null
+        enableButtons(home = originalPose != null, adjust = true, restore = persisted, undo = persisted, clear = true)
         applyChildTransforms()
         Log.d(
             TAG,
@@ -551,7 +583,7 @@ class MovedObjectController(
         // 미세 조정용 임시 노브 — 둘 다 1.0 이면 baseW×baseH(실측 미터) 그대로 그린다.
         val disp = scaleF * MARKER_SCALE * MOVED_SCALE_CORRECTION
         val h = baseH * disp
-        imageNode?.let {
+        visualNode?.let {
             it.scale = Scale(disp)
             it.rotation = if (onVertical) Rotation(-90f, 0f, rotDeg) else Rotation(0f, rotDeg, 0f)
         }
@@ -571,6 +603,8 @@ class MovedObjectController(
         }
         node = null
         imageNode = null
+        meshNode = null
+        visualNode = null
         labelNode = null
         dragging = false
         val hasScene = currentSceneId != null
