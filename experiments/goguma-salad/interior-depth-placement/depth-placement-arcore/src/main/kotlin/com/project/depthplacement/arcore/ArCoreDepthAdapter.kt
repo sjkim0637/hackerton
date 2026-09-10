@@ -1,6 +1,7 @@
 package com.project.depthplacement.arcore
 
 import android.media.Image
+import android.graphics.Bitmap
 import com.google.ar.core.Config
 import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Frame
@@ -22,6 +23,15 @@ data class CameraPreviewFrame(
     val width: Int,
     val height: Int,
     val argb: IntArray,
+    val timestampNanos: Long,
+)
+
+/**
+ * Sensor-coordinate RGB frame. Unlike [CameraPreviewFrame], this is not rotated or
+ * resized: its pixels line up with ARCore IMAGE_PIXELS and camera intrinsics.
+ */
+data class CameraRgbFrame(
+    val bitmap: Bitmap,
     val timestampNanos: Long,
 )
 
@@ -130,6 +140,24 @@ object ArCoreDepthAdapter {
         }
     }
 
+    /**
+     * Copies the CPU camera image without presentation rotation. Consumers that also
+     * use depth must use this method so RGB, MobileSAM masks and depth share the
+     * ARCore camera-image coordinate system.
+     */
+    fun acquireCameraRgb(frame: Frame): CameraRgbFrame? {
+        val image = try { frame.acquireCameraImage() } catch (_: NotYetAvailableException) { return null }
+        try {
+            val width = image.width
+            val height = image.height
+            val pixels = IntArray(width * height)
+            fillArgb(image, pixels, width, height, rotatePortrait = false)
+            return CameraRgbFrame(Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888), image.timestamp)
+        } finally {
+            image.close()
+        }
+    }
+
     /** Converts Android view pixels to the depth image pixel coordinate used by evaluatePlacement. */
     fun viewToDepth(frame: Frame, viewX: Float, viewY: Float, depthWidth: Int, depthHeight: Int): Pair<Float, Float> {
         val view = floatArrayOf(viewX, viewY)
@@ -146,6 +174,37 @@ object ArCoreDepthAdapter {
             for (y in 0 until image.height) for (x in 0 until image.width) {
                 result[y * image.width + x] = buffer.getShort(y * plane.rowStride + x * plane.pixelStride)
             }
+        }
+    }
+
+    private fun fillArgb(image: Image, out: IntArray, outputWidth: Int, outputHeight: Int, rotatePortrait: Boolean) {
+        val sourceWidth = image.width
+        val sourceHeight = image.height
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+        val yBuffer = yPlane.buffer.duplicate()
+        val uBuffer = uPlane.buffer.duplicate()
+        val vBuffer = vPlane.buffer.duplicate()
+        for (outY in 0 until outputHeight) for (outX in 0 until outputWidth) {
+            val sourceX: Int
+            val sourceY: Int
+            if (rotatePortrait) {
+                sourceX = outY.coerceAtMost(sourceWidth - 1)
+                sourceY = (sourceHeight - 1 - outX).coerceAtLeast(0)
+            } else {
+                sourceX = outX
+                sourceY = outY
+            }
+            val y = yBuffer.get(sourceY * yPlane.rowStride + sourceX * yPlane.pixelStride).toInt() and 0xff
+            val chromaX = sourceX / 2
+            val chromaY = sourceY / 2
+            val u = (uBuffer.get(chromaY * uPlane.rowStride + chromaX * uPlane.pixelStride).toInt() and 0xff) - 128
+            val v = (vBuffer.get(chromaY * vPlane.rowStride + chromaX * vPlane.pixelStride).toInt() and 0xff) - 128
+            val r = (y + 1.402f * v).toInt().coerceIn(0, 255)
+            val g = (y - 0.344136f * u - 0.714136f * v).toInt().coerceIn(0, 255)
+            val b = (y + 1.772f * u).toInt().coerceIn(0, 255)
+            out[outY * outputWidth + outX] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
         }
     }
 

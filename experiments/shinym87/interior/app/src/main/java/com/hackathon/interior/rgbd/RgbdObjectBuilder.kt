@@ -50,7 +50,7 @@ object RgbdObjectBuilder {
             id = "rgbd-${snapshot.timestampNanos}",
             sourceType = PlaceableObject.SourceType.RGBD,
             mesh = RgbdMesh(positions.toFloatArray(), uvs.toFloatArray(), indices.toIntArray()),
-            texture = snapshot.rgbFrame,
+            texture = maskedTexture(snapshot.rgbFrame, snapshot.mask),
             widthMeters = max(0.02f, bounds[3] - bounds[0]),
             heightMeters = max(0.02f, bounds[4] - bounds[1]),
             depthMeters = max(0.02f, bounds[5] - bounds[2]),
@@ -65,6 +65,19 @@ object RgbdObjectBuilder {
         val mx = (x.toLong() * mask.width / depthW).toInt().coerceIn(0, mask.width - 1)
         val my = (y.toLong() * mask.height / depthH).toInt().coerceIn(0, mask.height - 1)
         return (mask.getPixel(mx, my) ushr 24) > 96 || (mask.getPixel(mx, my) and 0x00ffffff) != 0
+    }
+
+    private fun maskedTexture(rgb: Bitmap, mask: Bitmap): Bitmap {
+        val pixels = IntArray(rgb.width * rgb.height)
+        rgb.getPixels(pixels, 0, rgb.width, 0, 0, rgb.width, rgb.height)
+        for (y in 0 until rgb.height) for (x in 0 until rgb.width) {
+            val alpha = mask.getPixel(
+                (x.toLong() * mask.width / rgb.width).toInt().coerceIn(0, mask.width - 1),
+                (y.toLong() * mask.height / rgb.height).toInt().coerceIn(0, mask.height - 1),
+            ) ushr 24
+            pixels[y * rgb.width + x] = (alpha shl 24) or (pixels[y * rgb.width + x] and 0x00ffffff)
+        }
+        return Bitmap.createBitmap(pixels, rgb.width, rgb.height, Bitmap.Config.ARGB_8888)
     }
 
     private fun bounds(p: List<Float>): FloatArray {
