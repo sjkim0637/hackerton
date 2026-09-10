@@ -64,6 +64,18 @@ class MovedObjectController(
     /** 마커를 아직 못 띄운 상태(평면 미인식). onFrame 에서 계속 재시도한다. */
     private var awaitingPlane = false
 
+    /**
+     * 드래그 스무딩(EMA). `onDrag` 는 hitTest 목표만 갱신하고, 실제 노드 pose 는 `onFrame`
+     * 의 [stepDragSmoothing] 이 목표로 부드럽게 따라가게 한다(팔딱거림 방지 —
+     * [RemovalController] PHASE 3 anchor 스무딩과 동일 방식). 손을 뗀 뒤에도 [settleFramesLeft]
+     * 프레임 동안 계속 보간해 최종 위치에 부드럽게 안착시킨 뒤 앵커를 고정한다.
+     */
+    private var dragTargetPos: FloatArray? = null
+    private var dragTargetQuat: FloatArray? = null
+    private var smoothPos: FloatArray? = null
+    private var smoothQuat: FloatArray? = null
+    private var settleFramesLeft = 0
+
     private var currentSceneId: String? = null
     private var currentJobId: String? = null
     private var sourceRect: FloatArray? = null       // 원래 제거 bbox [x, y, w, h] (재정합 기준)
@@ -97,6 +109,7 @@ class MovedObjectController(
         binding.btnMovedRotateRight.setOnClickListener { rotate(15f) }
         binding.btnMovedTiltUp.setOnClickListener { tilt(-15f) }
         binding.btnMovedTiltDown.setOnClickListener { tilt(15f) }
+        binding.btnMovedAlign.setOnClickListener { alignVerticalNow() }
         binding.btnMovedClear.setOnClickListener { clearMovedNode(); status("이동한 사물을 치웠습니다") }
 
         // 지난 세션에 저장된 배치가 있으면, 복원/취소만 가능한 상태로 패널을 연다.
@@ -212,6 +225,7 @@ class MovedObjectController(
                 )
             }
         }
+        stepDragSmoothing()
         if (!armed || node != null || !awaitingPlane) return
         if (placeMarkerNow()) {
             awaitingPlane = false
@@ -300,21 +314,40 @@ class MovedObjectController(
         )
         if (!ok) return false
         dragging = true
-        node?.updateAnchorPose = false
+        settleFramesLeft = 0
+        node?.let { n ->
+            n.updateAnchorPose = false
+            // 스무딩 시작점 = 지금 마커가 있는 자리 (첫 프레임에 튀지 않게).
+            val p = n.pose
+            val sp = FloatArray(3).also { p.getTranslation(it, 0) }
+            val sq = FloatArray(4).also { p.getRotationQuaternion(it, 0) }
+            smoothPos = sp
+            smoothQuat = sq
+            dragTargetPos = sp.copyOf()
+            dragTargetQuat = sq.copyOf()
+        }
         return true
     }
 
     fun onDrag(xPx: Float, yPx: Float): Boolean {
         if (!dragging) return false
-        val n = node ?: return true
+        node ?: return true
         val hit = space.hitTestPreferring(xPx, yPx, wantsWall())
         if (hit == null) {
             if (++dragLogN % 12 == 0) Log.d(TAG, "onDrag: hitTest 없음 @(${xPx.toInt()},${yPx.toInt()}) — 마커 위치 유지")
             return true
         }
-        n.pose = hit.hitPose
-        onVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
-        applyChildTransforms()
+        val plane = hit.trackable as? Plane
+        onVertical = plane?.type == Plane.Type.VERTICAL
+        // 원시 hitPose 회전(손 떨림·시선 각도로 사다리꼴처럼 삐뚤어짐)을 그대로 쓰지 않고,
+        // 평면 대표 법선(plane.centerPose)을 기준으로 항상 반듯하게 세운 pose 를 목표로 삼는다.
+        // 실제 노드 이동은 stepDragSmoothing(onFrame) 의 EMA 가 담당 → 팔딱거림 방지.
+        val pos = FloatArray(3).also { hit.hitPose.getTranslation(it, 0) }
+        val normal = FloatArray(3)
+        (plane?.centerPose ?: hit.hitPose).getTransformedAxis(1, 1f, normal, 0)
+        val target = uprightPose(pos, normal, onVertical)
+        dragTargetPos = FloatArray(3).also { target.getTranslation(it, 0) }
+        dragTargetQuat = FloatArray(4).also { target.getRotationQuaternion(it, 0) }
         return true
     }
 
@@ -325,22 +358,70 @@ class MovedObjectController(
         if (!dragging) return false
         dragging = false
         val n = node ?: return true
-        // 손을 뗀 위치에 최종 고정: 새 앵커로 재고정 (큐브 finalizeDrag 와 동일).
-        // ※ 노드는 그대로 두고 anchor 만 교체한다 — 원래 자리에 노드/마커를 새로 안 남긴다.
-        val fresh = runCatching { sceneView.session?.createAnchor(n.pose) }.getOrNull()
+        if (dragTargetPos == null || smoothPos == null) {
+            // 드래그 중 hitTest 가 한 번도 안 잡힘 → 안착 보간 없이 현재 자리에서 즉시 고정.
+            finalizeDragAnchor()
+            return true
+        }
+        // 손을 뗀 뒤에도 몇 프레임 더 목표로 보간해 부드럽게 안착시킨 뒤 앵커를 고정한다.
+        settleFramesLeft = SETTLE_FRAMES
+        Log.d(TAG, "onDragEnd: 안착 보간 시작 ($SETTLE_FRAMES 프레임) → finalizeDragAnchor")
+        return true
+    }
+
+    /** 스무딩된 현재 pose 로 새 앵커를 만들어 노드를 최종 고정한다(큐브 finalizeDrag 와 동일). */
+    private fun finalizeDragAnchor() {
+        val n = node ?: return
+        settleFramesLeft = 0
+        val poseNow = n.pose
+        val fresh = runCatching { sceneView.session?.createAnchor(poseNow) }.getOrNull()
         if (fresh != null) {
             runCatching { n.anchor.detach() }
             n.anchor = fresh
         }
-        n.updateAnchorPose = true
+        n.updateAnchorPose = true   // 이후엔 앵커(=스무딩 끝난 pose)를 그대로 따라감 → 튐 없음
+        smoothPos = null
+        smoothQuat = null
+        dragTargetPos = null
+        dragTargetQuat = null
         Log.d(
             TAG,
-            "onDragEnd: node#%d 같은 노드 재고정(새 노드/마커 생성 안 함) newAnchorPose=%s freshAnchor=%b".format(
+            "finalizeDragAnchor: node#%d 재고정 pose=%s fresh=%b".format(
                 n.hashCode(), poseStr(n.anchor.pose), fresh != null,
             ),
         )
         scheduleSave()   // 제스처 완료 → 최신 상태 저장
-        return true
+    }
+
+    /**
+     * onFrame 매 프레임: 드래그/안착 중이면 노드 pose 를 목표(`dragTarget*`)로 EMA easing.
+     * 위치는 선형 EMA, 회전은 최단경로 nlerp. 손을 뗀 뒤엔 [settleFramesLeft] 를 소진하며
+     * 계속 보간하고, 0 이 되면 [finalizeDragAnchor] 로 앵커를 고정한다.
+     */
+    private fun stepDragSmoothing() {
+        if (!dragging && settleFramesLeft <= 0) return
+        val n = node ?: return
+        val tp = dragTargetPos ?: return
+        val tq = dragTargetQuat ?: return
+        val sp = smoothPos ?: tp.copyOf().also { smoothPos = it }
+        val sq = smoothQuat ?: tq.copyOf().also { smoothQuat = it }
+        for (i in 0..2) sp[i] += (tp[i] - sp[i]) * DRAG_SMOOTH_ALPHA
+        nlerpInto(sq, tq, DRAG_SMOOTH_ALPHA)
+        n.pose = Pose(sp, sq)
+        applyChildTransforms()
+        if (!dragging && settleFramesLeft > 0) {
+            settleFramesLeft--
+            if (settleFramesLeft <= 0) finalizeDragAnchor()
+        }
+    }
+
+    /** [sq] 를 [tq] 쪽으로 [t] 만큼 최단경로 nlerp — 결과를 [sq] 에 다시 쓴다. */
+    private fun nlerpInto(sq: FloatArray, tq: FloatArray, t: Float) {
+        val dot = sq[0] * tq[0] + sq[1] * tq[1] + sq[2] * tq[2] + sq[3] * tq[3]
+        val s = if (dot < 0f) -1f else 1f
+        for (i in 0..3) sq[i] += (s * tq[i] - sq[i]) * t
+        val l = sqrt(sq[0] * sq[0] + sq[1] * sq[1] + sq[2] * sq[2] + sq[3] * sq[3])
+        if (l > 1e-6f) for (i in 0..3) sq[i] /= l
     }
 
     // --------------------------------------------- 크기(핀치/＋－) · 회전(버튼)
@@ -372,6 +453,119 @@ class MovedObjectController(
         if (node == null) return
         tiltDeg = (tiltDeg + deltaDeg).coerceIn(-60f, 60f)
         applyChildTransforms()
+    }
+
+    // --------------------------------------------- 수직 정렬 (손 떨림/각도로 삐뚤어짐 보정)
+
+    /**
+     * "수직 정렬" 버튼. 이동한 이미지가 손 떨림·시선 각도로 사다리꼴처럼 기울어졌을 때
+     * 반듯하게 되돌린다.
+     * - 벽 사물: 자식 quad 의 기울기(`tiltDeg`)와 roll(`rotDeg`)을 0 으로, 부모 앵커를
+     *   벽 **대표 법선** 방향의 중력 정렬 pose 로 다시 고정 → 항상 수평·수직이 맞는 직사각형.
+     * - 바닥 사물: `tiltDeg` 만 0 으로 (앞뒤 기울기 제거), 좌우 회전(`rotDeg` = yaw)은 유지.
+     */
+    fun alignVerticalNow() {
+        val n = node ?: run { status("정렬할 사물이 없습니다"); return }
+        // 진행 중인 드래그 스무딩/안착이 있으면 멈추고 지금 상태에서 정렬한다.
+        dragging = false
+        settleFramesLeft = 0
+        smoothPos = null
+        smoothQuat = null
+        dragTargetPos = null
+        dragTargetQuat = null
+        tiltDeg = 0f
+        if (onVertical) {
+            rotDeg = 0f
+            val cur = n.pose
+            val pos = FloatArray(3).also { cur.getTranslation(it, 0) }
+            // 현재 부모 +Y = 배치 시 쓴 법선(신규 경로) 또는 원시 hitPose 법선(구 경로).
+            val normal = FloatArray(3).also { cur.getTransformedAxis(1, 1f, it, 0) }
+            reanchor(n, uprightPose(pos, normal, wantVertical = true))
+            status("${label()} 이미지를 벽에 수직으로 맞췄습니다")
+        } else {
+            status("${label()} 앞뒤 기울기를 없앴습니다")
+        }
+        applyChildTransforms()
+        scheduleSave()
+    }
+
+    /** 노드를 [pose] 로 재고정한다(새 앵커 생성 → 교체). onDragEnd 의 재고정과 동일 방식. */
+    private fun reanchor(n: AnchorNode, pose: Pose) {
+        val fresh = runCatching { sceneView.session?.createAnchor(pose) }.getOrNull()
+        if (fresh != null) {
+            n.updateAnchorPose = false
+            runCatching { n.anchor.detach() }
+            n.anchor = fresh
+            n.pose = pose
+            n.updateAnchorPose = true
+        } else {
+            n.pose = pose
+        }
+    }
+
+    /**
+     * 배치/정렬에 쓸 "반듯한" 부모 pose.
+     * - 수평면(바닥): 회전 항등 — 자식 `rotDeg` 가 yaw 를 담당한다.
+     * - 수직면(벽): [normalIn] 을 수평으로 투영해 법선(+Y)으로 삼고, in-plane 축을 세계
+     *   up 에 맞춰 roll 을 제거한다(hitPose 와 같은 "+Y = 법선" 규약이라 자식 회전은 그대로).
+     */
+    private fun uprightPose(position: FloatArray, normalIn: FloatArray, wantVertical: Boolean): Pose {
+        if (!wantVertical) return Pose(position, IDENTITY_QUAT)
+        val n = floatArrayOf(normalIn[0], 0f, normalIn[2])   // 수평 투영 = 완전 수직 벽 강제
+        var len = sqrt(n[0] * n[0] + n[2] * n[2])
+        if (len < 1e-4f) { n[0] = 0f; n[2] = 1f; len = 1f }
+        n[0] /= len; n[2] /= len
+        // 카메라 쪽을 향하도록 법선 부호 정렬
+        space.latestFrame?.camera?.pose?.let { cam ->
+            if (n[0] * (cam.tx() - position[0]) + n[2] * (cam.tz() - position[2]) < 0f) {
+                n[0] = -n[0]; n[2] = -n[2]
+            }
+        }
+        val up = floatArrayOf(0f, 1f, 0f)
+        val xAxis = normalize3(cross3(up, n))         // 수평, in-plane
+        val zAxis = normalize3(cross3(n, xAxis))      // ≈ 세계 up, in-plane
+        return Pose(position, quatFromBasis(xAxis, n, zAxis))
+    }
+
+    private fun cross3(a: FloatArray, b: FloatArray) = floatArrayOf(
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+    private fun normalize3(v: FloatArray): FloatArray {
+        val l = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+        return if (l < 1e-6f) floatArrayOf(0f, 0f, 1f) else floatArrayOf(v[0] / l, v[1] / l, v[2] / l)
+    }
+
+    /** 정규직교 열벡터 3개(로컬 X/Y/Z 축)로 이뤄진 회전 → 쿼터니언 [x,y,z,w]. */
+    private fun quatFromBasis(x: FloatArray, y: FloatArray, z: FloatArray): FloatArray {
+        val m00 = x[0]; val m10 = x[1]; val m20 = x[2]
+        val m01 = y[0]; val m11 = y[1]; val m21 = y[2]
+        val m02 = z[0]; val m12 = z[1]; val m22 = z[2]
+        val tr = m00 + m11 + m22
+        val q = FloatArray(4)
+        when {
+            tr > 0f -> {
+                val s = sqrt(tr + 1f) * 2f
+                q[3] = 0.25f * s; q[0] = (m21 - m12) / s; q[1] = (m02 - m20) / s; q[2] = (m10 - m01) / s
+            }
+            m00 > m11 && m00 > m22 -> {
+                val s = sqrt(1f + m00 - m11 - m22) * 2f
+                q[3] = (m21 - m12) / s; q[0] = 0.25f * s; q[1] = (m01 + m10) / s; q[2] = (m02 + m20) / s
+            }
+            m11 > m22 -> {
+                val s = sqrt(1f + m11 - m00 - m22) * 2f
+                q[3] = (m02 - m20) / s; q[0] = (m01 + m10) / s; q[1] = 0.25f * s; q[2] = (m12 + m21) / s
+            }
+            else -> {
+                val s = sqrt(1f + m22 - m00 - m11) * 2f
+                q[3] = (m10 - m01) / s; q[0] = (m02 + m20) / s; q[1] = (m12 + m21) / s; q[2] = 0.25f * s
+            }
+        }
+        val l = sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
+        if (l > 1e-6f) { q[0] /= l; q[1] /= l; q[2] /= l; q[3] /= l }
+        return q
     }
 
     // ------------------------------------------------------ 서버: 저장 / 복원 / 취소
@@ -595,6 +789,11 @@ class MovedObjectController(
         imageNode = null
         labelNode = null
         dragging = false
+        settleFramesLeft = 0
+        smoothPos = null
+        smoothQuat = null
+        dragTargetPos = null
+        dragTargetQuat = null
         val hasScene = currentSceneId != null
         enableButtons(home = false, adjust = false, restore = hasScene, undo = hasScene, clear = false)
     }
@@ -612,6 +811,7 @@ class MovedObjectController(
         binding.btnMovedRotateRight.isEnabled = adjust
         binding.btnMovedTiltUp.isEnabled = adjust
         binding.btnMovedTiltDown.isEnabled = adjust
+        binding.btnMovedAlign.isEnabled = adjust
     }
 
     private fun downscale(src: Bitmap): Bitmap {
@@ -657,6 +857,19 @@ class MovedObjectController(
         const val MOVED_SCALE_CORRECTION = 1f
         const val KEY_LAST_SCENE = "moved_last_scene"
         const val KEY_LAST_JOB = "moved_last_job"
+
+        /**
+         * 드래그/안착 위치·회전 EMA 계수(0~1). 작을수록 부드럽지만 손가락을 더 늦게 따라온다.
+         * [RemovalController.SMOOTH_ALPHA](0.2, anchor 지터 완화)와 같은 취지이며, 능동적
+         * 드래그라 조금 더 민첩하게 0.30 을 쓴다.
+         */
+        const val DRAG_SMOOTH_ALPHA = 0.30f
+
+        /** 손을 뗀 뒤 최종 위치로 부드럽게 안착시키며 보간하는 프레임 수. */
+        const val SETTLE_FRAMES = 8
+
+        /** 회전 없음 쿼터니언 (x,y,z,w). 바닥 배치의 부모 앵커에 회전을 안 줄 때. */
+        val IDENTITY_QUAT = floatArrayOf(0f, 0f, 0f, 1f)
         val OBJECT_LABELS = mapOf(
             "tv" to "TV", "sofa" to "소파", "table" to "테이블",
             "chair" to "의자", "shelf" to "선반", "other" to "사물",

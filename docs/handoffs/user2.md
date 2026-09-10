@@ -13,6 +13,77 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 이동한 사물 이미지 — 수직 정렬(버튼 + 드래그 자동) + 드래그 스무딩 (2026-09-10)
+
+Branch `integration-interior-demo`. 리포트: 드래그로 옮긴 사물(TV 등) 이미지가 손
+떨림 / hitTest 시선 각도 때문에 원시 `hitPose` 회전을 그대로 받아 **사다리꼴처럼
+삐뚤어져** 보임. 파일: `MovedObjectController.kt`, `activity_main.xml`.
+
+### 1. 드래그 배치 자동 정렬 (근본 해결)
+
+`onDrag` 가 `n.pose = hit.hitPose` (원시, 흔들리는 회전)을 쓰던 것을 →
+`uprightPose(pos, normal, onVertical)` 로 교체:
+- **normal** = `hit.trackable(Plane).centerPose` 의 +Y(= 평면 대표 법선, ARCore 가
+  평면 전체로부터 안정적으로 추정) 을 우선 사용, 없으면 `hit.hitPose` +Y 폴백.
+- **벽(수직면)**: 법선을 수평으로 투영(완전 수직 벽 강제) → +Y 축, `up × n` = in-plane
+  수평축(+X), `n × X` ≈ 세계 up 방향 in-plane 축(+Z) 으로 정규직교 기저를 만들고
+  `quatFromBasis()`(행렬→쿼터니언)로 회전 산출. **"+Y = 법선" 규약은 hitPose 와
+  동일**하므로 자식 quad 회전(`Rotation(-90+tilt, 0, rotDeg)`)은 그대로 두고, 부모
+  앵커만 반듯해진다. 법선 부호는 카메라 쪽을 향하도록 정렬.
+- **바닥(수평면)**: 부모 회전 항등(`IDENTITY_QUAT`) — 자식 `rotDeg`(y-euler)가 yaw 를
+  담당. (기존엔 hitPose 의 임의 yaw 가 부모에 섞여 있었음 → 제거되어 더 예측 가능.)
+- `onDragEnd` 는 그대로 `n.pose` 로 새 앵커를 만들므로 자동으로 정렬된 pose 로 고정됨.
+- `placeMarkerNow`/`placeAtOriginal`/`restoreFromServer` 경로는 이번엔 원본 유지 —
+  아래 버튼으로 보정 가능. (필요하면 후속으로 동일 적용.)
+
+### 2. "수직 정렬" 버튼 (`alignVerticalNow()`)
+
+- **벽 사물**: `tiltDeg = 0`, `rotDeg = 0` (자식 quad 의 앞뒤 기울기 + roll 제거) →
+  현재 부모 pose 의 +Y(법선)를 읽어 `uprightPose()` 로 재고정(`reanchor()` = 새 앵커
+  생성·교체, `onDragEnd` 와 동일). 결과: 항상 수평·수직이 맞는 직사각형(촬영 당시
+  비율).
+- **바닥 사물**: `tiltDeg = 0` 만 (앞뒤 기울기 제거), 좌우 회전 `rotDeg`(yaw)은 유지.
+- 신규 헬퍼: `uprightPose`, `reanchor`, `cross3`, `normalize3`, `quatFromBasis`.
+  companion 에 `IDENTITY_QUAT`. 새 `kotlin.math` import 없음(`sqrt`/`abs` 재사용).
+- 서버 스키마 변경 없음 — `savePlacementNow` 는 `n.anchor.pose` 를 그대로 저장하고
+  복원은 `source_region` 재-hitTest + `rotDeg` 를 쓰므로 영향 없음.
+
+### 3. UI
+
+`activity_main.xml` `movedObjectPanel`: 크기 조절 줄과 "배치 복원 / 실행 취소" 줄
+**사이**에 `btnMovedAlign`("수직 정렬") 한 줄 추가(십자 다이얼 바로 아래).
+`enableButtons` 의 `adjust` 플래그에 연동(마커가 있을 때만 활성).
+
+### 4. 드래그 중 팔딱거림(지터) 제거 — EMA 스무딩 + 안착 보간
+
+리포트: 드래그하는 동안 사물 이미지가 매 프레임 raw hitTest 값을 그대로 받아
+여러 방향으로 빠르게 튐(시연 영상에서 조잡). [RemovalController] PHASE 3 의 anchor
+EMA 스무딩과 **동일 방식**으로 처리.
+
+- `onDrag` 는 이제 노드 pose 를 직접 안 건드리고 **목표만** 갱신
+  (`dragTargetPos`/`dragTargetQuat` = `uprightPose` 결과).
+- `onFrame` 의 새 `stepDragSmoothing()` 이 매 프레임 실제 pose 를 목표로 easing:
+  위치는 선형 EMA(`smoothPos += (target - smoothPos) * DRAG_SMOOTH_ALPHA`),
+  회전은 최단경로 nlerp(`nlerpInto`). `DRAG_SMOOTH_ALPHA = 0.30`(튜닝 노브;
+  `SMOOTH_ALPHA` 0.2 보다 약간 민첩).
+- `onDragBegin` 이 스무딩 시작점을 **현재 마커 위치**로 잡아 첫 프레임 튐 방지.
+- **손 뗄 때 안착 보간**: `onDragEnd` 는 즉시 앵커를 만들지 않고
+  `settleFramesLeft = SETTLE_FRAMES`(8) 설정 → `stepDragSmoothing` 이 남은 프레임
+  동안 목표로 계속 보간한 뒤 `finalizeDragAnchor()` 가 그 시점 pose 로 새 앵커를
+  고정(`updateAnchorPose=true`). 스냅 튐 없음. (드래그 중 hitTest 가 한 번도 없었으면
+  보간 없이 즉시 고정.)
+- 상태(`dragTarget*`/`smooth*`/`settleFramesLeft`)는 `clearMovedNode`·`alignVerticalNow`
+  에서 리셋.
+
+### 빌드
+
+`JAVA_HOME=...\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug` → **BUILD SUCCESSFUL**.
+APK: `experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk`.
+실기기에서 (a) 드래그가 부드럽게 따라오는지, (b) 손 뗄 때 스냅이 안 튀는지,
+(c) 드래그 후 자동으로 반듯한지, (d) "수직 정렬" 버튼으로 삐뚤어진 이미지가
+직사각형으로 펴지는지 확인 대기. 느리게 느껴지면 `DRAG_SMOOTH_ALPHA`↑ /
+`SETTLE_FRAMES`↓.
+
 ## 라이브 화면 가림막 가장자리 "얇은 흰색 테두리 선" 제거 (2026-09-10)
 
 Branch `integration-interior-demo`. 앞선 수정 후 실기기 재테스트: **정지 프리뷰

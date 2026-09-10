@@ -275,6 +275,20 @@
                         android:text="확대  ＋"
                         android:contentDescription="사물 크기 키우기" />
                 </LinearLayout>
+                <!-- 손 떨림/원시 hitTest 각도로 이미지가 사다리꼴처럼 삐뚤어졌을 때
+                     벽의 대표 법선 방향으로 반듯하게(기울기 0) 다시 세운다. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnMovedAlign"
+                        style="@style/WorkspaceButton"
+                        android:text="수직 정렬"
+                        android:enabled="false"
+                        android:contentDescription="이미지를 벽에 수직·수평으로 맞추기" />
+                </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
