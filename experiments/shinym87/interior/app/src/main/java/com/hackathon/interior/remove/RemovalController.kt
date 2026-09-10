@@ -91,8 +91,6 @@ class RemovalController(
     private var coverFrameLog = 0L
 
     private var busy = false
-    private val localRemoval = LocalRemovalProcessor()
-
     /** PHASE 4: 삭제 요청 시점의 "원래 사물" 스냅샷(이동 기능이 재사용). */
     private var capturedObjectBitmap: Bitmap? = null
     private var originalObjectPose: Pose? = null
@@ -276,30 +274,24 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
-            status("선택 영역을 즉시 복원 중…")
-            localRemoval.remove(
-                source = source,
-                bbox = bbox,
-                onSuccess = { result ->
-                    runCatching {
-                        // 경량 삭제 데모는 복원 patch만 AR 위치에 고정한다.
-                        // 지운 사물을 별도 3D 마커로 다시 만드는 경로는 사용하지 않는다.
-                        applyResult(result.bitmap, bbox)
-                    }.onSuccess {
-                        status("완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms · 선택 영역 적용")
-                    }.onFailure { error ->
-                        Log.e(TAG, "삭제 결과 AR 적용 실패", error)
-                        status("삭제 결과를 AR에 표시하지 못했습니다 · 화면은 계속 사용할 수 있어요")
-                    }
+            status("사물 윤곽과 배경을 복원 중…")
+            scope.launch {
+                try {
+                    runFlow(
+                        InteriorApiClient(serverBaseUrl()),
+                        jpeg,
+                        buildMetaJson(imageW, imageH, bbox, objectType),
+                        bbox,
+                        objectType,
+                    )
+                } catch (error: Exception) {
+                    Log.e(TAG, "MobileSAM·LaMa 삭제 실패", error)
+                    status("삭제 실패: ${error.message ?: error.javaClass.simpleName}")
+                } finally {
                     busy = false
                     setControlsEnabled(true)
-                },
-                onFailure = { error ->
-                    status("로컬 복원 실패: ${error.message ?: error.javaClass.simpleName}")
-                    busy = false
-                    setControlsEnabled(true)
-                },
-            )
+                }
+            }
         }
     }
 
@@ -317,7 +309,8 @@ class RemovalController(
         val keyframeId = client.uploadKeyframe(sceneId, jpeg, metaJson)
 
         status("삭제 요청 전송 중…")
-        val jobId = client.requestRemoveObject(sceneId, keyframeId, bbox, objectType)
+        val point = floatArrayOf(bbox[0] + bbox[2] / 2f, bbox[1] + bbox[3] / 2f)
+        val jobId = client.requestRemoveObjectAtPoint(sceneId, keyframeId, point, objectType)
 
         var job = client.getJob(sceneId, jobId)
         var tries = 0
@@ -683,9 +676,7 @@ class RemovalController(
         refreshRequestButton()   // bbox + 사물 종류 조건까지 함께 본다
     }
 
-    fun release() {
-        localRemoval.close()
-    }
+    fun release() = Unit
 
     private companion object {
         const val TAG = "InteriorAR"

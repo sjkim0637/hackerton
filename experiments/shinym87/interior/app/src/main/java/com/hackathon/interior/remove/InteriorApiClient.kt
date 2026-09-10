@@ -143,6 +143,29 @@ class InteriorApiClient(private val baseUrl: String) {
         JSONObject(readBody(conn)).getString("job_id")
     }
 
+    /** 선택 영역의 중심점을 MobileSAM에 전달해 실제 사물 마스크를 만든 뒤 삭제한다. */
+    suspend fun requestRemoveObjectAtPoint(
+        sceneId: String,
+        keyframeId: String,
+        point: FloatArray,
+        objectType: String,
+    ): String = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("keyframe_id", keyframeId)
+            .put("object_type", objectType)
+            .put(
+                "target",
+                JSONObject()
+                    .put("type", "point")
+                    .put("point", JSONArray(point.map { it.toDouble() })),
+            )
+        val conn = open("/scenes/$sceneId/remove-object", "POST")
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        JSONObject(readBody(conn)).getString("job_id")
+    }
+
     suspend fun getJob(sceneId: String, jobId: String): JobStatus = withContext(Dispatchers.IO) {
         val conn = open("/scenes/$sceneId/jobs/$jobId", "GET")
         val json = JSONObject(readBody(conn))
