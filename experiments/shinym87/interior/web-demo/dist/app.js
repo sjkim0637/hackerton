@@ -2,14 +2,10 @@ import * as THREE from "./vendor/three.module.min.js";
 import { GLTFLoader } from "./vendor/GLTFLoader.js";
 
 const products=[
-  {id:"kivik-blue",category:"소파",name:"KIVIK 쉬비크 3인용소파",variant:"군나레드 블루",size:"228×95×83cm",price:"₩699,000",type:"sofa",dims:[2.28,.83,.95],color:"#56788b",image:"products/kivik-blue.png",model:"models/kivik-blue.gltf",anchor:[.5,.96],source:"https://www.ikea.com/kr/ko/p/kivik-3-seat-sofa-gunnared-blue-s69484873/"},
-  {id:"kivik-dark",category:"소파",name:"KIVIK 쉬비크 3인용소파",variant:"트레순드 앤트러싸이트",size:"228×95×83cm",price:"₩749,000",type:"sofa",dims:[2.28,.83,.95],color:"#4d4d4b",image:"products/kivik-dark.png",model:"models/kivik-dark.gltf",anchor:[.5,.96],source:"https://www.ikea.com/kr/ko/p/kivik-3-seat-sofa-tresund-anthracite-s69482831/"},
-  {id:"lack-white",category:"테이블",name:"LACK 라크 커피테이블",variant:"화이트",size:"90×55×45cm",price:"₩29,900",type:"table",dims:[.9,.45,.55],color:"#e9e9e5",image:"products/lack-white.png",model:"models/lack-white.gltf",anchor:[.5,.94],source:"https://www.ikea.com/kr/ko/p/lack-coffee-table-white-70449906/"},
-  {id:"lack-dark",category:"테이블",name:"LACK 라크 커피테이블",variant:"블랙브라운",size:"90×55×45cm",price:"₩29,900",type:"table",dims:[.9,.45,.55],color:"#3b2e27",image:"products/lack-dark.png",model:"models/lack-dark.gltf",anchor:[.5,.94],source:"https://www.ikea.com/kr/ko/p/lack-coffee-table-black-brown-20352987/"},
-  {id:"poang-beige",category:"의자",name:"POÄNG 포엥 암체어",variant:"자작나무/라이트베이지",size:"68×82×100cm",price:"₩99,900",type:"chair",dims:[.68,1,.82],color:"#d9cdb9",image:"products/poang-beige.png",model:"models/poang-beige.gltf",anchor:[.5,.96],source:"https://www.ikea.com/kr/ko/p/poaeng-armchair-birch-veneer-knisa-light-beige-s19240788/"},
-  {id:"poang-black",category:"의자",name:"POÄNG 포엥 암체어",variant:"자작나무/블랙",size:"68×82×100cm",price:"₩99,900",type:"chair",dims:[.68,1,.82],color:"#292a28",image:"products/poang-black.png",model:"models/poang-black.gltf",anchor:[.5,.96],source:"https://www.ikea.com/kr/ko/p/poaeng-armchair-birch-veneer-knisa-black-s49240824/"},
-  {id:"billy-white",category:"수납",name:"BILLY 빌리 책장",variant:"화이트",size:"80×28×106cm",price:"₩64,900",type:"shelf",dims:[.8,1.06,.28],color:"#ecece7",image:"products/billy-white.png",model:"models/billy-white.gltf",anchor:[.5,.985],source:"https://www.ikea.com/kr/ko/p/billy-bookcase-white-70522044/"},
-  {id:"billy-blue",category:"수납",name:"BILLY 빌리 책장",variant:"블루",size:"40×28×202cm",price:"₩79,900",type:"shelf",dims:[.4,2.02,.28],color:"#244c77",image:"products/billy-blue.png",model:"models/billy-blue.gltf",anchor:[.5,.985],source:"https://www.ikea.com/kr/ko/p/billy-bookcase-blue-20594929/"}
+  {id:"demo-soft-cloud-sofa",category:"소파",name:"소프트 클라우드 3인 소파",variant:"웜 아이보리 부클 · 데모 디자인",size:"220×92×84cm",price:"DEMO ONLY",type:"sofa",dims:[2.2,.84,.92],color:"#ded2bf",image:"demo-products/soft-cloud-sofa.webp",model:"models/demo-soft-cloud-sofa.gltf",anchor:[.5,.91]},
+  {id:"demo-oak-stone-table",category:"테이블",name:"오크 스톤 커피테이블",variant:"라이트 오크·오프화이트 스톤 · 데모 디자인",size:"110×60×42cm",price:"DEMO ONLY",type:"table",dims:[1.1,.42,.6],color:"#c9a77f",image:"demo-products/oak-stone-table.webp",model:"models/demo-oak-stone-table.gltf",anchor:[.5,.88]},
+  {id:"demo-oak-lounge-chair",category:"의자",name:"오크 커브 라운지체어",variant:"내추럴 오크·아이보리 패브릭 · 데모 디자인",size:"72×78×88cm",price:"DEMO ONLY",type:"chair",dims:[.72,.88,.78],color:"#d6b68e",image:"demo-products/oak-lounge-chair.webp",model:"models/demo-oak-lounge-chair.gltf",anchor:[.5,.94]},
+  {id:"demo-white-oak-console",category:"수납",name:"화이트 오크 로우 콘솔",variant:"웜 화이트·라이트 오크 · 데모 디자인",size:"160×40×42cm",price:"DEMO ONLY",type:"shelf",dims:[1.6,.42,.4],color:"#e8dfd1",image:"demo-products/white-oak-console.webp",model:"models/demo-white-oak-console.gltf",anchor:[.5,.92]}
 ];
 
 const $=selector=>document.querySelector(selector);
@@ -71,7 +67,7 @@ const roomImage=new Image(); roomImage.src="room-uploaded.png"; roomImage.onload
 const restorationImages={};
 builtInItems.forEach(item=>{const image=new Image();image.src=item.restoration;image.onload=render;restorationImages[item.id]=image;});
 
-try{const saved=JSON.parse(localStorage.getItem("roomfit-calibration")||"null");if(Number.isFinite(saved?.fov))cameraState.fov=saved.fov;}catch{}
+try{const saved=JSON.parse(localStorage.getItem("roomfit-calibration")||"null");if(Number.isFinite(saved?.fov))cameraState.fov=saved.fov;for(const key of Object.keys(calibration))if(Number.isFinite(saved?.[key]?.x)&&Number.isFinite(saved?.[key]?.y))calibration[key]={x:saved[key].x,y:saved[key].y};}catch{}
 
 function announce(message){toast.textContent=message;toast.classList.add("show");clearTimeout(announce.timer);announce.timer=setTimeout(()=>toast.classList.remove("show"),1900);}
 function updateRoomBackground(){room.style.backgroundImage=`url("${customRoomUrl||"room-uploaded.png"}")`;}
@@ -92,7 +88,7 @@ function updateCamera(){
   fovControl.value=Math.round(cameraState.fov);fovValue.textContent=Math.round(cameraState.fov)+"°";
   const floorPercent=Math.round(((calibration.backLeft.y+calibration.backRight.y)/2)*100);
   floorControl.value=Math.max(65,Math.min(88,floorPercent));floorValue.textContent=floorPercent+"%";floorLine.style.top=floorPercent+"%";
-  localStorage.setItem("roomfit-calibration",JSON.stringify({fov:cameraState.fov}));
+  localStorage.setItem("roomfit-calibration",JSON.stringify({fov:cameraState.fov,...calibration}));
   updateCalibrationOverlay();render();
 }
 
@@ -109,15 +105,20 @@ function updateCalibrationOverlay(){
 function buildCalibrationHandles(){
   Object.keys(calibration).forEach(key=>{
     const handle=document.createElement("button");handle.type="button";handle.className="cal-point"+(key==="vanish"?" vanish":"");handle.dataset.point=key;handle.setAttribute("aria-label",key==="vanish"?"소실점":"바닥 모서리");
-    handle.disabled=true;
     calibrationOverlay.appendChild(handle);
   });
 }
 buildCalibrationHandles();
 
+let calibrationDrag=null;
+calibrationOverlay.addEventListener("pointerdown",event=>{const handle=event.target.closest(".cal-point");if(!handle)return;calibrationDrag=handle.dataset.point;handle.setPointerCapture(event.pointerId);event.preventDefault();});
+calibrationOverlay.addEventListener("pointermove",event=>{if(!calibrationDrag)return;const bounds=room.getBoundingClientRect();let x=Math.max(.02,Math.min(.98,(event.clientX-bounds.left)/bounds.width)),y=Math.max(.08,Math.min(.98,(event.clientY-bounds.top)/bounds.height));if(calibrationDrag==="vanish"){y=Math.min(y,Math.min(calibration.backLeft.y,calibration.backRight.y)-.04);}else{const left=calibrationDrag.endsWith("Left"),back=calibrationDrag.startsWith("back");x=left?Math.min(x,.48):Math.max(x,.52);if(back)y=Math.min(y,Math.min(calibration.frontLeft.y,calibration.frontRight.y)-.04);else y=Math.max(y,Math.max(calibration.backLeft.y,calibration.backRight.y)+.04);}calibration[calibrationDrag]={x,y};updateCamera();});
+calibrationOverlay.addEventListener("pointerup",event=>{if(!calibrationDrag)return;calibrationDrag=null;event.target.releasePointerCapture?.(event.pointerId);placedItems.forEach(updateSpatialState);saveState();updateCamera();announce("공간 원근 보정값을 저장했습니다.");});
+calibrationOverlay.addEventListener("pointercancel",()=>calibrationDrag=null);
+
 function renderFilters(){filters.innerHTML="";["전체","소파","테이블","의자","수납"].forEach(category=>{const button=document.createElement("button");button.type="button";button.className="filter"+(category===activeFilter?" active":"");button.textContent=category;button.onclick=()=>{activeFilter=category;renderFilters();renderCatalog();};filters.appendChild(button);});}
-function renderCatalog(){catalog.innerHTML="";products.filter(p=>activeFilter==="전체"||p.category===activeFilter).forEach(product=>{const card=document.createElement("article");card.className="card"+(chosenProduct?.id===product.id?" active":"");card.innerHTML=`<button class="card-select" type="button"><span class="kind">${product.category}</span><span class="thumb"><img src="${product.image}" alt="${product.name} ${product.variant}"><span class="image-fallback">이미지 준비 중</span></span><strong>${product.name}</strong><small>${product.variant} · ${product.size}</small><small class="price">${product.price}</small></button><a class="source" href="${product.source}" target="_blank" rel="noopener">공식 ↗</a>`;
-    card.querySelector("button").onclick=()=>{chosenProduct=product;selectionSummary.classList.add("show");selectionSummary.innerHTML=`<b>${product.name}</b><br>${product.variant} · ${product.size} · 로컬 glTF 실측 모델`;applyButton.disabled=false;applyButton.textContent="우리 집에 적용";renderCatalog();};catalog.appendChild(card);});}
+function renderCatalog(){catalog.innerHTML="";products.filter(p=>activeFilter==="전체"||p.category===activeFilter).forEach(product=>{const card=document.createElement("article");card.className="card"+(chosenProduct?.id===product.id?" active":"");card.innerHTML=`<button class="card-select" type="button"><span class="kind">${product.category}</span><span class="thumb"><img src="${product.image}" alt="${product.name} ${product.variant}"><span class="image-fallback">이미지 준비 중</span></span><strong>${product.name}</strong><small>${product.variant} · ${product.size}</small><small class="price">${product.price}</small></button>`;
+    card.querySelector("button").onclick=()=>{chosenProduct=product;selectionSummary.classList.add("show");selectionSummary.innerHTML=`<b>${product.name}</b><br>${product.variant} · ${product.size} · 데모 전용 3D 모델`;applyButton.disabled=false;applyButton.textContent="우리 집에 적용";renderCatalog();};catalog.appendChild(card);});}
 
 function connectedCutout(image){
   const c=document.createElement("canvas"),ratio=Math.min(1,700/Math.max(image.naturalWidth,image.naturalHeight));c.width=Math.round(image.naturalWidth*ratio);c.height=Math.round(image.naturalHeight*ratio);
@@ -143,7 +144,7 @@ function fallbackModel(product){const [w,h,d]=product.dims,g=new THREE.Group(),m
 const lerp=(a,b,t)=>a+(b-a)*t;
 const normalize=(value,min,max)=>Math.max(0,Math.min(1,(value-min)/(max-min||1)));
 function horizontalBoundsAt(y){
-  const intersections=[],polygon=SPACE_CONFIG.floorPolygon;
+  const intersections=[],polygon=[calibration.backLeft,calibration.backRight,calibration.frontRight,calibration.frontLeft];
   for(let i=0;i<polygon.length;i++){
     const a=polygon[i],b=polygon[(i+1)%polygon.length];
     if((y<a.y&&y<b.y)||(y>a.y&&y>b.y)||a.y===b.y)continue;
@@ -153,12 +154,14 @@ function horizontalBoundsAt(y){
   return intersections.length>=2?{left:intersections[0],right:intersections.at(-1)}:{left:.5,right:.5};
 }
 function clampToFloor(point){
-  const y=Math.max(SPACE_CONFIG.floorFarY,Math.min(SPACE_CONFIG.floorNearY,point.y));
+  const floorFarY=(calibration.backLeft.y+calibration.backRight.y)/2,floorNearY=(calibration.frontLeft.y+calibration.frontRight.y)/2;
+  const y=Math.max(floorFarY,Math.min(floorNearY,point.y));
   const bounds=horizontalBoundsAt(y);
   return {x:Math.max(bounds.left,Math.min(bounds.right,point.x)),y};
 }
 function perspectiveForY(y){
-  const depth=normalize(y,SPACE_CONFIG.floorFarY,SPACE_CONFIG.floorNearY);
+  const floorFarY=(calibration.backLeft.y+calibration.backRight.y)/2,floorNearY=(calibration.frontLeft.y+calibration.frontRight.y)/2;
+  const depth=normalize(y,floorFarY,floorNearY);
   return lerp(SPACE_CONFIG.minPerspectiveScale,SPACE_CONFIG.maxPerspectiveScale,depth);
 }
 function screenAnchorToWorld(screenX,screenY){
@@ -176,7 +179,8 @@ function updateModel(item){
   item.object.scale.set((item.flipX?-1:1)*item.finalScale,item.finalScale,item.finalScale);item.object.visible=!placementHidden;
 }
 async function placeProduct(product,state={}){
-  const migratedY=Number.isFinite(state.screenY)?state.screenY:Math.max(SPACE_CONFIG.floorFarY,Math.min(SPACE_CONFIG.floorNearY,.76+(state.z??0)*.08));
+  const floorFarY=(calibration.backLeft.y+calibration.backRight.y)/2,floorNearY=(calibration.frontLeft.y+calibration.frontRight.y)/2;
+  const migratedY=Number.isFinite(state.screenY)?state.screenY:Math.max(floorFarY,Math.min(floorNearY,.76+(state.z??0)*.08));
   const item={product,screenX:state.screenX??.5,screenY:migratedY,manualScale:state.manualScale??1,flipX:Boolean(state.flipX),rotation:state.rotation??0,object:null,x:0,z:0};
   updateSpatialState(item);const open=findOpenPosition(item);if(!state.id&&open)Object.assign(item,open);updateSpatialState(item);if(isInvalidPlacement(item)){if(!open){showPlacementBlocked();return;}Object.assign(item,open);updateSpatialState(item);}
   item.object=await loadModel(product);item.object.userData.item=item;item.object.traverse(n=>n.userData.item=item);addPhotoFace(item.object,product);worldGroup.add(item.object);placedItems.push(item);updateModel(item);selectItem(item);saveState();emptyState.hidden=true;render();
@@ -186,12 +190,12 @@ function footprint(item,override={}){const x=override.x??item.x,z=override.z??it
 function polygonsOverlap(first,second){const axes=[];[first,second].forEach(p=>{for(let i=0;i<2;i++){const e={x:p[i+1].x-p[i].x,z:p[i+1].z-p[i].z},l=Math.hypot(e.x,e.z)||1;axes.push({x:-e.z/l,z:e.x/l});}});return axes.every(a=>{const f=first.map(p=>p.x*a.x+p.z*a.z),s=second.map(p=>p.x*a.x+p.z*a.z);return Math.max(...f)>Math.min(...s)&&Math.max(...s)>Math.min(...f);});}
 function zonePolygon(zone){return [{x:zone.x-zone.w/2,z:zone.z-zone.d/2},{x:zone.x+zone.w/2,z:zone.z-zone.d/2},{x:zone.x+zone.w/2,z:zone.z+zone.d/2},{x:zone.x-zone.w/2,z:zone.z+zone.d/2}];}
 function isInvalidPlacement(item,override={}){const p=footprint(item,override),outside=p.some(v=>v.x< -2.45||v.x>2.45||v.z< -1.55||v.z>1.35);return outside||placedItems.some(o=>o!==item&&polygonsOverlap(p,footprint(o)))||(!customRoomUrl&&builtInItems.some(b=>b.present&&b.zone&&polygonsOverlap(p,zonePolygon(b.zone))));}
-function findOpenPosition(item){const candidates=[];for(let y=.68;y<=.94;y+=.055){const bounds=horizontalBoundsAt(y);for(let x=bounds.left+.04;x<=bounds.right-.04;x+=.055)candidates.push({screenX:x,screenY:y});}candidates.sort((a,b)=>Math.abs(a.screenX-.5)+Math.abs(a.screenY-.79)-Math.abs(b.screenX-.5)-Math.abs(b.screenY-.79));return candidates.find(candidate=>{const before={screenX:item.screenX,screenY:item.screenY,x:item.x,z:item.z};Object.assign(item,candidate);updateSpatialState(item);const valid=!isInvalidPlacement(item);Object.assign(item,before);return valid;});}
+function findOpenPosition(item){const candidates=[],far=(calibration.backLeft.y+calibration.backRight.y)/2+.04,near=(calibration.frontLeft.y+calibration.frontRight.y)/2-.04,step=Math.max(.035,(near-far)/6);for(let y=far;y<=near;y+=step){const bounds=horizontalBoundsAt(y);for(let x=bounds.left+.04;x<=bounds.right-.04;x+=.055)candidates.push({screenX:x,screenY:y});}candidates.sort((a,b)=>Math.abs(a.screenX-.5)+Math.abs(a.screenY-(far+near)/2)-Math.abs(b.screenX-.5)-Math.abs(b.screenY-(far+near)/2));return candidates.find(candidate=>{const before={screenX:item.screenX,screenY:item.screenY,x:item.x,z:item.z};Object.assign(item,candidate);updateSpatialState(item);const valid=!isInvalidPlacement(item);Object.assign(item,before);return valid;});}
 function showPlacementBlocked(){announce("상품을 놓을 수 없습니다. 다른 가구와 겹치는 위치입니다.");}
 
 function screenToFloor(clientX,clientY){const bounds=room.getBoundingClientRect();return clampToFloor({x:(clientX-bounds.left)/bounds.width,y:(clientY-bounds.top)/bounds.height});}
 function selectItem(item){selectedItem=item||null;updateSelectedInfo();render();}
-function updateSelectedInfo(){if(!selectedItem){selectedInfo.textContent="배치된 가구를 눌러 선택하세요.";return;}if(selectedItem.isBuiltIn){selectedInfo.innerHTML=`<b>${selectedItem.name}</b><br>사진 속 전경 가림 레이어 · 삭제하면 복원 이미지로 채웁니다.`;return;}const angle=((Math.round(selectedItem.rotation*180/Math.PI)%360)+360)%360;selectedInfo.innerHTML=`<b>${selectedItem.product.name}</b><br>${selectedItem.product.variant} · 실제 규격 ${selectedItem.product.size}<br>회전 ${angle}° · 수동 ${(selectedItem.manualScale*100).toFixed(0)}% · 원근 ${(selectedItem.perspectiveScale*100).toFixed(0)}%`;}
+function updateSelectedInfo(){if(!selectedItem){selectedInfo.textContent="배치된 가구를 눌러 선택하세요.";return;}if(selectedItem.isBuiltIn){selectedInfo.innerHTML=`<b>${selectedItem.name}</b><br>사진 속 전경 가림 레이어 · 삭제하면 복원 이미지로 채웁니다.`;return;}const angle=((Math.round(selectedItem.rotation*180/Math.PI)%360)+360)%360;selectedInfo.innerHTML=`<b>${selectedItem.product.name}</b><br>${selectedItem.product.variant} · 실제 규격 ${selectedItem.product.size}<br>회전 ${angle}° · ${selectedItem.flipX?"좌우 반전 · ":""}수동 ${(selectedItem.manualScale*100).toFixed(0)}% · 원근 ${(selectedItem.perspectiveScale*100).toFixed(0)}%`;}
 function saveState(){localStorage.setItem("roomfit-real-placement-v2",JSON.stringify(placedItems.map(i=>({id:i.product.id,screenX:i.screenX,screenY:i.screenY,manualScale:i.manualScale,flipX:i.flipX,rotation:i.rotation}))));}
 function removeSelected(){if(!selectedItem)return;if(selectedItem.isBuiltIn){selectedItem.present=false;localStorage.setItem(`roomfit-builtin-${selectedItem.id}`,"false");}else{worldGroup.remove(selectedItem.object);placedItems=placedItems.filter(i=>i!==selectedItem);}selectedItem=null;updateSelectedInfo();saveState();render();announce("선택한 가구를 공간에서 제거했습니다.");}
 
@@ -221,7 +225,7 @@ overlay.onpointerup=()=>{if(dragState?.item){saveState();announce("바닥 평면
 function rotateSelected(delta){if(!selectedItem||selectedItem.isBuiltIn)return;const before=selectedItem.rotation;selectedItem.rotation+=delta;if(isInvalidPlacement(selectedItem)){selectedItem.rotation=before;showPlacementBlocked();}updateModel(selectedItem);updateSelectedInfo();saveState();render();}
 function moveSelected(dx,dy){if(!selectedItem||selectedItem.isBuiltIn)return;const before={screenX:selectedItem.screenX,screenY:selectedItem.screenY,x:selectedItem.x,z:selectedItem.z},next=clampToFloor({x:selectedItem.screenX+dx,y:selectedItem.screenY+dy});Object.assign(selectedItem,{screenX:next.x,screenY:next.y});updateSpatialState(selectedItem);if(isInvalidPlacement(selectedItem)){Object.assign(selectedItem,before);showPlacementBlocked();return;}updateModel(selectedItem);updateSelectedInfo();saveState();render();}
 function scaleSelected(factor){if(!selectedItem||selectedItem.isBuiltIn)return;const before=selectedItem.manualScale;selectedItem.manualScale=Math.max(.65,Math.min(1.4,before*factor));updateSpatialState(selectedItem);if(isInvalidPlacement(selectedItem)){selectedItem.manualScale=before;updateSpatialState(selectedItem);showPlacementBlocked();return;}updateModel(selectedItem);updateSelectedInfo();saveState();render();}
-function flipSelected(){if(!selectedItem||selectedItem.isBuiltIn)return;selectedItem.flipX=!selectedItem.flipX;updateModel(selectedItem);saveState();render();}
+function flipSelected(){if(!selectedItem||selectedItem.isBuiltIn)return;selectedItem.flipX=!selectedItem.flipX;updateModel(selectedItem);updateSelectedInfo();saveState();render();announce(selectedItem.flipX?"가구를 좌우 반전했습니다.":"가구 반전을 해제했습니다.");}
 overlay.onkeydown=event=>{let handled=true;if(event.key==="ArrowLeft")moveSelected(-.012,0);else if(event.key==="ArrowRight")moveSelected(.012,0);else if(event.key==="ArrowUp")moveSelected(0,-.012);else if(event.key==="ArrowDown")moveSelected(0,.012);else if(event.key.toLowerCase()==="q")rotateSelected(-Math.PI/12);else if(event.key.toLowerCase()==="e")rotateSelected(Math.PI/12);else if(event.key.toLowerCase()==="h")flipSelected();else if(event.key==="+"||event.key==="=")scaleSelected(1.05);else if(event.key==="-"||event.key==="_")scaleSelected(1/1.05);else if(event.key==="Delete"||event.key==="Backspace")removeSelected();else handled=false;if(handled)event.preventDefault();};
 
 applyButton.onclick=()=>chosenProduct&&placeProduct(chosenProduct);
@@ -229,7 +233,7 @@ $(".controls").onclick=event=>{const action=event.target.dataset.action;if(!acti
 function toggleCalibration(){calibrationActive=!calibrationActive;updateCalibrationOverlay();announce(calibrationActive?"이 공간에 고정된 바닥 영역과 소실점입니다.":"바닥 영역 표시를 닫았습니다.");}
 $("#autoCalibrate").onclick=toggleCalibration;
 fovControl.oninput=()=>{cameraState.fov=Number(fovControl.value);updateCamera();};
-floorControl.oninput=()=>{floorControl.value=Math.round(SPACE_CONFIG.floorFarY*100);floorValue.textContent=Math.round(SPACE_CONFIG.floorFarY*100)+"%";announce("이 공간의 바닥 기준은 이미지에 맞춘 고정값입니다.");};
+floorControl.oninput=()=>{const target=Number(floorControl.value)/100,delta=target-(calibration.backLeft.y+calibration.backRight.y)/2;calibration.backLeft.y=Math.max(.35,Math.min(.84,calibration.backLeft.y+delta));calibration.backRight.y=Math.max(.35,Math.min(.84,calibration.backRight.y+delta));updateCamera();};
 $("#togglePlacement").onclick=event=>{placementHidden=!placementHidden;event.target.textContent=placementHidden?"배치 보기":"배치 숨기기";render();};
 $("#reset").onclick=()=>{placedItems.forEach(i=>worldGroup.remove(i.object));placedItems=[];selectedItem=null;chosenProduct=null;builtInItems.forEach(i=>{i.present=true;localStorage.setItem(`roomfit-builtin-${i.id}`,"true");});localStorage.removeItem("roomfit-real-placement-v2");selectionSummary.classList.remove("show");applyButton.disabled=true;applyButton.textContent="제품을 먼저 선택하세요";renderCatalog();updateSelectedInfo();render();announce("배치 상태를 초기화했습니다.");};
 roomPhoto.onchange=event=>{const file=event.target.files?.[0];if(!file?.type.startsWith("image/")){announce("이미지 파일을 선택해 주세요.");return;}const url=URL.createObjectURL(file),image=new Image();image.onload=()=>{if(customRoomUrl)URL.revokeObjectURL(customRoomUrl);customRoomUrl=url;roomAspect=Math.max(.75,Math.min(2.4,image.naturalWidth/image.naturalHeight));placedItems.forEach(i=>worldGroup.remove(i.object));placedItems=[];selectedItem=null;updateRoomSizing();updateRoomBackground();spaceMeta.textContent=`사용자 사진 · ${image.naturalWidth}×${image.naturalHeight} · 5점 보정 필요`;calibrationActive=true;updateCamera();announce("사진을 불러왔습니다. 바닥 5점을 맞춰 주세요.");};image.src=url;};

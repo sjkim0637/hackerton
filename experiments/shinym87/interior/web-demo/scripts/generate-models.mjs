@@ -53,10 +53,10 @@ function parts(type,[w,h,d]){
 }
 
 const models=[
-  ["kivik-blue","sofa",[2.28,.83,.95],"#56788b"],["kivik-dark","sofa",[2.28,.83,.95],"#4d4d4b"],
-  ["lack-white","table",[.9,.45,.55],"#e9e9e5"],["lack-dark","table",[.9,.45,.55],"#3b2e27"],
-  ["poang-beige","chair",[.68,1,.82],"#d9cdb9"],["poang-black","chair",[.68,1,.82],"#292a28"],
-  ["billy-white","shelf",[.8,1.06,.28],"#ecece7"],["billy-blue","shelf",[.4,2.02,.28],"#244c77"]
+  ["demo-soft-cloud-sofa","sofa",[2.2,.84,.92],"#ded2bf"],
+  ["demo-oak-stone-table","table",[1.1,.42,.6],"#c9a77f"],
+  ["demo-oak-lounge-chair","chair",[.72,.88,.78],"#d6b68e"],
+  ["demo-white-oak-console","shelf",[1.6,.42,.4],"#e8dfd1"]
 ];
 
 for(const [id,type,dims,color] of models){
