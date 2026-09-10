@@ -13,6 +13,105 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 삭제한 사물을 "투명 배경 컷아웃"으로 재배치 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 문제: 삭제한 사물을 다시 배치하면 선택
+사각형이 그대로 잘려 흰/배경 모서리까지 딸려와 매끄럽지 않았다. `agent/goguma-salad/
+interior-mobilesam` 브랜치의 MobileSAM 세그멘테이션을 참조해 서버가 **RGBA 컷아웃**을
+만들도록 하고, 앱이 그걸 이동 마커 이미지로 쓴다.
+
+**서버:**
+- `app/ai/mobilesam.py` 를 mobilesam 브랜치에서 그대로 이식(단, `numpy`/`onnxruntime`
+  을 **지연 import** 로 바꿔 모델 없이도 서버가 뜨게 함). 모델 파일이 있으면
+  실루엣 마스크, 없으면 `None` 반환 → 호출부가 대체.
+- `app/ai/imageops.py::cutout_rgba_png(source, rect, mask_png=None)` — bbox 크롭에
+  alpha 를 씌워 투명 배경 PNG. mask 있으면 실루엣, 없으면 크롭 **안쪽으로** 페더링
+  (인페인팅용 `region_to_mask_png` 와 달리 밖으로 안 키움).
+- `scenes.py::_run_job`: `{job}_object.jpg`(기존, 네모 크롭) 옆에 `{job}_object.png`
+  (컷아웃) 도 저장. mask 는 MobileSAM(bbox 중심점) → 없으면 페더링.
+- 라우트 `GET /scenes/{id}/results/{job}_object.png` (`.jpg` 라우트들보다 먼저 등록).
+- `store.jobs` 에 `removed_object_cutout_path/url` 컬럼(+`_EXTRA_COLUMNS` ALTER).
+- `JobOut`/`ResultInfoOut` 에 `removed_object_cutout_image_url`. `cleanup.py` 가 동반
+  `_object.png` 도 함께 정리.
+- `config.py`: `mobilesam_encoder_path`/`mobilesam_decoder_path`/`mobilesam_fallback_box_frac`.
+- `requirements-onnx.txt`: `numpy` + `onnxruntime` (모델 켤 때만). `pytest` 47 통과
+  (`test_api.py` 에 컷아웃 RGBA 검증 추가).
+
+**앱:**
+- `InteriorApiClient.JobStatus.cutoutImageUrl` 추가 (`removed_object_cutout_image_url` 파싱).
+- `RemovalController.runFlow`: job done 후 `cutoutImageUrl` 이 있으면 다운로드·디코드해
+  이동 마커 비트맵으로 사용(실패 시 로컬 bbox 크롭으로 대체).
+- `MovedObjectController.restoreFromServer`: `{job}_object.png` → `{job}_object.jpg` 순으로 시도.
+- `:app:assembleDebug` 성공.
+
+**실물 세그멘테이션을 켜려면**: `pip install -r requirements-onnx.txt`, MobileSAM
+encoder/decoder ONNX 를 받아 `INTERIOR_MOBILESAM_ENCODER_PATH`/`..._DECODER_PATH` 설정.
+안 켜도 페더링 컷아웃으로 흰 모서리는 사라진다(실루엣은 아님).
+
+## 가림막(빌보드) 회귀 수정 — 크기를 화면 선택 종횡비로 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 증상 (빌보드 도입 후):
+1. 평면 미인식 시 삭제 완료 후 화면 전체가 거대 반투명 판으로 뒤덮임.
+2. 컵 삭제 시 엉뚱한 위치에 세로로 긴 막대형 가림막, 컵은 안 가려짐.
+
+**원인 = merge/Depth 아님. 이 세션의 빌보드 커밋(`c44bc4a` + `e2f0033`) 자체.**
+- Depth 코드(`DepthPlacementController`, `depth-placement-*` 모듈, 패키지
+  `com.project.depthplacement`)는 `RemovalController`/`patchWidthM`/`resolveWall`/
+  `wallAnchor` 를 **한 군데도 참조 안 함** — `FurnitureController.validatePlacement`
+  전용 검증기. 좌표계·스케일 공유 없음.
+- `RemovalController.kt` 는 `f3f291e` merge 이후 **이 세션 4커밋(`683a9ea`
+  `35340fb` `c44bc4a` `e2f0033`)만** 건드림. merge 가 바꾼 게 아님.
+- 증상1 = `e2f0033` 의 "평면 미인식 → 카메라 앞 0.8m fallback 앵커": 크기가
+  선택값이 아니라 기본 1.2×0.7 인데 얼굴 앞 0.8m 에 세워 화면을 다 덮음.
+- 증상2 = (a) 자식 ImageNode 에 `worldQuaternion` 을 걸었더니 부모 pose 갱신에
+  밀려 빌보드 회전이 안 먹고 평면 앵커 로컬프레임의 세로 quad 로 남음(막대),
+  (b) `resolveWall` 이 상/하단 평면 hitTest 로 높이를 재 지평선 근처에서 폭발/
+  종횡비 붕괴.
+
+**수정 (commit `<이번>`):**
+- `resolveWall`: 폭 = 좌·우 변 hitTest 실거리(한쪽만이면 중심~그쪽×2), **높이 =
+  폭 × 화면 선택 사각형 종횡비**(`rect.height()/rect.width()`). 상/하단 평면
+  hitTest 와 4m 폭발 캡(`683a9ea`) 제거 — 커버 quad 가 항상 "내가 그린 박스" 모양.
+- `applyResult`: 카메라 앞 fallback 앵커 삭제 → 평면 없으면 전체화면 프리뷰만.
+- `onFrame`: 빌보드 회전을 **부모 AnchorNode** 에 건다(`node.worldQuaternion`).
+- `COVER_MARGIN` 1.35 → 1.12 (살짝만).
+- 빌드 `:app:assembleDebug` 성공.
+
+기대 로그: `resolveWall: patchW=... patchH=... (edges L R · screenAspect=... · center=)`,
+`buildResultNode ... billboard=true cover=WxH` (W:H = 선택 박스 비율).
+
+## 조사 — "화면에 두 UI가 겹쳐 보인다" 는 레이아웃 버그 아님 (2026-09-09)
+
+Branch `integration-interior-demo-temp`. 리포트: 상단 "화보 / 내 공간에 배치" 와
+하단 "지운 사물 편집 / 사물 종류: 의자" 가 동시에 떠서 Activity/Fragment 두 개가
+겹쳐 렌더링되는 것으로 의심.
+
+**결론: 버그 아님. `MainActivity` 하나 · `activity_main.xml`(FrameLayout) 하나인
+통합 워크스페이스이고, 이 두 패널 동시 표시는 설계된 동작이다. 의자 삭제도 정상 처리됨.**
+
+- **상단 "화보 / 내 공간에 배치" = `arTopPanel`** — 고정 헤더 바(`‹ 화보` 뒤로가기 +
+  "내 공간에 배치" 제목 TextView + 설정 톱니 + `instructionText`). user1(goguma-salad)
+  이 `9bbea8c`/`697b1ed` 에서 만든 통합 AR 화면의 상단 바. **카탈로그/화보 화면이 아님** —
+  `catalogPanel`·`homeScreen` 은 `setupUnifiedWorkspace()` + XML 기본값으로 둘 다 `GONE`,
+  `CatalogController` 는 `MainActivity` 에 인스턴스화조차 안 됨(화보 브라우징은 별도
+  `CatalogActivity` 런처 담당).
+- **하단 "지운 사물 편집" = `movedObjectPanel`** (+ `removalTools`>`removalTypeRow` "사물 종류").
+  `MovedObjectController.arm()` 이 삭제 성공 직후 띄운다 → **삭제 성공 신호**이지 잔상 아님.
+- `WorkspaceScrollView.onMeasure` 가 높이를 화면 48% 로 제한 → 카메라 시야 확보. `arTopPanel`
+  (top-gravity) + `WorkspaceScrollView`(bottom-gravity) 가 위·아래 띠로 공존 = 설계.
+- **merge 로 빠진 로직 없음**: `agent/shinym87/interior_dev` 는 `MainActivity` 의 패널
+  visibility 를 한 줄도 안 건드렸고(`git diff 3b98b9a..interior_dev` visibility/Panel 라인 0건),
+  merge(`f3f291e`) 결과에 `setupUnifiedWorkspace()` 온전. 두 패널 사이 상호배제 로직은
+  애초에 없었다(통합 설계 전제).
+- **의자 삭제 = 성공** (logcat 13:48:01): `runFlow done → onRemovalApplied(type=chair
+  hasBmp=true hasPose=true)` → `applyResult: 빌보드 커버 quad` → `buildResultNode
+  billboard=true cover=1.58x0.94m` → `arm: type=chair markerPlaced=true`. `runFlow` 는
+  서버 job `done` + 결과 이미지 디코드까지 끝나야 `onRemovalApplied` 를 부르므로 서버
+  remove-object 정상 완료. UI 겹침이 삭제를 막지 않았다.
+
+**후속(선택, 미적용)**: UX 산만함은 사실 — `movedObjectPanel` 표시 중엔 `removalTools`
+자동 접기 같은 상호배제를 넣을 수 있으나 user1 통합 워크스페이스 설계라 합의 후 반영.
+
 ## 진단 로그 추가 — 이동 후 원래 자리에 남는 "반투명 잔상" (2026-09-08)
 
 Branch `agent/shinym87/interior_dev`. 증상: 모니터 삭제→이동 후 화면에 3개가 동시에

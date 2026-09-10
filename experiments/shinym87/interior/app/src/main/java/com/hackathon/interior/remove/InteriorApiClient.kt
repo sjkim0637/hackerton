@@ -23,6 +23,7 @@ class InteriorApiClient(private val baseUrl: String) {
         val jobId: String,
         val status: String,           // queued | running | done | failed
         val resultImageUrl: String?,  // 예: /scenes/{id}/results/{job}.jpg
+        val cutoutImageUrl: String?,  // 예: /scenes/{id}/results/{job}_object.png (투명 배경 컷아웃)
         val changedRect: FloatArray?, // [x, y, w, h] 정규화, 없으면 null
         val error: String?,
     )
@@ -154,6 +155,7 @@ class InteriorApiClient(private val baseUrl: String) {
             jobId = json.optString("job_id", jobId),
             status = json.optString("status", "unknown"),
             resultImageUrl = json.optString("result_image_url").ifEmpty { null },
+            cutoutImageUrl = json.optString("removed_object_cutout_image_url").ifEmpty { null },
             changedRect = rect,
             error = json.optString("error").ifEmpty { null },
         )

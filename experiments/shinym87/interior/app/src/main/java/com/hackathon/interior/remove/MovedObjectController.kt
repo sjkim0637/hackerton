@@ -415,17 +415,23 @@ class MovedObjectController(
                 return@launch
             }
 
-            // 사물 이미지: 서버의 제거-사물 크롭({job}_object.jpg). 없으면 플레이스홀더.
+            // 사물 이미지: 투명 배경 컷아웃({job}_object.png) 을 우선, 없으면 네모 크롭
+            // ({job}_object.jpg), 그것도 없으면 플레이스홀더.
             val jid = plc.jobId
-            val bmp: Bitmap? = if (jid != null) {
-                try {
-                    val bytes = client.downloadBytes("/scenes/$sceneId/results/${jid}_object.jpg")
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                } catch (_: Exception) {
-                    null
+            var bmp: Bitmap? = null
+            if (jid != null) {
+                for (path in listOf(
+                    "/scenes/$sceneId/results/${jid}_object.png",
+                    "/scenes/$sceneId/results/${jid}_object.jpg",
+                )) {
+                    bmp = try {
+                        val bytes = client.downloadBytes(path)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (bmp != null) break
                 }
-            } else {
-                null
             }
 
             objectType = plc.objectType

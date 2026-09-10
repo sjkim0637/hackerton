@@ -89,6 +89,22 @@ class RemovalController(
     private var pendingCoverPatch: Bitmap? = null
     private var pendingCoverRegion: FloatArray? = null
 
+    /**
+     * 평면 자체를 못 잡아 커버 quad 를 아예 포기하고 전체화면 프리뷰만 쓰는 상태.
+     * [buildResultNode] 를 건너뛰고 [showFrozenResult] 를 켠다.
+     */
+    private var coverQuadDisabled = false
+
+    /**
+     * 커버 quad 를 **카메라를 향하는 가림막(빌보드)** 으로 세운 상태 — 바닥/테이블 위 사물 전용.
+     * 평면에 납작하게 깐 quad 는 표면 위로 서 있는 실물(컵·의자 등)을 못 가린다. 대신 사물
+     * 위치에 카메라 정면을 보는 quad 를 세우고, [onFrame] 에서 매 프레임 카메라로 돌린다.
+     */
+    private var coverIsBillboard = false
+
+    /** 커버 quad 의 자식 ImageNode. 빌보드 회전을 매 프레임 여기에 건다. */
+    private var resultImageNode: ImageNode? = null
+
     /** TEMP-DIAG(B): 커버 quad 를 만든 시점의 카메라 pose. 지금 카메라와의 차이를 로그로 본다. */
     private var coverCamPoseAtBuild: Pose? = null
     private var coverFrameLog = 0L
@@ -258,17 +274,26 @@ class RemovalController(
             wallPlaneJson = planeToJson(plane)
         }
 
+        // --- 커버 quad 크기 = "화면에서 그린 사각형" 그대로 ---
+        // 폭: 선택 사각형 좌·우 변을 평면에 hitTest 한 실제 거리(m). 둘 다 맞아야 신뢰.
+        //     한쪽만 맞으면 중심~그쪽 거리의 2배. 둘 다 실패하면 기본값 유지.
+        // 높이: 평면 상/하단 hitTest 로 재지 않는다 — 수평면에서 위쪽 레이가 지평선으로
+        //     향하면 교점이 4m 로 폭발했고, 일부만 맞으면 종횡비가 깨졌다. 대신 **화면
+        //     선택 사각형의 종횡비**를 폭에 곱한다 → 커버 quad 가 항상 내가 그린 박스 모양.
         val left = space.hitTest(rect.left, rect.centerY())?.hitPose
         val right = space.hitTest(rect.right, rect.centerY())?.hitPose
-        val top = space.hitTest(rect.centerX(), rect.top)?.hitPose
-        val bottom = space.hitTest(rect.centerX(), rect.bottom)?.hitPose
-        // 하한을 0.05m 로 (기존 0.2m). 텀블러/컵 같은 소품이 20cm 로 부풀던 문제.
-        if (left != null && right != null) patchWidthM = distance(left, right).coerceIn(0.05f, 4f)
-        if (top != null && bottom != null) patchHeightM = distance(top, bottom).coerceIn(0.05f, 4f)
+        val centerHit = center?.hitPose
+        when {
+            left != null && right != null -> patchWidthM = distance(left, right).coerceIn(0.05f, 3f)
+            centerHit != null && left != null -> patchWidthM = (distance(centerHit, left) * 2f).coerceIn(0.05f, 3f)
+            centerHit != null && right != null -> patchWidthM = (distance(centerHit, right) * 2f).coerceIn(0.05f, 3f)
+        }
+        val screenAspect = rect.height() / rect.width().coerceAtLeast(1f)
+        patchHeightM = (patchWidthM * screenAspect).coerceIn(0.05f, 3f)
         Log.d(
             TAG,
-            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b T=%b B=%b)".format(
-                patchWidthM, patchHeightM, left != null, right != null, top != null, bottom != null,
+            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b · screenAspect=%.2f · center=%b)".format(
+                patchWidthM, patchHeightM, left != null, right != null, screenAspect, center != null,
             ),
         )
     }
@@ -358,15 +383,27 @@ class RemovalController(
             }
         applyResult(bitmap, job.changedRect ?: bbox)
 
+        // 이동 마커에 쓸 이미지: 서버가 만든 **투명 배경 컷아웃**(RGBA PNG) 을 우선 쓴다.
+        // 없거나 실패하면 로컬 bbox 크롭(capturedObjectBitmap) 으로 대체 — 그 경우 네모/흰
+        // 배경이 딸려온다.
+        var markerBitmap = capturedObjectBitmap
+        job.cutoutImageUrl?.let { cutUrl ->
+            runCatching {
+                val cutBytes = client.downloadBytes(cutUrl)
+                BitmapFactory.decodeByteArray(cutBytes, 0, cutBytes.size)
+            }.getOrNull()?.let { markerBitmap = it }
+        }
+
         // PHASE 4: 이 사물을 "다른 위치로 이동" + 서버(placements) 저장/복원 할 수 있게 넘긴다.
         Log.d(
             TAG,
             "runFlow done → onRemovalApplied(scene=$sceneId type=$objectType " +
-                "hasBmp=${capturedObjectBitmap != null} hasPose=${originalObjectPose != null})",
+                "hasBmp=${markerBitmap != null} cutout=${job.cutoutImageUrl != null} " +
+                "hasPose=${originalObjectPose != null})",
         )
         onRemovalApplied(
             sceneId, jobId, objectType,
-            capturedObjectBitmap, originalObjectPose, bbox,
+            markerBitmap, originalObjectPose, bbox,
             patchWidthM, patchHeightM,
         )
     }
@@ -413,19 +450,51 @@ class RemovalController(
                 planeIsVertical = isVertical
             }
         }
+        // 평면을 전혀 못 잡으면 붙일 자리도, 크기 기준도 없다 → 카메라 앞에 임의로 세우면
+        // (예전 시도) 기본값 1.2×0.7 짜리 판이 얼굴 앞 0.8m 에 떠서 화면을 다 덮었다.
+        // 그런 경우는 아래 else 에서 전체화면 정지 프리뷰로만 보여준다.
 
-        if (anchor != null) {
-            buildResultNode(anchor, isVertical, patch)
-            status("완료 · 라이브 화면에서 삭제 자리가 가려집니다 · '삭제 결과 보기'로 전체 확인")
-            Log.d(TAG, "applyResult: 커버 quad 고정 (vertical=$isVertical)")
-        } else {
-            // 아직 평면 없음 → onFrame 에서 재시도. 전체화면으로 덮지 않는다(라이브 유지).
-            pendingCoverPatch = patch
-            pendingCoverRegion = region.copyOf()
-            awaitingCoverAnchor = true
-            status("완료 · 삭제 자리 평면이 인식되면 결과가 고정됩니다 · 그 방향을 잠깐 비춰주세요")
-            Log.d(TAG, "applyResult: 앵커 없음 → onFrame 에서 커버 quad 재시도")
+        // 커버 quad 처리:
+        // - 벽걸이 사물(수직 평면) → 평면에 납작하게 붙인다 (기존 방식, 라이브 유지).
+        // - 바닥/테이블 위 사물(수평 평면) → 평면에 깔면 서 있는 실물을 못 가리므로,
+        //   사물 위치에 카메라를 향하는 가림막(빌보드)으로 세운다 (라이브 유지).
+        // - 평면 자체를 못 잡음 → 붙일 데가 없어 전체화면 정지 프리뷰로 대체.
+        when {
+            anchor != null && isVertical -> {
+                buildResultNode(anchor, isVertical, patch)
+                status("완료 · 라이브 화면에서 삭제 자리가 가려집니다 · '삭제 결과 보기'로 전체 확인")
+                Log.d(TAG, "applyResult: 커버 quad 고정 (vertical=true)")
+            }
+            anchor != null -> {
+                coverIsBillboard = true
+                buildResultNode(anchor, isVertical = false, patch)
+                status("완료 · 삭제 자리를 가림막으로 덮었습니다 · 삭제한 사물을 원하는 곳으로 끌어 옮기세요")
+                Log.d(TAG, "applyResult: 빌보드 커버 quad (수평면 사물)")
+            }
+            isVertical -> {
+                // 벽 사물인데 아직 평면을 못 잡음 → onFrame 에서 재시도 (라이브 유지).
+                pendingCoverPatch = patch
+                pendingCoverRegion = region.copyOf()
+                awaitingCoverAnchor = true
+                status("완료 · 삭제 자리 평면이 인식되면 결과가 고정됩니다 · 그 방향을 잠깐 비춰주세요")
+                Log.d(TAG, "applyResult: 앵커 없음(벽) → onFrame 에서 커버 quad 재시도")
+            }
+            else -> {
+                coverQuadDisabled = true
+                showFrozenResult()
+                status("완료 · 평면 인식이 안 돼 결과를 전체화면으로 표시합니다 · '결과 닫기 (라이브로)'로 복귀")
+                Log.d(TAG, "applyResult: 평면 없음 → 전체화면 프리뷰")
+            }
         }
+    }
+
+    /** 전체화면 정지 결과 프리뷰([R.id.resultOverlay])를 켠다. 커버 quad 를 못/안 쓸 때. */
+    private fun showFrozenResult() {
+        if (binding.resultOverlay.drawable == null) return
+        showingAfter = true
+        binding.resultOverlay.visibility = View.VISIBLE
+        binding.btnToggleRemoval.text = "결과 닫기 (라이브로)"
+        binding.btnToggleRemoval.visibility = View.VISIBLE
     }
 
     /** 사물 영역([region] = 정규화 [x,y,w,h]) 중심에서 평면 hitTest. */
@@ -448,10 +517,14 @@ class RemovalController(
 
     /** 커버 quad(AnchorNode + ImageNode)를 만들어 씬에 붙인다. */
     private fun buildResultNode(anchor: Anchor, isVertical: Boolean, patch: Bitmap) {
+        // 빌보드 가림막은 선택 영역 딱 그 크기면 실물 가장자리가 삐져나온다 → 여유를 더한다.
+        // 측정값(patchWidthM/HeightM) 자체는 안 건드린다(마커 크기는 실측 그대로 써야 하므로).
+        val coverW = if (coverIsBillboard) patchWidthM * COVER_MARGIN else patchWidthM
+        val coverH = if (coverIsBillboard) patchHeightM * COVER_MARGIN else patchHeightM
         val image = ImageNode(
             materialLoader = sceneView.materialLoader,
             bitmap = patch,
-            size = Size(patchWidthM, patchHeightM),
+            size = Size(coverW, coverH),
         ).apply {
             isTouchable = false
             // 수직 평면(벽): 앵커 로컬 +Y 가 벽 바깥이므로 quad 를 X축 -90° 세운다.
@@ -465,6 +538,7 @@ class RemovalController(
         }
         sceneView.addChildNode(node)
         resultNode = node
+        resultImageNode = image
         smoothedPos = null
         awaitingCoverAnchor = false
         pendingCoverPatch = null
@@ -472,9 +546,9 @@ class RemovalController(
         coverCamPoseAtBuild = space.latestFrame?.camera?.pose
         Log.d(
             TAG,
-            "buildResultNode: node#%d anchorPose=%s vertical=%b patch=%.2fx%.2fm camAtBuild=%s".format(
-                node.hashCode(), poseStr(anchor.pose), isVertical,
-                patchWidthM, patchHeightM, poseStr(coverCamPoseAtBuild),
+            "buildResultNode: node#%d anchorPose=%s vertical=%b billboard=%b patch=%.2fx%.2fm cover=%.2fx%.2fm camAtBuild=%s".format(
+                node.hashCode(), poseStr(anchor.pose), isVertical, coverIsBillboard,
+                patchWidthM, patchHeightM, coverW, coverH, poseStr(coverCamPoseAtBuild),
             ),
         )
     }
@@ -488,7 +562,7 @@ class RemovalController(
      *    - 위치에 이동 평균(EMA)을 걸어 재추적 지터를 완화한다.
      */
     fun onFrame() {
-        if (awaitingCoverAnchor && resultNode == null) {
+        if (awaitingCoverAnchor && resultNode == null && !coverQuadDisabled) {
             val region = pendingCoverRegion
             val patch = pendingCoverPatch
             if (region != null && patch != null) {
@@ -501,6 +575,7 @@ class RemovalController(
                     val isVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
                     wallAnchor = fresh
                     planeIsVertical = isVertical
+                    coverIsBillboard = !isVertical
                     buildResultNode(fresh, isVertical, patch)
                     status("삭제 자리에 결과가 고정되었습니다")
                     Log.d(TAG, "onFrame: 커버 quad 앵커 확보 (vertical=$isVertical)")
@@ -535,6 +610,13 @@ class RemovalController(
         p.getRotationQuaternion(quat, 0)
         node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
         node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
+
+        if (coverIsBillboard) {
+            // 가림막(부모 AnchorNode)을 매 프레임 카메라 정면으로 돌린다. 위치는 앵커에서,
+            // 회전만 카메라에서 — 자식 quad(Rotation 0)가 이걸 물려받아 정면을 본다.
+            // 자식에 worldQuaternion 을 걸면 부모 pose 갱신에 밀려 안 먹는 경우가 있어 부모에 건다.
+            node.worldQuaternion = sceneView.cameraNode.worldQuaternion
+        }
 
         // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
         // 카메라의 위치·회전 차이가 클수록, 평면 이미지 1장으론 시차(parallax)를 못 살려
@@ -592,8 +674,11 @@ class RemovalController(
             runCatching { node.destroy() }
         }
         resultNode = null
+        resultImageNode = null
         smoothedPos = null
         awaitingCoverAnchor = false
+        coverQuadDisabled = false
+        coverIsBillboard = false
         pendingCoverPatch = null
         pendingCoverRegion = null
         coverCamPoseAtBuild = null
@@ -751,6 +836,9 @@ class RemovalController(
 
         /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
+
+        /** 빌보드 가림막을 선택 영역보다 이 배율만큼 살짝 키운다(하드 엣지 방지, 크게는 안 함). */
+        const val COVER_MARGIN = 1.12f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"

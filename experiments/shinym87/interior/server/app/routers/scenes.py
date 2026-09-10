@@ -13,8 +13,15 @@ from pydantic import ValidationError
 
 from ..ai import ProviderError, is_known, normalize_object_type
 from ..ai.colormatch import check_result_anomaly, match_to_source
-from ..ai.imageops import cap_jpeg_bytes, crop_normalized_jpeg, ensure_jpeg_size, image_size
+from ..ai.imageops import (
+    cap_jpeg_bytes,
+    crop_normalized_jpeg,
+    cutout_rgba_png,
+    ensure_jpeg_size,
+    image_size,
+)
 from ..ai.mask import region_bbox
+from ..ai.mobilesam import point_to_mask_png
 from ..cleanup import prune_scene_results
 from ..config import get_settings
 from ..deps import get_provider, get_store
@@ -56,6 +63,7 @@ def _job_out(job: dict) -> JobOut:
         keyframe_id=job["keyframe_id"],
         status=job["status"],
         result_image_url=job.get("result_url"),
+        removed_object_cutout_image_url=job.get("removed_object_cutout_url"),
         changed_region=job.get("changed_region"),
         error=job.get("error"),
     )
@@ -266,6 +274,37 @@ def _run_job(
                 except Exception as exc:  # noqa: BLE001 - 부가 산출물, 실패해도 job 은 done
                     _log.warning("[job %s] 제거 사물 크롭 저장 실패: %s", job_id, exc)
 
+                # 투명 배경 컷아웃(RGBA PNG). 삭제한 사물을 다시 배치할 때 네모 크롭 +
+                # 흰/배경 모서리가 딸려오지 않게 한다. MobileSAM 모델이 있으면 실루엣을,
+                # 없으면 bbox 가장자리 페더링으로 대체한다.
+                try:
+                    bx, by, bw, bh = region_bbox(region)
+                    silhouette = point_to_mask_png(
+                        source_bytes,
+                        bx + bw / 2,
+                        by + bh / 2,
+                        encoder_path=settings.mobilesam_encoder_path,
+                        decoder_path=settings.mobilesam_decoder_path,
+                    )
+                    cut_bytes = cutout_rgba_png(
+                        source_bytes, (bx, by, bw, bh), mask_png=silhouette
+                    )
+                    cut_path = results_dir / f"{job_id}_object.png"
+                    cut_path.write_bytes(cut_bytes)
+                    store.update_job(
+                        job_id,
+                        removed_object_cutout_path=str(cut_path),
+                        removed_object_cutout_url=(
+                            f"/scenes/{scene_id}/results/{job_id}_object.png"
+                        ),
+                    )
+                    _log.info(
+                        "[job %s] 사물 컷아웃 저장 → %s (%d bytes, mobilesam=%s)",
+                        job_id, cut_path.name, len(cut_bytes), silhouette is not None,
+                    )
+                except Exception as exc:  # noqa: BLE001 - 부가 산출물, 실패해도 job 은 done
+                    _log.warning("[job %s] 사물 컷아웃 저장 실패: %s", job_id, exc)
+
             # 오래된 결과 정리 (scene 당 개수 상한). job 기록은 남기고 파일만 지운다.
             prune_scene_results(
                 settings.scenes_dir, scene_id, settings.result_keep_per_scene
@@ -381,6 +420,11 @@ def list_results(scene_id: str) -> list[dict]:
         if rop and Path(rop).is_file():
             removed_object_url = job.get("removed_object_url")
 
+        cutout_url: str | None = None
+        cop = job.get("removed_object_cutout_path")
+        if cop and Path(cop).is_file():
+            cutout_url = job.get("removed_object_cutout_url")
+
         out.append(
             {
                 "job_id": job["job_id"],
@@ -388,6 +432,7 @@ def list_results(scene_id: str) -> list[dict]:
                 "status": job["status"],
                 "result_image_url": job.get("result_url") if available else None,
                 "removed_object_image_url": removed_object_url,
+                "removed_object_cutout_image_url": cutout_url,
                 "changed_region": job.get("changed_region"),
                 "error": job.get("error"),
                 "created_at": job["created_at"],
@@ -397,6 +442,26 @@ def list_results(scene_id: str) -> list[dict]:
             }
         )
     return out
+
+
+@router.get("/scenes/{scene_id}/results/{job_id}_object.png")
+def get_removed_object_cutout(scene_id: str, job_id: str) -> FileResponse:
+    """제거된 사물의 **투명 배경 컷아웃**(RGBA PNG). 이동 배치 시 네모/흰배경 없이 재사용.
+
+    (`{job_id}.jpg` / `{job_id}_object.jpg` 라우트보다 먼저 등록되어야 여기로 매칭된다.)
+    """
+    _require_scene(scene_id)
+    job = get_store().get_job(job_id)
+    if job is None or job["scene_id"] != scene_id:
+        raise HTTPException(status_code=404, detail=f"작업 없음: {job_id}")
+    path = job.get("removed_object_cutout_path")
+    if not path:
+        raise HTTPException(status_code=404, detail=f"사물 컷아웃이 없습니다: {job_id}")
+    if not Path(path).is_file():
+        raise HTTPException(
+            status_code=410, detail=f"사물 컷아웃이 정리되어 없습니다: {job_id}"
+        )
+    return FileResponse(path, media_type="image/png")
 
 
 @router.get("/scenes/{scene_id}/results/{job_id}_object.jpg")

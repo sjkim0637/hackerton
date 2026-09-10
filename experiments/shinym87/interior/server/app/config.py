@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     # 작업(scene) 당 외부 AI 호출 상한
     max_ai_calls_per_scene: int = 20
 
+    # 삭제한 사물을 다시 배치할 때 쓰는 "투명 배경 컷아웃"(RGBA PNG) 생성용.
+    # MobileSAM ONNX(encoder + decoder)가 있으면 실루엣 마스크를, 없으면 bbox 가장자리
+    # 페더링으로 대체한다. 모델은 저장소에 커밋하지 않는다(수동 다운로드, 경로 지정).
+    # 참고: agent/goguma-salad/interior-mobilesam 브랜치.
+    mobilesam_encoder_path: Path | None = None
+    mobilesam_decoder_path: Path | None = None
+    # MobileSAM 없이 점만 있을 때 대체 정사각형 한 변(이미지 짧은 변 대비 비율).
+    mobilesam_fallback_box_frac: float = 0.28
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "interior.db"
