@@ -281,17 +281,23 @@ class RemovalController(
                 source = source,
                 bbox = bbox,
                 onSuccess = { result ->
-                    result.removedObjectBitmap?.let { capturedObjectBitmap = it }
-                    applyResult(result.bitmap, bbox)
-                    onRemovalApplied(
-                        "local-${System.currentTimeMillis()}", null, objectType,
-                        capturedObjectBitmap, originalObjectPose, bbox,
-                        patchWidthM, patchHeightM,
-                    )
-                    status(
-                        "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
-                            if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
-                    )
+                    runCatching {
+                        result.removedObjectBitmap?.let { capturedObjectBitmap = it }
+                        applyResult(result.bitmap, bbox)
+                        onRemovalApplied(
+                            "local-${System.currentTimeMillis()}", null, objectType,
+                            capturedObjectBitmap, originalObjectPose, bbox,
+                            patchWidthM, patchHeightM,
+                        )
+                    }.onSuccess {
+                        status(
+                            "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
+                                if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
+                        )
+                    }.onFailure { error ->
+                        Log.e(TAG, "삭제 결과 AR 적용 실패", error)
+                        status("삭제 결과를 AR에 표시하지 못했습니다 · 화면은 계속 사용할 수 있어요")
+                    }
                     busy = false
                     setControlsEnabled(true)
                 },

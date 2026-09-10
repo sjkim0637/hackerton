@@ -55,9 +55,14 @@ class LocalRemovalProcessor {
         onFailure: (Throwable) -> Unit,
     ) {
         val startedAt = System.nanoTime()
-        segmenter.process(InputImage.fromBitmap(source, 0))
-            .addOnSuccessListener { result -> runInpaint(source, bbox, result, startedAt, onSuccess, onFailure) }
-            .addOnFailureListener { runInpaint(source, bbox, null, startedAt, onSuccess, onFailure) }
+        runCatching { segmenter.process(InputImage.fromBitmap(source, 0)) }
+            .onFailure { error ->
+                // Play services 초기화 실패도 앱 화면 밖으로 예외를 던지지 않는다.
+                runInpaint(source, bbox, null, startedAt, onSuccess, onFailure)
+            }
+            .getOrNull()
+            ?.addOnSuccessListener { result -> runInpaint(source, bbox, result, startedAt, onSuccess, onFailure) }
+            ?.addOnFailureListener { runInpaint(source, bbox, null, startedAt, onSuccess, onFailure) }
     }
 
     private fun runInpaint(
