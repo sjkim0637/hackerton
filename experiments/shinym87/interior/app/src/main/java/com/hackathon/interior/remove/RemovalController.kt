@@ -608,15 +608,16 @@ class RemovalController(
 
         val quat = FloatArray(4)
         p.getRotationQuaternion(quat, 0)
-        node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
-        node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
-
         if (coverIsBillboard) {
-            // 가림막(부모 AnchorNode)을 매 프레임 카메라 정면으로 돌린다. 위치는 앵커에서,
-            // 회전만 카메라에서 — 자식 quad(Rotation 0)가 이걸 물려받아 정면을 본다.
-            // 자식에 worldQuaternion 을 걸면 부모 pose 갱신에 밀려 안 먹는 경우가 있어 부모에 건다.
-            node.worldQuaternion = sceneView.cameraNode.worldQuaternion
+            // 빌보드: 부모는 **위치만**(회전 항등), 자식 quad 를 카메라 회전 전체(pitch/roll
+            // 포함)에 직접 맞춘다 — FurnitureController.billboard() 의 라벨 처리와 동일.
+            // (부모에 회전을 걸면 앵커 pose 갱신과 섞여 45° 어긋났다.)
+            node.pose = Pose(floatArrayOf(nx, ny, nz), IDENTITY_QUAT)
+            resultImageNode?.worldQuaternion = sceneView.cameraNode.worldQuaternion
+        } else {
+            node.pose = Pose(floatArrayOf(nx, ny, nz), quat)
         }
+        node.isVisible = true   // 라이브/프리뷰 무관하게 항상 — 실제 사물을 계속 가린다.
 
         // TEMP-DIAG(B): "잔상"이 재투영 어긋남인지 확인. 커버 quad 생성 시점 카메라와 지금
         // 카메라의 위치·회전 차이가 클수록, 평면 이미지 1장으론 시차(parallax)를 못 살려
@@ -836,6 +837,9 @@ class RemovalController(
 
         /** 결과 quad 위치 이동 평균 계수(0~1). 작을수록 부드럽지만 반응이 느리다. */
         const val SMOOTH_ALPHA = 0.2f
+
+        /** 회전 없음 쿼터니언 (x,y,z,w). 빌보드일 때 부모 AnchorNode 에 위치만 주려고 쓴다. */
+        val IDENTITY_QUAT = floatArrayOf(0f, 0f, 0f, 1f)
 
         /** 빌보드 가림막을 선택 영역보다 이 배율만큼 살짝 키운다(하드 엣지 방지, 크게는 안 함). */
         const val COVER_MARGIN = 1.12f

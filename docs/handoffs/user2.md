@@ -13,6 +13,40 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## merge 후 리포트 2건 — 빌보드 45° / 이동 패널 버튼 (2026-09-10)
+
+Branch `integration-interior-demo` (temp merge 이후).
+
+### 문제 1 — 가림막(빌보드)이 45° 꺾임, 폰 기울일 때 심함
+
+원인: 빌보드 회전을 **부모 AnchorNode** `worldQuaternion` 에 걸고, 바로 앞에서
+`node.pose = Pose(pos, anchorQuat)` 로 앵커 회전을 넣고 있었다. 앵커 pose 갱신과
+카메라 회전이 섞여 pitch 가 어긋났다.
+
+수정 (`RemovalController.onFrame`): 빌보드면 부모는 **위치만**(회전 항등
+`IDENTITY_QUAT`), 자식 `resultImageNode` 에 `worldQuaternion = cameraNode.worldQuaternion`
+을 직접 건다 — `FurnitureController.billboard()` 의 라벨 처리와 동일 방식. pitch/roll
+포함 카메라 전체 회전을 그대로 따라간다.
+
+### 문제 2 — "이동 패널에 상하좌우 버튼이 있었는데 회전만 남음"
+
+**merge 가 덮어쓴 것 아님.** 증거: `git diff 3028fb7 HEAD -- activity_main.xml`
+= 0 bytes (merge `8ef01a0` 은 activity_main.xml 을 전혀 안 건드림). `movedObjectPanel`
+블록은 `f3f291e` 이후 바이트 동일 — 원위치/치우기, −/＋/회전↷, 배치복원/실행취소
+7버튼 그대로. temp 브랜치는 `remove/*.kt`·`server/*`·`docs/` 만 수정(파일 겹침 0).
+
+"상하좌우 버튼" = demo-v1 이 만든 **`selectionPanel`(선택한 가구)** 의 조이스틱
+다이얼(＋위/−아래/↶왼/↷오른). 이동한 사물 패널엔 원래 없었고 평범한 버튼 행이었다.
+
+조치: 요청대로 `movedObjectPanel` 에도 **같은 조이스틱 다이얼**을 넣었다.
+- `activity_main.xml`: `movedObjectPanel` 의 `−/＋/회전↷` 행 → `selectionPanel` 과
+  동일한 `FrameLayout` 다이얼. ids `btnMovedGrow`(＋)/`btnMovedShrink`(−)/
+  **`btnMovedRotateLeft`(↶)**/**`btnMovedRotateRight`(↷)**. `btnMovedRotate` 제거.
+- `MovedObjectController`: `rotate()` → `rotate(deltaDeg)`, 좌 −15°/우 +15° 배선,
+  `enableButtons` 갱신.
+
+`:app:assembleDebug` 성공. 빌보드/컷아웃/잔상 수정은 그대로 유지.
+
 ## 삭제한 사물을 "투명 배경 컷아웃"으로 재배치 (2026-09-09)
 
 Branch `integration-interior-demo-temp`. 문제: 삭제한 사물을 다시 배치하면 선택

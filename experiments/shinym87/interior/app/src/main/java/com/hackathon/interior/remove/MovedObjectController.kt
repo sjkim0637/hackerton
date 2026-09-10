@@ -91,7 +91,8 @@ class MovedObjectController(
         binding.btnMovedUndo.setOnClickListener { undoOnServer() }
         binding.btnMovedShrink.setOnClickListener { bump(1f / SCALE_STEP) }
         binding.btnMovedGrow.setOnClickListener { bump(SCALE_STEP) }
-        binding.btnMovedRotate.setOnClickListener { rotate() }
+        binding.btnMovedRotateLeft.setOnClickListener { rotate(-15f) }
+        binding.btnMovedRotateRight.setOnClickListener { rotate(15f) }
         binding.btnMovedClear.setOnClickListener { clearMovedNode(); status("이동한 사물을 치웠습니다") }
 
         // 지난 세션에 저장된 배치가 있으면, 복원/취소만 가능한 상태로 패널을 연다.
@@ -355,9 +356,9 @@ class MovedObjectController(
         scheduleSave()
     }
 
-    private fun rotate() {
+    private fun rotate(deltaDeg: Float) {
         if (node == null) return
-        rotDeg = (rotDeg + 15f) % 360f
+        rotDeg = ((rotDeg + deltaDeg) % 360f + 360f) % 360f
         applyChildTransforms()
         scheduleSave()
     }
@@ -592,7 +593,8 @@ class MovedObjectController(
         binding.btnMovedClear.isEnabled = clear
         binding.btnMovedShrink.isEnabled = adjust
         binding.btnMovedGrow.isEnabled = adjust
-        binding.btnMovedRotate.isEnabled = adjust
+        binding.btnMovedRotateLeft.isEnabled = adjust
+        binding.btnMovedRotateRight.isEnabled = adjust
     }
 
     private fun downscale(src: Bitmap): Bitmap {
