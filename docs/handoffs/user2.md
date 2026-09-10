@@ -13,6 +13,56 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 가림막 크기가 삭제할 때마다 들쭉날쭉 — 고정 계산으로 교체 (2026-09-11)
+
+Branch `integration-interior-demo`. 실기기: 라이브 가림막 크기가 매 삭제마다 다름
+(양옆이 튀거나 상하좌우가 다 작음). "삭제 결과 보기"(정지화면)는 항상 정확.
+
+### 1. 기존 크기 계산 방식 = **hitTest 3D 거리 기반 + 분기 폴백** (불안정)
+
+`RemovalController.resolveWall()` (박스를 그린 순간 1회 실행):
+- `patchWidthM` = 선택 사각형 **좌·우 변**을 각각 `space.hitTest` 해서 나온 두
+  3D 점 사이 거리. 단, `when` 분기가 3갈래:
+  - 좌·우 둘 다 평면에 맞음 → `distance(left, right)` (정확)
+  - 한쪽만 맞음 → `distance(center, 그쪽) × 2` (근사)
+  - 둘 다 실패 → 기본값 `1.2` 유지
+- `patchHeightM` = `patchWidthM × (그린 박스 종횡비)` — 이 부분은 안정적.
+
+→ **레이가 벽 대신 바닥/허공에 맞거나 시선 각도가 조금만 달라도 어느 분기로
+가는지가 바뀌어** 폭이 크게 출렁였다. hitTest 시점 카메라 위치/각도 의존이 원인.
+
+### 2·3. 정지화면과의 차이 → 정지화면 방식으로 통일
+
+"삭제 결과 보기"(`showFrozenResult` + `resultOverlay`)는 **크기 계산 자체가 없다** —
+서버가 준 전체 결과 이미지를 `centerCrop` ImageView 로 화면에 1:1 blit 할 뿐이라
+"내가 캡처한 화면 그대로" 항상 정확. 3D 투영·hitTest·미터 단위가 없어 출렁일 요소가
+없다.
+
+가림막은 월드 앵커 quad 라 미터 크기가 필요하지만, **개념은 정지화면과 같게** 바꿨다:
+"화면에 그린 사각형(bboxNorm)을 앵커 깊이에 투영":
+
+새 `updatePatchSize(camPose, targetPose)`:
+```
+d   = distance(camPose, targetPose)                 # 커버 지점까지 거리
+fov = imageW / fx  (카메라 intrinsics, ≈ 2·tan(hfov/2))   # 거리 1m 에서 화면이 덮는 월드 폭
+patchWidthM  = bboxNorm.w · d · fov
+patchHeightM = patchWidthM · (bboxNorm.h / bboxNorm.w)
+```
+- 가장자리 hitTest·분기 폴백 **완전 제거**. 입력(그린 박스 비율, 앵커 위치, 그 시점
+  카메라·intrinsics)이 전부 삭제 요청 시점에 고정되므로 **언제 어디서 보든 같은 크기**.
+- 호출: `resolveWall`(중심 hitTest 로), 그리고 선택 시점에 평면을 못 잡아
+  `applyResult`/`onFrame` 이 뒤늦게 앵커를 잡는 경로에서도(그 앵커 깊이로) 재계산.
+- intrinsics 를 못 읽으면 `DEFAULT_FOV_W = 1.2` 폴백. `fov` 는 0.6~2.2 로 clamp.
+- 벽 커버(비-빌보드) 경로도 같은 `patchWidthM/HeightM` 를 쓰므로 함께 안정화됨.
+- `COVER_MARGIN`(1.04) 은 그대로 — 이제 안정된 폭에 일관되게 4% 만 더한다.
+
+### 빌드
+
+`.\gradlew.bat :app:assembleDebug` → **BUILD SUCCESSFUL** (30s). APK:
+`experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk`.
+실기기에서 같은 TV 를 여러 번 삭제해도 가림막 크기가 일정한지 확인 대기. 로그:
+`updatePatchSize: d=.. fov=.. bboxFrac=..x.. → patch=..x..m` (tag `InteriorAR`).
+
 ## 벽걸이 TV 삭제 가림막이 45° 기울어짐 — 커버 quad 수직 정렬 (2026-09-11)
 
 Branch `integration-interior-demo`. 실기기: 벽걸이 TV 삭제 시 가림막(커버 quad)이

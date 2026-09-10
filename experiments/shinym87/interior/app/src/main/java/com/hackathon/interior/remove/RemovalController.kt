@@ -274,28 +274,54 @@ class RemovalController(
             wallPlaneJson = planeToJson(plane)
         }
 
-        // --- 커버 quad 크기 = "화면에서 그린 사각형" 그대로 ---
-        // 폭: 선택 사각형 좌·우 변을 평면에 hitTest 한 실제 거리(m). 둘 다 맞아야 신뢰.
-        //     한쪽만 맞으면 중심~그쪽 거리의 2배. 둘 다 실패하면 기본값 유지.
-        // 높이: 평면 상/하단 hitTest 로 재지 않는다 — 수평면에서 위쪽 레이가 지평선으로
-        //     향하면 교점이 4m 로 폭발했고, 일부만 맞으면 종횡비가 깨졌다. 대신 **화면
-        //     선택 사각형의 종횡비**를 폭에 곱한다 → 커버 quad 가 항상 내가 그린 박스 모양.
-        val left = space.hitTest(rect.left, rect.centerY())?.hitPose
-        val right = space.hitTest(rect.right, rect.centerY())?.hitPose
-        val centerHit = center?.hitPose
-        when {
-            left != null && right != null -> patchWidthM = distance(left, right).coerceIn(0.05f, 3f)
-            centerHit != null && left != null -> patchWidthM = (distance(centerHit, left) * 2f).coerceIn(0.05f, 3f)
-            centerHit != null && right != null -> patchWidthM = (distance(centerHit, right) * 2f).coerceIn(0.05f, 3f)
-        }
-        val screenAspect = rect.height() / rect.width().coerceAtLeast(1f)
-        patchHeightM = (patchWidthM * screenAspect).coerceIn(0.05f, 3f)
+        // --- 커버 quad 크기 = "내가 그린 사각형" 을 앵커 깊이에 투영 (정지화면 오버레이와 동일 개념) ---
+        // 예전엔 선택 사각형 좌·우 변을 각각 hitTest 해 그 실거리를 폭으로 썼는데, 레이가
+        // 벽 대신 바닥/허공에 맞거나 한쪽만 맞으면 분기(±2배·기본값)가 갈려 삭제할 때마다
+        // 크기가 들쭉날쭉했다. 이제 bboxNorm 화면 비율 × 중심 hitTest 거리 × 카메라 화각으로
+        // 고정 계산한다 — 입력이 모두 삭제 요청 시점에 확정되므로 어디서 보든 같은 크기.
+        updatePatchSize(space.latestFrame?.camera?.pose, center?.hitPose)
         Log.d(
             TAG,
-            "resolveWall: patchW=%.3f patchH=%.3f m (edges L=%b R=%b · screenAspect=%.2f · center=%b)".format(
-                patchWidthM, patchHeightM, left != null, right != null, screenAspect, center != null,
+            "resolveWall: patchW=%.3f patchH=%.3f m (center=%b vertical=%b)".format(
+                patchWidthM, patchHeightM, center != null, planeIsVertical,
             ),
         )
+    }
+
+    /**
+     * 커버 quad 의 월드 크기(m)를 **"내가 그린 사각형(bboxNorm) 화면 비율 × 대상 지점까지
+     * 거리 × 카메라 수평 화각"** 으로 계산해 [patchWidthM]/[patchHeightM] 에 넣는다.
+     *
+     * 정지화면 오버레이(`resultOverlay`)가 "화면 사각형을 그대로 덮는" 것과 동일한 개념을
+     * 3D 앵커 깊이에 투영한 것. 가장자리 hitTest(레이가 벽/바닥/허공 중 어디에 맞느냐로
+     * 값이 갈리고 폴백 분기까지 있어 불안정)를 쓰지 않는다. 입력(bboxNorm, 앵커 위치,
+     * 그 시점 카메라·intrinsics)이 삭제 요청 시점에 고정되므로 언제 어디서 보든 같은 크기.
+     */
+    private fun updatePatchSize(camPose: Pose?, targetPose: Pose?) {
+        val bbox = bboxNorm ?: return
+        if (camPose == null || targetPose == null) return
+        val d = distance(camPose, targetPose)
+        if (d < 0.05f || d > 12f) return
+        val fov = fovWidthFactor()                       // 거리 1m 에서 화면이 덮는 월드 폭
+        val w = (bbox[2] * d * fov).coerceIn(0.05f, 3f)
+        // 높이는 그린 사각형의 종횡비로 유도 — quad 모양이 이미지와 안 어긋나게.
+        val h = (w * (bbox[3] / bbox[2].coerceAtLeast(1e-3f))).coerceIn(0.05f, 3f)
+        patchWidthM = w
+        patchHeightM = h
+        Log.d(
+            TAG,
+            "updatePatchSize: d=%.2f fov=%.2f bboxFrac=%.3fx%.3f → patch=%.2fx%.2fm".format(
+                d, fov, bbox[2], bbox[3], w, h,
+            ),
+        )
+    }
+
+    /** 거리 1m 에서 카메라 화면이 덮는 월드 폭 (= imageW / fx ≈ 2·tan(hfov/2)). */
+    private fun fovWidthFactor(): Float {
+        val intr = space.latestFrame?.camera?.imageIntrinsics ?: return DEFAULT_FOV_W
+        val fx = intr.focalLength.getOrNull(0) ?: return DEFAULT_FOV_W
+        val imgW = intr.imageDimensions.getOrNull(0)?.toFloat() ?: return DEFAULT_FOV_W
+        return if (fx > 1f && imgW > 0f) (imgW / fx).coerceIn(0.6f, 2.2f) else DEFAULT_FOV_W
     }
 
     // ----------------------------------------------- 2·3. 캡처 → 서버 → 폴링 → 적용 (P1-3, P1-8)
@@ -450,6 +476,8 @@ class RemovalController(
                 isVertical = (hit.trackable as? Plane)?.type == Plane.Type.VERTICAL
                 wallAnchor = fresh
                 planeIsVertical = isVertical
+                // 선택 시점에 평면이 없어 크기를 못 잡았으니, 지금 잡은 앵커 깊이로 고정 계산.
+                updatePatchSize(space.latestFrame?.camera?.pose, hit?.hitPose)
             }
         }
         // 평면을 전혀 못 잡으면 붙일 자리도, 크기 기준도 없다 → 카메라 앞에 임의로 세우면
@@ -581,6 +609,7 @@ class RemovalController(
                     wallAnchor = fresh
                     planeIsVertical = isVertical
                     coverIsBillboard = !isVertical
+                    updatePatchSize(space.latestFrame?.camera?.pose, hit?.hitPose)
                     buildResultNode(fresh, isVertical, patch)
                     status("삭제 자리에 결과가 고정되었습니다")
                     Log.d(TAG, "onFrame: 커버 quad 앵커 확보 (vertical=$isVertical)")
@@ -885,6 +914,12 @@ class RemovalController(
 
         /** 커버 quad 텍스처 크롭을 각 변에서 영역 크기 대비 이만큼 안쪽으로 좁힌다(seam 회피). */
         const val CROP_INSET_FRACTION = 0.03f
+
+        /**
+         * intrinsics 를 못 읽을 때 쓰는 기본 수평 화각 계수 (거리 1m 에서 화면이 덮는
+         * 월드 폭 ≈ 2·tan(hfov/2)). 일반적인 폰 후면 카메라 ~65° 기준.
+         */
+        const val DEFAULT_FOV_W = 1.2f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"
