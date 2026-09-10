@@ -276,7 +276,7 @@ class RemovalController(
                 setControlsEnabled(true)
                 return@captureSceneJpeg
             }
-            status("사물 윤곽 분석·즉시 복원 중…")
+            status("선택 영역을 즉시 복원 중…")
             localRemoval.remove(
                 source = source,
                 bbox = bbox,
@@ -286,10 +286,7 @@ class RemovalController(
                         // 지운 사물을 별도 3D 마커로 다시 만드는 경로는 사용하지 않는다.
                         applyResult(result.bitmap, bbox)
                     }.onSuccess {
-                        status(
-                            "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
-                                if (result.usedSubjectMask) " · 사물 마스크 적용" else " · 선택 영역 적용",
-                        )
+                        status("완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms · 선택 영역 적용")
                     }.onFailure { error ->
                         Log.e(TAG, "삭제 결과 AR 적용 실패", error)
                         status("삭제 결과를 AR에 표시하지 못했습니다 · 화면은 계속 사용할 수 있어요")

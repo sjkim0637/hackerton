@@ -50,8 +50,7 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
 
-    // 온디바이스 사물 마스크 + 경량 Telea 복원 실험. 서버/Gemini 호출 없이 삭제 결과를 만든다.
-    implementation 'com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1'
+    // 기기 내 OpenCV Telea 복원. 서버/Gemini 호출 없이 삭제 결과를 만든다.
     implementation 'org.opencv:opencv:4.10.0'
 
     // SceneView for ARCore: camera background, plane detection + grid rendering,

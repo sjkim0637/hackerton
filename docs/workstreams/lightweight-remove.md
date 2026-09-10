@@ -30,6 +30,10 @@ IN_PROGRESS
 
 ## Current Direction
 
+- Samsung `SM-S908N`에서 ML Kit Subject Segmentation Play services 모듈이 네이티브 `SIGSEGV`를 일으킨 것이 로그로 확인되어 해당 의존성과 모델 다운로드를 제거했다.
+- 현재는 사용자가 지정한 영역을 OpenCV `INPAINT_TELEA`로 기기 안에서 실제 복원한다. 이는 mock 흐림 처리가 아니며, 객체 윤곽 단위 마스크보다 경계 정밀도는 낮다.
+- 삭제 결과 patch는 생성 시점의 AR pose에 고정하며, 삭제한 사물을 별도 이동 마커로 다시 만들지 않는다.
+
 - `interior-mobilesam` 브랜치는 서버 ONNX/LaMa 구조이므로 병합하지 않고, 개별 사물 마스크를 고르는 방식만 온디바이스 ML Kit에 반영한다.
 - 선택 bbox와 가장 많이 겹치는 ML Kit `Subject` 하나의 마스크만 Telea 입력으로 쓴다. 삭제한 사물은 투명 cutout으로 만들어 AR 이동 마커에 넘긴다.
 - 삭제 후 전체 정지 이미지 프리뷰는 열지 않고, 복원 patch를 생성 시점 AR pose에 고정해 계속 삭제 자리를 덮는다.
