@@ -13,6 +13,47 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 이동 다이얼을 상하좌우 회전 십자로 + 대리석 벽 평면 인식 완화 (2026-09-10)
+
+Branch `integration-interior-demo`.
+
+### 이동 사물 조작 다이얼 재구성 (`activity_main.xml` + `MovedObjectController`)
+
+십자 다이얼을 **회전 전용**으로 바꿈:
+- 상 `btnMovedTiltUp` ▲ / 하 `btnMovedTiltDown` ▼ = **pitch(위아래 기울기)**
+- 좌 `btnMovedRotateLeft` ↶ / 우 `btnMovedRotateRight` ↷ = yaw(좌우 회전, 기존)
+- 가운데 = 라벨("회전")
+
+크기 조절은 다이얼에서 빼서 **별도 한 줄** `[축소 −] [확대 ＋]` (`btnMovedShrink`/
+`btnMovedGrow`, 배치복원/실행취소 줄 위). id 는 그대로라 배선 변경 최소.
+
+`MovedObjectController`:
+- `tiltDeg` 상태 추가 (yaw `rotDeg` 와 별개, x축). `tilt(delta)` — ±60° clamp,
+  **서버 저장 안 함**(placements 스키마에 pitch 필드 없음 → 세션 로컬 표시 조정).
+- `applyChildTransforms`: 바닥 `Rotation(tiltDeg, rotDeg, 0)`, 벽
+  `Rotation(-90+tiltDeg, 0, rotDeg)`. `rotate()` 는 `rotate(deltaDeg)` 로 이미 일반화됨.
+- `arm()` 에서 `tiltDeg=0` 리셋. `enableButtons` 에 tilt 버튼 포함.
+
+### 무늬 없는 밝은 대리석 벽에서 평면(수직) 인식 안 됨
+
+**원인은 confidence 임계값이 아님.** ARCore `Config` 에는 평면 신뢰도/민감도
+임계값을 노출하는 API 자체가 없다. `planeFindingMode` 도 이미
+`HORIZONTAL_AND_VERTICAL` 로 최대 범위다(더 완화할 값 없음). 광택·저대비 대리석은
+특징점이 거의 안 잡히고 반사가 움직여 ARCore 가 평면을 못 세우는, 근본적으로 어려운
+표면이다. 폰을 좌우로 움직여 **시차(parallax)** 를 줘야 하고, 정면·정지로 대면 안 된다.
+
+완화책 (`ArSpaceController`):
+- `config.instantPlacementMode = InstantPlacementMode.LOCAL_Y_UP` 추가 — Plane 없이도
+  화면 탭 위치에 즉시 임시 배치, 이후 Plane/Depth 잡히면 자동 보정.
+- `hitTest`/`hitTestPreferring` 이 `depthPoint = usesDepthPlacement`,
+  `instantPlacementPoint = true` 도 후보로 받도록 함. `hitTestPreferring` 은 원하는
+  평면 종류 → 아무 평면 → Depth/Instant 포인트 순 fallback.
+- Depth API 는 `ArCoreDepthAdapter.prepareConfig` 로 이미 AUTOMATIC. (참고:
+  `agent/goguma-salad/interior-mobilesam` D6 커밋 `e4a2f52`.)
+- 추적 실패 안내 문구에 "광택·무늬 없는 벽은 인식이 어려워요" 추가.
+
+`:app:assembleDebug` 성공.
+
 ## merge 후 리포트 2건 — 빌보드 45° / 이동 패널 버튼 (2026-09-10)
 
 Branch `integration-interior-demo` (temp merge 이후).

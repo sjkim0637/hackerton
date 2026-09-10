@@ -66,7 +66,11 @@ class ArSpaceController(
             config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
             // 지원 기기에서는 가구 footprint 검증에 사용할 dense Depth를 함께 활성화한다.
             usesDepthPlacement = ArCoreDepthAdapter.isDepthSupported(session)
-            ArCoreDepthAdapter.prepareConfig(session, config)
+            ArCoreDepthAdapter.prepareConfig(session, config)   // depthMode = AUTOMATIC/RAW when supported
+            // 광택·무늬 없는 벽(대리석 등)은 특징점이 거의 안 잡혀 Plane 인식이 오래/영영 안 된다.
+            // Instant Placement 는 Plane 없이도 화면 탭 위치에 즉시 임시 배치를 허용하고,
+            // 이후 실제 Plane/Depth 가 잡히면 ARCore 가 자동으로 자리를 다듬는다(하드웨어 무관).
+            config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
             sceneView.planeRenderer.isEnabled = !usesDepthPlacement
         }
 
@@ -88,20 +92,32 @@ class ArSpaceController(
         }
     }
 
-    /** 화면 좌표 (xPx, yPx) 에서 벽/바닥 평면과의 hitTest 결과를 돌려준다. */
+    /**
+     * 화면 좌표 (xPx, yPx) 에서 hitTest 한다. Plane 을 우선하되, Plane 이 아직 없으면
+     * Depth 포인트(지원 기기) · Instant Placement 포인트도 후보로 받아 즉시 결과를 준다.
+     * (SceneView `hitTestAR` 가 내부적으로 Plane → 그 외 순으로 하나를 고른다.)
+     */
     fun hitTest(xPx: Float, yPx: Float): HitResult? =
-        sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES)
+        sceneView.hitTestAR(
+            xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES,
+            depthPoint = usesDepthPlacement, instantPlacementPoint = true,
+        )
 
     /**
      * 원하는 평면 종류를 우선해서 hitTest 한다.
      * TV/선반은 벽(수직), 소파/테이블 등은 바닥(수평)에 붙이려고 쓴다.
-     * 원하는 종류가 없으면 null을 반환한다. 벽 물체가 바닥에 놓이는 식의 fallback은 하지 않는다.
+     * 원하는 종류가 없으면 아무 평면이나, 그마저 없으면 Depth/Instant Placement 포인트,
+     * 그것도 없으면 null 을 돌려준다.
      */
     fun hitTestPreferring(xPx: Float, yPx: Float, wantVertical: Boolean): HitResult? {
         val preferred: Set<Plane.Type> =
             if (wantVertical) setOf(Plane.Type.VERTICAL)
             else setOf(Plane.Type.HORIZONTAL_UPWARD_FACING, Plane.Type.HORIZONTAL_DOWNWARD_FACING)
         return sceneView.hitTestAR(xPx = xPx, yPx = yPx, planeTypes = preferred)
+            ?: sceneView.hitTestAR(
+                xPx = xPx, yPx = yPx, planeTypes = PlaneKind.PLANE_TYPES,
+                depthPoint = usesDepthPlacement, instantPlacementPoint = true,
+            )
     }
 
     /**
@@ -138,7 +154,7 @@ class ArSpaceController(
                 usesDepthPlacement ->
                     "Depth 직접 배치 · 바닥이나 벽을 비추고 원하는 위치를 탭하세요"
                 trackingPlanes == 0 ->
-                    "평면 찾는 중 · 바닥/책상/벽을 비추며 폰을 움직이세요"
+                    "평면 찾는 중 · 폰을 좌우로 천천히 움직이세요 (광택·무늬 없는 벽은 인식이 어려워요)"
                 else ->
                     "평면 $trackingPlanes 개 (바닥·벽) · 탭하면 가구 생성, 길게 누르면 선택"
             }

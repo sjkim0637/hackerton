@@ -213,14 +213,14 @@
                         style="@style/WorkspaceButton"
                         android:text="치우기" />
                 </LinearLayout>
-                <!-- 선택한 가구의 조정 다이얼과 동일: 위/아래 = 크기, 좌/우 = 회전. -->
+                <!-- 십자 다이얼: 상/하 = pitch(위아래 기울기), 좌/우 = yaw(좌우 회전). -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_gravity="center">
                     <FrameLayout
                         android:layout_width="176dp"
-                        android:layout_height="100dp"
+                        android:layout_height="120dp"
                         android:layout_gravity="center">
                         <TextView
                             android:layout_width="58dp"
@@ -228,22 +228,22 @@
                             android:layout_gravity="center"
                             android:background="@drawable/bg_workspace_control"
                             android:gravity="center"
-                            android:text="크기\n회전"
+                            android:text="회전"
                             android:textColor="#E7D6B8"
-                            android:textSize="11sp"
+                            android:textSize="12sp"
                             android:textStyle="bold" />
                         <Button
-                            android:id="@+id/btnMovedGrow"
+                            android:id="@+id/btnMovedTiltUp"
                             style="@style/WorkspaceControlButton"
                             android:layout_gravity="top|center_horizontal"
-                            android:text="＋"
-                            android:contentDescription="사물 크기 키우기" />
+                            android:text="▲"
+                            android:contentDescription="위로 기울이기 (pitch)" />
                         <Button
-                            android:id="@+id/btnMovedShrink"
+                            android:id="@+id/btnMovedTiltDown"
                             style="@style/WorkspaceControlButton"
                             android:layout_gravity="bottom|center_horizontal"
-                            android:text="−"
-                            android:contentDescription="사물 크기 줄이기" />
+                            android:text="▼"
+                            android:contentDescription="아래로 기울이기 (pitch)" />
                         <Button
                             android:id="@+id/btnMovedRotateLeft"
                             style="@style/WorkspaceControlButton"
@@ -258,6 +258,23 @@
                             android:contentDescription="오른쪽으로 15도 회전" />
                     </FrameLayout>
                 </FrameLayout>
+                <!-- 크기 조절은 다이얼에서 분리해 별도 한 줄로. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <Button
+                        android:id="@+id/btnMovedShrink"
+                        style="@style/WorkspaceButton"
+                        android:text="축소  −"
+                        android:contentDescription="사물 크기 줄이기" />
+                    <Button
+                        android:id="@+id/btnMovedGrow"
+                        style="@style/WorkspaceButton"
+                        android:text="확대  ＋"
+                        android:contentDescription="사물 크기 키우기" />
+                </LinearLayout>
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

@@ -75,6 +75,8 @@ class MovedObjectController(
     private var baseH = 0.6f
     private var scaleF = 1f
     private var rotDeg = 0f
+    /** 상하(pitch) 기울임 각도. 좌우(rotDeg)와 함께 십자 다이얼로 조절. 세션 로컬(서버 저장 안 함). */
+    private var tiltDeg = 0f
 
     private var node: AnchorNode? = null
     private var imageNode: ImageNode? = null
@@ -93,6 +95,8 @@ class MovedObjectController(
         binding.btnMovedGrow.setOnClickListener { bump(SCALE_STEP) }
         binding.btnMovedRotateLeft.setOnClickListener { rotate(-15f) }
         binding.btnMovedRotateRight.setOnClickListener { rotate(15f) }
+        binding.btnMovedTiltUp.setOnClickListener { tilt(-15f) }
+        binding.btnMovedTiltDown.setOnClickListener { tilt(15f) }
         binding.btnMovedClear.setOnClickListener { clearMovedNode(); status("이동한 사물을 치웠습니다") }
 
         // 지난 세션에 저장된 배치가 있으면, 복원/취소만 가능한 상태로 패널을 연다.
@@ -150,6 +154,7 @@ class MovedObjectController(
         )
         this.scaleF = 1f
         this.rotDeg = 0f
+        this.tiltDeg = 0f
         armed = true
         awaitingPlane = false
         prefs.edit().putString(KEY_LAST_SCENE, sceneId).putString(KEY_LAST_JOB, jobId).apply()
@@ -362,6 +367,12 @@ class MovedObjectController(
         applyChildTransforms()
         scheduleSave()
     }
+    /** 상하 기울임. 뒤집히지 않게 ±60° 로 제한. 서버 저장 없음(세션 로컬 표시 조정). */
+    private fun tilt(deltaDeg: Float) {
+        if (node == null) return
+        tiltDeg = (tiltDeg + deltaDeg).coerceIn(-60f, 60f)
+        applyChildTransforms()
+    }
 
     // ------------------------------------------------------ 서버: 저장 / 복원 / 취소
 
@@ -560,7 +571,9 @@ class MovedObjectController(
         val h = baseH * disp
         imageNode?.let {
             it.scale = Scale(disp)
-            it.rotation = if (onVertical) Rotation(-90f, 0f, rotDeg) else Rotation(0f, rotDeg, 0f)
+            it.rotation =
+                if (onVertical) Rotation(-90f + tiltDeg, 0f, rotDeg)
+                else Rotation(tiltDeg, rotDeg, 0f)
         }
         labelNode?.let {
             it.position = Position(0f, h + LABEL_GAP, 0f)
@@ -595,6 +608,8 @@ class MovedObjectController(
         binding.btnMovedGrow.isEnabled = adjust
         binding.btnMovedRotateLeft.isEnabled = adjust
         binding.btnMovedRotateRight.isEnabled = adjust
+        binding.btnMovedTiltUp.isEnabled = adjust
+        binding.btnMovedTiltDown.isEnabled = adjust
     }
 
     private fun downscale(src: Bitmap): Bitmap {
