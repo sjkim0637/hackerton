@@ -56,14 +56,15 @@ def cutout_rgba_png(
     rect: tuple[float, float, float, float],
     *,
     mask_png: bytes | None = None,
-    feather_frac: float = 0.14,
+    feather_frac: float = 0.05,
 ) -> bytes:
     """`rect`(정규화 x, y, w, h)로 사물을 오려 **투명 배경 RGBA PNG** 로 돌려준다.
 
     삭제한 사물을 다시 배치할 때 네모 크롭 + 흰/배경 모서리가 딸려오지 않게 한다.
     - `mask_png`(원본 크기 흑백, 사물=255)이 오면 그 실루엣을 alpha 로 쓴다(MobileSAM).
-    - 없으면 크롭 사각형 가장자리를 **안쪽으로** 페더링해 모서리를 투명하게 뺀다
-      (`region_to_mask_png` 의 인페인팅용 마스크와 달리 밖으로 키우지 않는다).
+    - 없으면 **바깥 테두리만** 얇게 페더링한다. 안쪽 대부분은 완전 불투명이라
+      사물이 반투명하게 뜨지 않는다(테두리 폭·블러를 절대 px 로 상한 → 작은 크롭에서도
+      가운데가 흐려지지 않음).
     """
     x, y, w, h = rect
     with Image.open(io.BytesIO(image_bytes)) as im:
@@ -83,12 +84,16 @@ def cutout_rgba_png(
                 alpha = alpha.resize((width, height), Image.BILINEAR)
             alpha = alpha.crop((left, top, right, bottom))
         else:
-            feather = max(3, round(min(cw, ch) * max(0.0, feather_frac)))
+            # 테두리 폭: 짧은 변의 feather_frac, 단 4~20px 로 상한(작은 크롭에서 폭발 방지).
+            band = min(max(4, round(min(cw, ch) * max(0.0, feather_frac))), 20)
+            # 불투명 사각형을 band 만큼만 안쪽으로 넣고, 블러는 그보다 작게(band*0.5) 준다.
+            # → 가운데는 255 그대로, 바깥 ~1.5*band px 만 부드럽게 사라진다.
+            inset = max(1, band // 2)
             alpha = Image.new("L", (cw, ch), 0)
             ImageDraw.Draw(alpha).rectangle(
-                [feather, feather, cw - 1 - feather, ch - 1 - feather], fill=255
+                [inset, inset, cw - 1 - inset, ch - 1 - inset], fill=255
             )
-            alpha = alpha.filter(ImageFilter.GaussianBlur(feather))
+            alpha = alpha.filter(ImageFilter.GaussianBlur(band * 0.5))
 
         crop.putalpha(alpha)
         out = io.BytesIO()
