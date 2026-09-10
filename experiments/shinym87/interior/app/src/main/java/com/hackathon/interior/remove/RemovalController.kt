@@ -282,13 +282,9 @@ class RemovalController(
                 bbox = bbox,
                 onSuccess = { result ->
                     runCatching {
-                        result.removedObjectBitmap?.let { capturedObjectBitmap = it }
+                        // 경량 삭제 데모는 복원 patch만 AR 위치에 고정한다.
+                        // 지운 사물을 별도 3D 마커로 다시 만드는 경로는 사용하지 않는다.
                         applyResult(result.bitmap, bbox)
-                        onRemovalApplied(
-                            "local-${System.currentTimeMillis()}", null, objectType,
-                            capturedObjectBitmap, originalObjectPose, bbox,
-                            patchWidthM, patchHeightM,
-                        )
                     }.onSuccess {
                         status(
                             "완료 · 온디바이스 Telea 복원 ${result.elapsedMs}ms" +
