@@ -172,7 +172,7 @@ class MainActivity : AppCompatActivity() {
                 setToolsExpanded(true)
             }
         }
-        binding.btnAddFurniture.text = "다른 가구"
+        binding.btnAddFurniture.text = "가구 추가"
         binding.btnRemovalTools.setOnClickListener {
             val expanded = binding.removalTools.visibility != View.VISIBLE
             if (!expanded && binding.bboxSelectionView.isSelecting) removal.toggleSelectionMode()
@@ -180,7 +180,11 @@ class MainActivity : AppCompatActivity() {
             binding.btnRemovalTools.text = if (expanded) "사물 지우기 ▴" else "사물 지우기 ▾"
             binding.btnRemovalTools.contentDescription = if (expanded) "사물 지우기 도구 접기" else "사물 지우기 도구 펼치기"
         }
-        binding.btnAddFurniture.setOnClickListener { finish() }
+        // 작업 화면에서 버튼을 잘못 눌렀다고 AR 세션을 끝내고 카탈로그로 돌아가지 않는다.
+        // 카탈로그 진입은 상단의 명시적 화보 버튼/뒤로 가기로만 제한한다.
+        binding.btnAddFurniture.setOnClickListener {
+            Toast.makeText(this, "가구 추가는 화보에서 선택할 수 있어요", Toast.LENGTH_SHORT).show()
+        }
         binding.btnWorkspaceSettings.setOnClickListener {
             binding.serverUrlInput.setText(settings.serverBaseUrl)
             binding.settingsScreen.visibility = View.VISIBLE
