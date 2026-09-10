@@ -6,6 +6,7 @@
 
 | Owner | Git Branch | Project Path | Topic | Purpose | Status | Workstream | Updated |
 |---|---|---|---|---|---|---|---|
+| goguma-salad + Codex | `agent/goguma-salad/rgbd-space-edit` | `experiments/shinym87/interior/` | RGB-D 실물 가구 공간 편집 | 선택 시점의 RGB·Mask·Depth·Intrinsics·Pose를 Snapshot으로 저장하고, 배경·객체를 AR world-space에서 복원하는 기반을 만든다. | `IN_PROGRESS` | [rgbd-space-edit](docs/workstreams/rgbd-space-edit.md) | 2026-09-10 |
 | goguma-salad + Codex | `agent/goguma-salad/demo-recording` | `experiments/shinym87/interior/` | Interior Demo 촬영 안정화 | 오늘 영상 촬영을 위해 가구 배치 성공률과 기능 표현 UI를 데모 우선으로 정리한다. | `IN_PROGRESS` | [demo-recording](docs/workstreams/demo-recording.md) | 2026-09-10 |
 | goguma-salad + Codex | `agent/goguma-salad/demo-v1` | `experiments/shinym87/interior/` | Interior Demo v1 APK | 최신 통합 데모를 기준으로 VS Code 빌드·설치·실행 Task와 Debug APK를 검증한다. | `INTEGRATION` | [demo-v1](docs/workstreams/demo-v1.md) | 2026-09-09 |
 | goguma-salad + Codex | `agent/goguma-salad/geo-time-ar-v2` | `experiments/goguma-salad/geo-time-ar-v2/` | Geo-Time AR Platform Core | 위치·시간 후보 조회와 6DoF 기반 AR 표시 흐름을 검증한다. | `IN_PROGRESS` | [geo-time-ar-v2](docs/workstreams/geo-time-ar-v2.md) | 2026-08-24 |
