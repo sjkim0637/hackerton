@@ -423,8 +423,10 @@ class RemovalController(
      */
     private fun applyResult(full: Bitmap, region: FloatArray) {
         clearResult()
-        // 가장자리를 투명하게 페이드아웃해 quad 경계가 카메라 화면과 자연스럽게 섞이게 한다.
-        val patch = EdgeFade.feather(cropNormalized(full, region))
+        // 커버 quad 텍스처는 영역 경계를 몇 px 안쪽으로 좁혀 크롭한다 — AI 인페인팅이 남긴
+        // 마스크 경계 seam / JPEG 링잉이 가장자리에 밝게 섞여 들어오는 것을 피한다.
+        // 그 다음 가장자리 alpha 를 페이드아웃해 quad 경계가 카메라 화면과 섞이게 한다.
+        val patch = EdgeFade.feather(cropNormalized(full, insetRegion(region)))
 
         // 전체화면 프리뷰용 이미지는 앵커 유무와 무관하게 항상 준비(기본은 꺼짐).
         binding.resultOverlay.setImageBitmap(full)
@@ -525,6 +527,9 @@ class RemovalController(
             materialLoader = sceneView.materialLoader,
             bitmap = patch,
             size = Size(coverW, coverH),
+            // 기본 TextureSampler2D(REPEAT + mipmap)는 라이브 화면에서 quad 가장자리에
+            // 얇은 밝은 선을 만든다 → CLAMP_TO_EDGE + 밉맵 미사용 샘플러로 렌더한다.
+            textureSampler = EdgeFade.crispSampler(),
         ).apply {
             isTouchable = false
             // 수직 평면(벽): 앵커 로컬 +Y 가 벽 바깥이므로 quad 를 X축 -90° 세운다.
@@ -809,6 +814,22 @@ class RemovalController(
             )
     }
 
+    /**
+     * 정규화 영역 [x,y,w,h] 를 각 변에서 [CROP_INSET_FRACTION] 만큼(영역 크기 대비) 안쪽으로
+     * 좁힌다. 커버 quad 텍스처가 AI 마스크 경계의 seam/링잉을 물지 않도록. 한 변당 최대
+     * 영역 폭/높이의 1/4 로 제한하고, 결과 폭/높이는 최소 1% 로 보장한다.
+     */
+    private fun insetRegion(r: FloatArray): FloatArray {
+        val insetX = (r[2] * CROP_INSET_FRACTION).coerceAtMost(r[2] * 0.25f)
+        val insetY = (r[3] * CROP_INSET_FRACTION).coerceAtMost(r[3] * 0.25f)
+        return floatArrayOf(
+            (r[0] + insetX).coerceIn(0f, 1f),
+            (r[1] + insetY).coerceIn(0f, 1f),
+            (r[2] - 2f * insetX).coerceAtLeast(0.01f),
+            (r[3] - 2f * insetY).coerceAtLeast(0.01f),
+        )
+    }
+
     private fun cropNormalized(bmp: Bitmap, r: FloatArray): Bitmap {
         val x = (r[0] * bmp.width).toInt().coerceIn(0, bmp.width - 1)
         val y = (r[1] * bmp.height).toInt().coerceIn(0, bmp.height - 1)
@@ -854,10 +875,14 @@ class RemovalController(
 
         /**
          * 빌보드 가림막을 선택 영역보다 이 배율만큼만 살짝 키운다 — 실물 가장자리가
-         * 삐져나오지 않을 정도의 최소 여유(8%). EdgeFade 가 가장자리를 부드럽게 지우므로
-         * 이 값을 더 키우면 가림막만 과하게 커 보인다. (예전 1.35 → 1.12 → 1.08)
+         * 삐져나오지 않을 정도의 최소 여유(4%). EdgeFade 페이드 밴드가 이 여유 위에
+         * 얹히므로 값을 키우면 부드러워진 가장자리가 벽 위로 밀려나 오히려 눈에 띈다.
+         * (예전 1.35 → 1.12 → 1.08 → 1.04)
          */
-        const val COVER_MARGIN = 1.08f
+        const val COVER_MARGIN = 1.04f
+
+        /** 커버 quad 텍스처 크롭을 각 변에서 영역 크기 대비 이만큼 안쪽으로 좁힌다(seam 회피). */
+        const val CROP_INSET_FRACTION = 0.03f
 
         /** 스피너 0번 안내 항목(실제 종류 아님). 이 상태에선 '삭제 요청'이 비활성화된다. */
         const val SPINNER_PROMPT = "사물 종류 선택…"

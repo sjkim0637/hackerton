@@ -512,6 +512,8 @@ class MovedObjectController(
             materialLoader = sceneView.materialLoader,
             bitmap = objectBitmap ?: EdgeFade.feather(placeholderBitmap()),
             size = Size(baseW, baseH),
+            // 커버 quad 와 동일 — 기본 샘플러(REPEAT + mipmap)의 가장자리 밝은 선 방지.
+            textureSampler = EdgeFade.crispSampler(),
         ).apply { isTouchable = false }
 
         val lbl = ImageNode(

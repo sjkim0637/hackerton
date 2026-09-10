@@ -13,6 +13,51 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 라이브 화면 가림막 가장자리 "얇은 흰색 테두리 선" 제거 (2026-09-10)
+
+Branch `integration-interior-demo`. 앞선 수정 후 실기기 재테스트: **정지 프리뷰
+("삭제 결과 보기")는 완벽하게 깨끗**, 라이브 화면에서만 커버 quad 가장자리를 따라
+얇은 밝은(흰) 선이 보였다.
+
+### 원인 = SceneView 기본 텍스처 샘플러 (`TextureSampler2D`)
+
+`io.github.sceneview.texture.TextureSampler2D` 는
+`WrapMode.REPEAT` + `MinFilter.LINEAR_MIPMAP_LINEAR` 다. `ImageNode` 의 Plane 지오메트리
+UV 는 0→1 이라:
+- **REPEAT**: quad 가장자리(UV≈0/1)에서 bilinear 이 반대쪽 가장자리 텍셀을 wrap 해
+  같이 섞는다.
+- **밉맵**: `LINEAR_MIPMAP_LINEAR` 로 축소 렌더 시 밉을 쓰는데, 밉 생성이 alpha 가중이
+  아니라 non-premultiplied 페이드 림(밝은 벽색 + alpha 0)을 안쪽으로 번지게 한다.
+
+두 효과가 합쳐져 라이브(Filament)에서만 얇은 밝은 테두리가 났다. 정지 프리뷰는 일반
+Android `ImageView`(clamp, 밉맵 없음)라 원래 깨끗했다 — 증상이 라이브에만 있던 이유.
+
+### 수정
+
+1. **`EdgeFade.crispSampler()` 신설** — `TextureSampler(LINEAR, LINEAR, CLAMP_TO_EDGE)`.
+   커버 quad(`RemovalController.buildResultNode`)와 이동 마커(`MovedObjectController.setNode`)
+   의 `ImageNode` 가 이 샘플러로 렌더한다. REPEAT wrap 과 밉맵 블리딩이 사라진다.
+2. **`EdgeFade.feather`** — 페더 폭 `featherFrac` 0.08 → **0.10**, 추가로 최외곽
+   `HARD_RIM_FRAC`(18% of feather, 최소 1px) 구간을 **완전 투명으로 강제**. CLAMP_TO_EDGE
+   가 물어오는 최외곽 텍셀이 항상 alpha 0 이 되도록.
+3. **크롭 inset** — `RemovalController.insetRegion()`: 커버 quad 텍스처 크롭을 각 변에서
+   영역 크기의 `CROP_INSET_FRACTION`(3%) 만큼 안쪽으로 좁힌다. AI 인페인팅이 마스크
+   경계에 남기는 seam / JPEG 링잉이 텍스처 가장자리에 밝게 섞이는 것을 배제. (사용자
+   지적 1·2번.) 정지 프리뷰용 `full` 은 그대로 — inset 은 quad 텍스처에만 적용.
+4. **`COVER_MARGIN` 1.08 → 1.04** — 페이드 밴드가 얹히는 여유를 줄여, 부드러워진
+   가장자리가 벽 위로 밀려나 눈에 띄는 것을 완화. (사용자 지적 3번: quad 가 실물보다
+   커서 그 여백이 흰색으로 렌더되는가 → CLAMP_TO_EDGE 로는 "흰 여백" 자체가 생기지
+   않지만, 여유를 줄이면 페이드가 삭제 자리 안쪽에 들어와 더 안 보인다.)
+
+튜닝 노브: `EdgeFade.HARD_RIM_FRAC`, `feather(featherFrac=)`,
+`RemovalController.CROP_INSET_FRACTION`, `COVER_MARGIN`.
+
+### 빌드
+
+`JAVA_HOME=...\jbr-21.0.11` + `.\gradlew.bat :app:assembleDebug` → **BUILD SUCCESSFUL**
+(24s). APK: `experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk`.
+실기기에서 라이브 화면 커버 quad 가장자리 육안 확인 대기.
+
 ## 가림막 크기·어두운 경계선 + 이동 사물에 파란 테두리 박힘 수정 (2026-09-10)
 
 Branch `integration-interior-demo`. 실기기 리포트 2건.
