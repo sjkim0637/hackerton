@@ -39,8 +39,11 @@ def create_app() -> FastAPI:
     logging.getLogger("interior").info(
         "AI 설정: provider=%s, model=%s, timeout=%.0fs, 재시도=%d회, "
         "호출당 비용≈$%.4f, scene 당 최대 %d회",
-        settings.ai_provider, settings.ai_model, settings.ai_timeout_seconds,
-        settings.ai_max_retries, settings.ai_cost_per_call_usd,
+        settings.ai_provider,
+        settings.ai_model if settings.ai_provider == "external" else "local LaMa ONNX",
+        settings.ai_timeout_seconds,
+        settings.ai_max_retries,
+        settings.ai_cost_per_call_usd if settings.ai_provider == "external" else 0.0,
         settings.max_ai_calls_per_scene,
     )
 

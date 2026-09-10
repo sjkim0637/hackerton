@@ -209,17 +209,22 @@ def _run_job(
 
     source_bytes = Path(image_path).read_bytes()
     original_size = image_size(source_bytes)
+    region_summary = {key: value for key, value in region.items() if key != "png"}
+    if region.get("type") == "mask":
+        region_summary["png_bytes"] = len(region.get("png", "")) * 3 // 4
     _log.info(
         "[job %s] provider=%s keyframe=%s (%d bytes, %dx%d) object=%s region=%s",
         job_id, provider.name, Path(image_path).name, len(source_bytes),
-        original_size[0], original_size[1], object_type, region,
+        original_size[0], original_size[1], object_type, region_summary,
     )
 
-    per_call_cost = 0.0 if provider.name == "mock" else settings.ai_cost_per_call_usd
+    per_call_cost = settings.ai_cost_per_call_usd if provider.name == "external" else 0.0
     attempts = max(1, settings.ai_max_retries + 1)
     last_exc: Exception | None = None
 
     for attempt in range(1, attempts + 1):
+        if provider.name == "lama":
+            _log.info("[job %s] 로컬 LaMa ONNX 추론 시작 · 외부 API 호출/비용 없음", job_id)
         # --- AI 호출 횟수 / 대략 비용 기록 ---
         scene_calls = store.bump_ai_calls(scene_id)
         _log.info(
