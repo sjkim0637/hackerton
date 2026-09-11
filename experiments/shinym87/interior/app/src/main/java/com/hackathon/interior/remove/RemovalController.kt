@@ -449,10 +449,17 @@ class RemovalController(
      */
     private fun applyResult(full: Bitmap, region: FloatArray) {
         clearResult()
-        // 커버 quad 텍스처는 영역 경계를 몇 px 안쪽으로 좁혀 크롭한다 — AI 인페인팅이 남긴
-        // 마스크 경계 seam / JPEG 링잉이 가장자리에 밝게 섞여 들어오는 것을 피한다.
-        // 그 다음 가장자리 alpha 를 페이드아웃해 quad 경계가 카메라 화면과 섞이게 한다.
-        val patch = EdgeFade.feather(cropNormalized(full, insetRegion(region)))
+        // 커버 quad 텍스처 경계 처리 — "삭제 결과 보기"(정지화면)가 항상 깨끗한 이유는
+        // 전체 결과 이미지를 화면에 1:1 로 덮어 **보이는 경계 자체가 없기** 때문이다.
+        // 커버 quad 는 국소 패치라 사각형 경계가 생기므로, 그 경계를 최대한 안 보이게:
+        //  1) 영역을 3% 안쪽으로 좁혀 크롭 (AI seam / JPEG 링잉 배제)
+        //  2) 가장자리 ~13% 를 투명 그라데이션 + 최외곽 35% 는 완전 투명(색 무관)으로
+        //     → quad 가 TV 보다 살짝 커도 여백이 배경에 녹아들고 "흰 테두리" 가 안 보인다.
+        val patch = EdgeFade.feather(
+            cropNormalized(full, insetRegion(region)),
+            featherFrac = COVER_FEATHER_FRAC,
+            hardRimFrac = COVER_HARD_RIM_FRAC,
+        )
 
         // 전체화면 프리뷰용 이미지는 앵커 유무와 무관하게 항상 준비(기본은 꺼짐).
         binding.resultOverlay.setImageBitmap(full)
@@ -905,12 +912,20 @@ class RemovalController(
         val IDENTITY_QUAT = floatArrayOf(0f, 0f, 0f, 1f)
 
         /**
-         * 빌보드 가림막을 선택 영역보다 이 배율만큼만 살짝 키운다 — 실물 가장자리가
-         * 삐져나오지 않을 정도의 최소 여유(4%). EdgeFade 페이드 밴드가 이 여유 위에
-         * 얹히므로 값을 키우면 부드러워진 가장자리가 벽 위로 밀려나 오히려 눈에 띈다.
-         * (예전 1.35 → 1.12 → 1.08 → 1.04)
+         * 커버 quad 를 선택 영역보다 이 배율만큼만 키운다 — 계산 오차로 TV 가장자리가
+         * 삐져나오지 않을 최소 여유. 넓은 페더링(아래)이 경계를 지우므로 거의 1.0 로 둔다.
+         * (예전 1.35 → 1.12 → 1.08 → 1.04 → 1.02)
          */
-        const val COVER_MARGIN = 1.04f
+        const val COVER_MARGIN = 1.02f
+
+        /**
+         * 커버 quad 가장자리 페이드 폭(짧은 변 대비). TV 보다 살짝 커도 그 여백이
+         * 반투명하게 사라져 "흰 테두리" 대신 배경에 녹아들도록 넓게 잡는다.
+         */
+        const val COVER_FEATHER_FRAC = 0.13f
+
+        /** 위 페이드 폭 중 최외곽 이 비율은 완전 투명(가장자리 색이 밝아도 alpha 0). */
+        const val COVER_HARD_RIM_FRAC = 0.35f
 
         /** 커버 quad 텍스처 크롭을 각 변에서 영역 크기 대비 이만큼 안쪽으로 좁힌다(seam 회피). */
         const val CROP_INSET_FRACTION = 0.03f

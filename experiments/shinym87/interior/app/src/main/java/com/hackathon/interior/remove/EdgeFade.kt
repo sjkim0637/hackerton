@@ -26,21 +26,30 @@ import com.google.android.filament.TextureSampler
  */
 object EdgeFade {
 
-    /** 최외곽 몇 px 는 완전 투명으로 강제할지 — [f] 대비 비율. REPEAT/mip 샘플링 대비. */
-    private const val HARD_RIM_FRAC = 0.18f
+    /** [hardRimFrac] 기본값 — 페이드 폭 중 최외곽 이 비율은 완전 투명(색 무관). */
+    private const val DEFAULT_HARD_RIM_FRAC = 0.18f
 
     /**
-     * [featherFrac] = 짧은 변 대비 페이드 폭 비율. 가장자리에서 [featherFrac] 안쪽까지
-     * alpha 를 0→원본 으로 램프하고, 최외곽 [HARD_RIM_FRAC] 구간은 완전 투명으로 둔다.
+     * 네 가장자리 alpha 를 안쪽으로 램프해 투명하게 페이드아웃한다.
+     *
+     * @param featherFrac 짧은 변 대비 페이드 폭 비율. 이 폭 안에서 바깥→안 방향으로
+     *   alpha 0 → 원본 으로 올라간다.
+     * @param hardRimFrac 페이드 폭 중 **최외곽 이 비율은 alpha 0 으로 강제**한다(선형 램프는
+     *   그 안쪽부터). 가장자리 픽셀 색이 밝든(흰 테두리) 어떻든 완전히 사라지게 하고,
+     *   CLAMP_TO_EDGE 샘플링이 물어오는 최외곽 텍셀도 항상 투명이 되게 한다.
      */
-    fun feather(src: Bitmap, featherFrac: Float = 0.10f): Bitmap {
+    fun feather(
+        src: Bitmap,
+        featherFrac: Float = 0.10f,
+        hardRimFrac: Float = DEFAULT_HARD_RIM_FRAC,
+    ): Bitmap {
         val w = src.width
         val h = src.height
         if (w < 8 || h < 8) return src
 
-        val f = (minOf(w, h) * featherFrac).toInt().coerceIn(8, minOf(w, h) / 3)
+        val f = (minOf(w, h) * featherFrac).toInt().coerceIn(8, minOf(w, h) / 2)
         if (f <= 0) return src
-        val hardRim = (f * HARD_RIM_FRAC).toInt().coerceAtLeast(1)
+        val hardRim = (f * hardRimFrac).toInt().coerceIn(1, f - 1)
 
         // getPixels 는 항상 non-premultiplied ARGB 를 준다.
         val pixels = IntArray(w * h)

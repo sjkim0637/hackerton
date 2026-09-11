@@ -13,6 +13,47 @@ shinym87 (Gemini API 키가 준비되면 실제 결과 확인) / 이후 합류�
 [interior](../workstreams/interior.md) — 카메라 기반 공간 편집 / AR 가구 재배치.
 PHASE 1 (P1-10) + PHASE 2 + PHASE 3 "사용자 2 (영상 / AI)".
 
+## 가림막 경계를 정지화면처럼 안 보이게 — 페더링 강화 + margin 축소 (2026-09-11)
+
+Branch `integration-interior-demo`. margin·계산 오차로 가림막이 TV 보다 살짝 커도
+"흰 테두리"처럼 안 보이도록 텍스처 경계 처리를 강화.
+
+### 정지화면("삭제 결과 보기") vs 가림막 경계 처리 비교
+
+| | 정지화면 (`resultOverlay`) | 가림막 커버 quad |
+|---|---|---|
+| 무엇 | 서버 **전체 결과 이미지** | 결과의 **bbox 크롭 패치** |
+| 표시 | `centerCrop` ImageView, `match_parent` — 화면 전체를 덮음 | 월드 앵커 quad (국소) |
+| 경계 | **없음** — 화면 끝까지 덮어 이어붙일 자리가 없음. 라이브 카메라와 1:1 정렬 | 사각형 경계가 카메라 피드 위에 생김 → 그게 "테두리"로 보임 |
+| 픽셀 처리 | 없음(원본 그대로 blit) | 크롭 + alpha 페이드 + Filament 텍스처 |
+
+**정지화면이 깨끗한 이유 = "보이는 경계가 아예 없어서"**. 가림막은 국소 패치라
+경계를 없앨 수 없으니, **경계를 최대한 안 보이게** = 가장자리를 넓게 투명으로 fade
+→ 정지화면처럼 "배경에 그냥 녹아든" 인상을 준다.
+
+### 수정
+
+- **`EdgeFade.feather` 에 `hardRimFrac` 파라미터 추가** — 페이드 폭 중 최외곽 이 비율은
+  **alpha 0 으로 강제**(가장자리 색이 밝든 흰색이든 완전히 사라짐). 기존 상수
+  `HARD_RIM_FRAC` → 파라미터화(기본 0.18 유지). 페이드 폭 상한도 `짧은변/3 → /2` 로 완화.
+- **커버 quad 전용으로 강하게**(`RemovalController.applyResult`):
+  `feather(crop, featherFrac = COVER_FEATHER_FRAC = 0.13, hardRimFrac = COVER_HARD_RIM_FRAC = 0.35)`
+  → 가장자리 ~13% 가 투명 그라데이션, 그 중 최외곽 35%(≈4.5% of 짧은 변)는 완전 투명.
+  (이동 사물 마커는 기존 기본값 0.10 유지 — 이번 범위 아님.)
+- **`COVER_MARGIN` 1.04 → 1.02** — 넓은 페더링이 경계를 지우므로 여유는 거의 1.0.
+- 크롭 3% inset(`CROP_INSET_FRACTION`), `crispSampler`(CLAMP_TO_EDGE·밉맵 미사용),
+  straight-alpha 출력은 그대로 유지.
+
+튜닝 노브: `RemovalController.COVER_FEATHER_FRAC` / `COVER_HARD_RIM_FRAC` / `COVER_MARGIN`,
+`EdgeFade.feather(hardRimFrac=)`.
+
+### 빌드
+
+`.\gradlew.bat :app:assembleDebug` → **BUILD SUCCESSFUL** (25s). APK:
+`experiments/shinym87/interior/app/build/outputs/apk/debug/app-debug.apk`.
+실기기에서 가림막 경계가 배경에 녹아드는지 확인 대기. 불투명 커버가 부족하면
+`COVER_FEATHER_FRAC`↓ 또는 `COVER_MARGIN`↑.
+
 ## 가림막 크기가 삭제할 때마다 들쭉날쭉 — 고정 계산으로 교체 (2026-09-11)
 
 Branch `integration-interior-demo`. 실기기: 라이브 가림막 크기가 매 삭제마다 다름
