@@ -30,26 +30,27 @@
     .topline p { margin:4px 0 0; color:var(--muted); font-size:.875rem; }
     .depth-status { margin-left:auto; white-space:nowrap; background:#e4f4e9; padding:9px 11px; border-radius:10px; color:#17603f; font-size:.75rem; font-weight:800; }
     .depth-status::before { content:""; display:inline-block; width:8px; height:8px; margin-right:7px; border-radius:50%; background:#29aa67; box-shadow:0 0 0 4px #29aa6720; }
-    .room { --room-aspect:1.4938; position:relative; flex:none; width:100%; min-height:0; aspect-ratio:var(--room-aspect); overflow:hidden; border-radius:22px; background:#cbd0cb url("room-uploaded.png") center/contain no-repeat; box-shadow:var(--shadow); touch-action:none; }
+    .room { --room-aspect:1.4938; position:relative; flex:none; width:100%; min-height:0; aspect-ratio:var(--room-aspect); overflow:hidden; border-radius:22px; background:#cbd0cb url("restorations/clean-v2.webp") center/contain no-repeat; box-shadow:var(--shadow); touch-action:none; }
     .room::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(180deg,transparent 56%,rgba(7,20,13,.25)); }
-    #webglScene { position:absolute; inset:0; z-index:2; width:100%; height:100%; pointer-events:none; }
-    #scene { position:absolute; inset:0; z-index:3; width:100%; height:100%; cursor:grab; }
+    #builtInScene { position:absolute; inset:0; z-index:2; width:100%; height:100%; pointer-events:none; }
+    #webglScene { position:absolute; inset:0; z-index:3; width:100%; height:100%; pointer-events:none; }
+    #scene { position:absolute; inset:0; z-index:4; width:100%; height:100%; cursor:grab; }
     #scene:active { cursor:grabbing; }
     .floor-line { position:absolute; left:5%; right:5%; top:77%; z-index:1; border-top:1px solid #d5ff74bb; box-shadow:0 0 18px #caff63; }
     .floor-line::before { content:"FLOOR PLANE · CALIBRATED"; position:absolute; right:0; top:-25px; padding:5px 8px; border-radius:7px; background:#10261ed9; color:#fff; font-size:.6875rem; letter-spacing:.05em; }
-    .calibration-overlay { position:absolute; inset:0; z-index:4; pointer-events:none; opacity:0; transition:.2s; }
+    .calibration-overlay { position:absolute; inset:0; z-index:5; pointer-events:none; opacity:0; transition:.2s; }
     .calibration-overlay.active { opacity:1; pointer-events:auto; }
     .calibration-shape { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
     .calibration-shape polygon { fill:#d7ff761c; stroke:#d7ff76; stroke-width:2; stroke-dasharray:7 5; }
     .calibration-shape line { stroke:#ffdf70; stroke-width:1.5; stroke-dasharray:5 4; }
     .cal-point { position:absolute; width:22px; height:22px; margin:-11px; border:3px solid #10261e; border-radius:50%; background:#d7ff76; box-shadow:0 2px 8px #0006; cursor:move; touch-action:none; }
     .cal-point.vanish { background:#ffdf70; }
-    .empty { position:absolute; inset:0; z-index:3; display:grid; place-items:center; pointer-events:none; }
+    .empty { position:absolute; inset:0; z-index:4; display:grid; place-items:center; pointer-events:none; }
     .empty[hidden] { display:none; }
     .empty span { max-width:290px; padding:13px 16px; border-radius:12px; background:#10261ee8; color:#fff; font-size:.875rem; text-align:center; line-height:1.5; }
-    .toast { position:absolute; left:50%; top:18px; z-index:5; transform:translate(-50%,-8px); opacity:0; padding:11px 15px; border-radius:11px; background:#10261ef2; color:#fff; font-size:.875rem; white-space:nowrap; pointer-events:none; transition:.2s; }
+    .toast { position:absolute; left:50%; top:18px; z-index:6; transform:translate(-50%,-8px); opacity:0; padding:11px 15px; border-radius:11px; background:#10261ef2; color:#fff; font-size:.875rem; white-space:nowrap; pointer-events:none; transition:.2s; }
     .toast.show { opacity:1; transform:translate(-50%,0); }
-    .hud { position:absolute; left:14px; bottom:14px; z-index:4; padding:10px 12px; border:1px solid #ffffff1f; border-radius:12px; background:#10261dcc; color:#fff; font-size:.75rem; line-height:1.55; backdrop-filter:blur(8px); }
+    .hud { position:absolute; left:14px; bottom:14px; z-index:5; padding:10px 12px; border:1px solid #ffffff1f; border-radius:12px; background:#10261dcc; color:#fff; font-size:.75rem; line-height:1.55; backdrop-filter:blur(8px); }
     .hud b { color:var(--lime); }
     aside { overflow:auto; padding:20px; border-left:1px solid var(--line); background:#fff; }
     aside h2 { margin:0 0 5px; font-size:1.25rem; letter-spacing:-.03em; }
@@ -140,6 +141,7 @@
       </div>
       <div class="room" id="room">
         <div class="floor-line"></div>
+        <canvas id="builtInScene" aria-hidden="true"></canvas>
         <canvas id="webglScene" aria-hidden="true"></canvas>
         <canvas id="scene" tabindex="0" aria-label="가구 배치 공간. 사진 속 기존 소파, 탁자, TV와 새로 배치한 가구를 선택할 수 있습니다. 기존 가구는 삭제할 수 있고 배치 가구는 이동과 회전이 가능합니다."></canvas>
         <div class="calibration-overlay" id="calibrationOverlay" aria-label="바닥 평면 보정점">
@@ -192,6 +194,6 @@
     </aside>
   </main>
 </div>
-<script type="module" src="app.js?v=17"></script>
+<script type="module" src="app.js?v=22"></script>
 </body>
 </html>

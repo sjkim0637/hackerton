@@ -9,7 +9,7 @@ const products=[
 ];
 
 const $=selector=>document.querySelector(selector);
-const room=$("#room"),overlay=$("#scene"),overlayContext=overlay.getContext("2d"),webgl=$("#webglScene");
+const room=$("#room"),builtInCanvas=$("#builtInScene"),builtInContext=builtInCanvas.getContext("2d"),overlay=$("#scene"),overlayContext=overlay.getContext("2d"),webgl=$("#webglScene");
 const catalog=$("#catalog"),filters=$("#filters"),applyButton=$("#apply"),selectedInfo=$("#selectedInfo"),selectionSummary=$("#selectionSummary");
 const emptyState=$("#empty"),toast=$("#toast"),roomPhoto=$("#roomPhoto"),fovControl=$("#fovControl"),floorControl=$("#floorControl");
 const fovValue=$("#fovValue"),floorValue=$("#floorValue"),spaceMeta=$("#spaceMeta"),floorLine=$(".floor-line");
@@ -53,32 +53,36 @@ const SPACE_CONFIG={
   minPerspectiveScale:.45,
   maxPerspectiveScale:1.25
 };
+const builtInPresenceKey=id=>`roomfit-v3-builtin-${id}`;
+const builtInTransformKey=id=>`roomfit-v3-builtin-${id}-transform`;
+const PLACEMENT_STATE_KEY="roomfit-real-placement-v3";
 const calibration={
   backLeft:{...SPACE_CONFIG.floorPolygon[0]},backRight:{...SPACE_CONFIG.floorPolygon[1]},
   frontRight:{...SPACE_CONFIG.floorPolygon[2]},frontLeft:{...SPACE_CONFIG.floorPolygon[3]},
   vanish:{...SPACE_CONFIG.vanishingPoint}
 };
 const builtInItems=[
-  {id:"sofa",isBuiltIn:true,name:"기존 소파",present:localStorage.getItem("roomfit-builtin-sofa")!=="false",area:{left:0,top:.43,right:.49,bottom:1},polygon:[[0,.48],[.23,.43],[.49,.61],[.49,.88],[.28,1],[0,1]],restoration:"restorations/sofa.png",zone:{x:-1.55,z:.55,w:2.2,d:1.25}},
-  {id:"table",isBuiltIn:true,name:"기존 탁자",present:localStorage.getItem("roomfit-builtin-table")!=="false",area:{left:.36,top:.68,right:.66,bottom:.96},polygon:[[.39,.72],[.58,.69],[.66,.78],[.61,.96],[.39,.95]],restoration:"restorations/table.png",zone:{x:.05,z:.8,w:1.15,d:.7}},
-  {id:"tv",isBuiltIn:true,name:"기존 벽걸이 TV",present:localStorage.getItem("roomfit-builtin-tv")!=="false",area:{left:.77,top:.13,right:1,bottom:.68},polygon:[[.79,.16],[1,.09],[1,.67],[.8,.59]],restoration:"restorations/tv.png",zone:null}
+  {id:"sofa",isBuiltIn:true,name:"기존 소파",present:localStorage.getItem(builtInPresenceKey("sofa"))!=="false",sprite:"built-in/original-sofa.webp",area:{left:-.015,top:.41,right:.515,bottom:1},zone:{x:-1.55,z:.55,w:2.2,d:1.25}},
+  {id:"tv",isBuiltIn:true,name:"기존 벽걸이 TV",present:localStorage.getItem(builtInPresenceKey("tv"))!=="false",sprite:"built-in/original-tv.webp",area:{left:.765,top:.075,right:1.015,bottom:.705},zone:null},
+  {id:"table",isBuiltIn:true,name:"기존 탁자",present:localStorage.getItem(builtInPresenceKey("table"))!=="false",sprite:"built-in/original-table.webp",area:{left:.375,top:.69,right:.64,bottom:.95},zone:{x:.05,z:.8,w:1.15,d:.7}}
 ];
-builtInItems.forEach(item=>{try{const saved=JSON.parse(localStorage.getItem(`roomfit-builtin-${item.id}-transform`)||"null");item.offsetX=Number.isFinite(saved?.x)?saved.x:0;item.offsetY=Number.isFinite(saved?.y)?saved.y:0;}catch{item.offsetX=0;item.offsetY=0;}});
-const roomImage=new Image(); roomImage.src="room-uploaded.png"; roomImage.onload=render;
-const restorationImages={};
-builtInItems.forEach(item=>{const image=new Image();image.src=item.restoration;image.onload=render;restorationImages[item.id]=image;});
+builtInItems.forEach(item=>{try{const saved=JSON.parse(localStorage.getItem(builtInTransformKey(item.id))||"null");item.offsetX=Number.isFinite(saved?.x)?saved.x:0;item.offsetY=Number.isFinite(saved?.y)?saved.y:0;}catch{item.offsetX=0;item.offsetY=0;}});
+const CLEAN_ROOM_SOURCE="restorations/clean-v2.webp";
+builtInItems.forEach(item=>{item.image=new Image();item.image.onload=()=>{const width=180,height=Math.max(1,Math.round(width*item.image.naturalHeight/item.image.naturalWidth)),canvas=document.createElement("canvas"),context=canvas.getContext("2d",{willReadFrequently:true});canvas.width=width;canvas.height=height;context.drawImage(item.image,0,0,width,height);try{item.hitMap={width,height,data:context.getImageData(0,0,width,height).data};}catch{item.hitMap=null;}render();};item.image.src=item.sprite;});
 
 try{const saved=JSON.parse(localStorage.getItem("roomfit-calibration")||"null");if(Number.isFinite(saved?.fov))cameraState.fov=saved.fov;for(const key of Object.keys(calibration))if(Number.isFinite(saved?.[key]?.x)&&Number.isFinite(saved?.[key]?.y))calibration[key]={x:saved[key].x,y:saved[key].y};}catch{}
 
 function announce(message){toast.textContent=message;toast.classList.add("show");clearTimeout(announce.timer);announce.timer=setTimeout(()=>toast.classList.remove("show"),1900);}
-function updateRoomBackground(){room.style.backgroundImage=`url("${customRoomUrl||"room-uploaded.png"}")`;}
+function updateRoomBackground(){const source=customRoomUrl||CLEAN_ROOM_SOURCE;if(room.dataset.backgroundSource!==source){room.style.backgroundImage=`url("${source}")`;room.dataset.backgroundSource=source;}}
 function updateRoomSizing(){const h=Math.max(360,innerHeight-130);room.style.setProperty("--room-aspect",roomAspect);room.style.maxWidth=Math.round(h*roomAspect)+"px";}
 function resize(){
   const bounds=room.getBoundingClientRect(); sceneWidth=bounds.width;sceneHeight=bounds.height;
   renderer.setSize(sceneWidth,sceneHeight,false);camera3d.aspect=sceneWidth/sceneHeight;camera3d.updateProjectionMatrix();
   const ratio=Math.min(devicePixelRatio||1,2),w=Math.round(sceneWidth*ratio),h=Math.round(sceneHeight*ratio);
   if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;overlay.style.width=sceneWidth+"px";overlay.style.height=sceneHeight+"px";}
+  if(builtInCanvas.width!==w||builtInCanvas.height!==h){builtInCanvas.width=w;builtInCanvas.height=h;builtInCanvas.style.width=sceneWidth+"px";builtInCanvas.style.height=sceneHeight+"px";}
   overlayContext.setTransform(ratio,0,0,ratio,0,0);
+  builtInContext.setTransform(ratio,0,0,ratio,0,0);
 }
 
 function updateCamera(){
@@ -138,7 +142,7 @@ function attachPhoto(group,product,texture){
 }
 function loadModel(product){
   if(modelCache.has(product.id))return Promise.resolve(modelCache.get(product.id).clone(true));
-  return new Promise(resolve=>loader.load(product.model,gltf=>{gltf.scene.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;node.material=node.material.clone();}});modelCache.set(product.id,gltf.scene);resolve(gltf.scene.clone(true));},undefined,()=>resolve(fallbackModel(product))));
+  return new Promise(resolve=>{let settled=false;const finish=model=>{if(settled)return;settled=true;clearTimeout(timeout);resolve(model);};const timeout=setTimeout(()=>finish(fallbackModel(product)),3500);loader.load(product.model,gltf=>{gltf.scene.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;node.material=node.material.clone();}});modelCache.set(product.id,gltf.scene);finish(gltf.scene.clone(true));},undefined,()=>finish(fallbackModel(product)));});
 }
 function fallbackModel(product){const [w,h,d]=product.dims,g=new THREE.Group(),m=new THREE.MeshStandardMaterial({color:product.color,roughness:.78});const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.y=h/2;mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return g;}
 
@@ -183,47 +187,61 @@ async function placeProduct(product,state={}){
   const floorFarY=(calibration.backLeft.y+calibration.backRight.y)/2,floorNearY=(calibration.frontLeft.y+calibration.frontRight.y)/2;
   const migratedY=Number.isFinite(state.screenY)?state.screenY:Math.max(floorFarY,Math.min(floorNearY,.76+(state.z??0)*.08));
   const item={product,screenX:state.screenX??.5,screenY:migratedY,manualScale:state.manualScale??1,flipX:Boolean(state.flipX),rotation:state.rotation??0,object:null,x:0,z:0};
-  updateSpatialState(item);const open=findOpenPosition(item);if(!state.id&&open)Object.assign(item,open);updateSpatialState(item);if(isInvalidPlacement(item)){if(!open){showPlacementBlocked();return;}Object.assign(item,open);updateSpatialState(item);}
+  updateSpatialState(item);let replacedBuiltIn=null;
+  if(!state.id){replacedBuiltIn=builtInItems.find(existing=>existing.present&&existing.id===product.type)||null;if(replacedBuiltIn){replacedBuiltIn.present=false;localStorage.setItem(builtInPresenceKey(replacedBuiltIn.id),"false");}}
+  let open=findOpenPosition(item,preferredPlacement(product));
+  if(!open&&replacedBuiltIn){replacedBuiltIn.present=true;localStorage.setItem(builtInPresenceKey(replacedBuiltIn.id),"true");replacedBuiltIn=null;open=findOpenPosition(item,preferredPlacement(product));}
+  if(!state.id&&open)Object.assign(item,open);updateSpatialState(item);if(isInvalidPlacement(item)){if(!open){announce("배치할 빈 공간을 찾지 못했습니다. 기존 가구를 조금 이동한 뒤 다시 적용해 주세요.");return false;}Object.assign(item,open);updateSpatialState(item);}
   item.object=await loadModel(product);item.object.userData.item=item;item.object.traverse(n=>n.userData.item=item);addPhotoFace(item.object,product);worldGroup.add(item.object);placedItems.push(item);updateModel(item);selectItem(item);saveState();emptyState.hidden=true;render();
+  announce(replacedBuiltIn?`${replacedBuiltIn.name}을 비우고 ${product.name}을 적용했습니다.`:`${product.name}을 우리 집에 적용했습니다.`);return true;
 }
 
-function footprint(item,override={}){const x=override.x??item.x,z=override.z??item.z,r=override.rotation??item.rotation,manual=override.manualScale??item.manualScale??1,[w,,d]=item.product.dims,c=Math.cos(r),s=Math.sin(r);return [[-w*manual/2-.05,-d*manual/2-.05],[w*manual/2+.05,-d*manual/2-.05],[w*manual/2+.05,d*manual/2+.05],[-w*manual/2-.05,d*manual/2+.05]].map(([lx,lz])=>({x:x+lx*c-lz*s,z:z+lx*s+lz*c}));}
+function footprint(item,override={}){const x=override.x??item.x,z=override.z??item.z,r=override.rotation??item.rotation,scale=override.finalScale??item.finalScale??item.manualScale??1,[w,,d]=item.product.dims,c=Math.cos(r),s=Math.sin(r);return [[-w*scale/2-.05,-d*scale/2-.05],[w*scale/2+.05,-d*scale/2-.05],[w*scale/2+.05,d*scale/2+.05],[-w*scale/2-.05,d*scale/2+.05]].map(([lx,lz])=>({x:x+lx*c-lz*s,z:z+lx*s+lz*c}));}
 function polygonsOverlap(first,second){const axes=[];[first,second].forEach(p=>{for(let i=0;i<2;i++){const e={x:p[i+1].x-p[i].x,z:p[i+1].z-p[i].z},l=Math.hypot(e.x,e.z)||1;axes.push({x:-e.z/l,z:e.x/l});}});return axes.every(a=>{const f=first.map(p=>p.x*a.x+p.z*a.z),s=second.map(p=>p.x*a.x+p.z*a.z);return Math.max(...f)>Math.min(...s)&&Math.max(...s)>Math.min(...f);});}
 function zonePolygon(zone){return [{x:zone.x-zone.w/2,z:zone.z-zone.d/2},{x:zone.x+zone.w/2,z:zone.z-zone.d/2},{x:zone.x+zone.w/2,z:zone.z+zone.d/2},{x:zone.x-zone.w/2,z:zone.z+zone.d/2}];}
-function isInvalidPlacement(item,override={}){const p=footprint(item,override),outside=p.some(v=>v.x< -2.45||v.x>2.45||v.z< -1.55||v.z>1.35);return outside||placedItems.some(o=>o!==item&&polygonsOverlap(p,footprint(o)))||(!customRoomUrl&&builtInItems.some(b=>b.present&&b.zone&&polygonsOverlap(p,zonePolygon(b.zone))));}
-function findOpenPosition(item){const candidates=[],far=(calibration.backLeft.y+calibration.backRight.y)/2+.04,near=(calibration.frontLeft.y+calibration.frontRight.y)/2-.04,step=Math.max(.035,(near-far)/6);for(let y=far;y<=near;y+=step){const bounds=horizontalBoundsAt(y);for(let x=bounds.left+.04;x<=bounds.right-.04;x+=.055)candidates.push({screenX:x,screenY:y});}candidates.sort((a,b)=>Math.abs(a.screenX-.5)+Math.abs(a.screenY-(far+near)/2)-Math.abs(b.screenX-.5)-Math.abs(b.screenY-(far+near)/2));return candidates.find(candidate=>{const before={screenX:item.screenX,screenY:item.screenY,x:item.x,z:item.z};Object.assign(item,candidate);updateSpatialState(item);const valid=!isInvalidPlacement(item);Object.assign(item,before);return valid;});}
+function isInvalidPlacement(item,override={}){const p=footprint(item,override);return placedItems.some(o=>o!==item&&polygonsOverlap(p,footprint(o)))||(!customRoomUrl&&builtInItems.some(b=>b.present&&b.zone&&polygonsOverlap(p,zonePolygon(b.zone))));}
+function preferredPlacement(product){return {sofa:{x:.29,y:.79},table:{x:.53,y:.84},chair:{x:.68,y:.82},shelf:{x:.72,y:.69}}[product.type]||{x:.5,y:.78};}
+function findOpenPosition(item,preferred={x:.5,y:.78}){const candidates=[],far=(calibration.backLeft.y+calibration.backRight.y)/2+.025,near=(calibration.frontLeft.y+calibration.frontRight.y)/2-.025,step=Math.max(.025,(near-far)/12);for(let y=far;y<=near;y+=step){const bounds=horizontalBoundsAt(y);for(let x=bounds.left+.025;x<=bounds.right-.025;x+=.03)candidates.push({screenX:x,screenY:y});}candidates.sort((a,b)=>Math.hypot(a.screenX-preferred.x,(a.screenY-preferred.y)*1.4)-Math.hypot(b.screenX-preferred.x,(b.screenY-preferred.y)*1.4));return candidates.find(candidate=>{const before={screenX:item.screenX,screenY:item.screenY,x:item.x,z:item.z,perspectiveScale:item.perspectiveScale,finalScale:item.finalScale};Object.assign(item,candidate);updateSpatialState(item);const valid=!isInvalidPlacement(item);Object.assign(item,before);return valid;});}
 function showPlacementBlocked(){announce("상품을 놓을 수 없습니다. 다른 가구와 겹치는 위치입니다.");}
 
 function screenToFloor(clientX,clientY){const bounds=room.getBoundingClientRect();return clampToFloor({x:(clientX-bounds.left)/bounds.width,y:(clientY-bounds.top)/bounds.height});}
 function selectItem(item){selectedItem=item||null;updateSelectedInfo();render();}
 function updateSelectedInfo(){if(!selectedItem){selectedInfo.textContent="소파·탁자·TV 또는 배치된 가구를 눌러 선택하세요.";return;}if(selectedItem.isBuiltIn){selectedInfo.innerHTML=`<b>${selectedItem.name}</b><br>사진 속 가구 · 드래그/방향키로 이동 · 제거 시 빈 공간 복원`;return;}const angle=((Math.round(selectedItem.rotation*180/Math.PI)%360)+360)%360;selectedInfo.innerHTML=`<b>${selectedItem.product.name}</b><br>${selectedItem.product.variant} · 실제 규격 ${selectedItem.product.size}<br>회전 ${angle}° · ${selectedItem.flipX?"좌우 반전 · ":""}수동 ${(selectedItem.manualScale*100).toFixed(0)}% · 원근 ${(selectedItem.perspectiveScale*100).toFixed(0)}%`;}
-function saveState(){localStorage.setItem("roomfit-real-placement-v2",JSON.stringify(placedItems.map(i=>({id:i.product.id,screenX:i.screenX,screenY:i.screenY,manualScale:i.manualScale,flipX:i.flipX,rotation:i.rotation}))));}
-function saveBuiltInState(item){localStorage.setItem(`roomfit-builtin-${item.id}-transform`,JSON.stringify({x:item.offsetX||0,y:item.offsetY||0}));}
-function removeSelected(){if(!selectedItem)return;if(selectedItem.isBuiltIn){selectedItem.present=false;localStorage.setItem(`roomfit-builtin-${selectedItem.id}`,"false");}else{worldGroup.remove(selectedItem.object);placedItems=placedItems.filter(i=>i!==selectedItem);}selectedItem=null;updateSelectedInfo();saveState();render();announce("선택한 가구를 공간에서 제거했습니다.");}
+function saveState(){localStorage.setItem(PLACEMENT_STATE_KEY,JSON.stringify(placedItems.map(i=>({id:i.product.id,screenX:i.screenX,screenY:i.screenY,manualScale:i.manualScale,flipX:i.flipX,rotation:i.rotation}))));}
+function saveBuiltInState(item){localStorage.setItem(builtInTransformKey(item.id),JSON.stringify({x:item.offsetX||0,y:item.offsetY||0}));}
+function hasVisibleFurniture(){return placedItems.length>0||(!customRoomUrl&&builtInItems.some(item=>item.present));}
+function removeSelected(){if(!selectedItem)return;if(selectedItem.isBuiltIn){selectedItem.present=false;localStorage.setItem(builtInPresenceKey(selectedItem.id),"false");}else{worldGroup.remove(selectedItem.object);placedItems=placedItems.filter(i=>i!==selectedItem);}selectedItem=null;emptyState.hidden=hasVisibleFurniture();updateSelectedInfo();saveState();render();announce("선택한 가구를 제거했습니다. 빈 자리는 깨끗한 공간으로 복원했습니다.");}
 
-function clampBuiltInOffset(item,x,y){const width=item.area.right-item.area.left,height=item.area.bottom-item.area.top;return{x:Math.max(-item.area.left,Math.min(1-item.area.right,x)),y:Math.max(-item.area.top,Math.min(1-item.area.bottom,y))};}
+function clampBuiltInOffset(item,x,y){const boundedX=Math.max(-item.area.left,Math.min(1-item.area.right,x)),boundedY=Math.max(-item.area.top,Math.min(1-item.area.bottom,y));return{x:Math.abs(boundedX)<.002?0:boundedX,y:Math.abs(boundedY)<.002?0:boundedY};}
 function moveBuiltIn(item,dx,dy){const next=clampBuiltInOffset(item,(item.offsetX||0)+dx,(item.offsetY||0)+dy);item.offsetX=next.x;item.offsetY=next.y;saveBuiltInState(item);updateSelectedInfo();render();}
+
+function drawBuiltIns(){
+  builtInContext.clearRect(0,0,sceneWidth,sceneHeight);
+  builtInItems.forEach(item=>{
+    const dx=(item.offsetX||0)*sceneWidth,dy=(item.offsetY||0)*sceneHeight;
+    item.bounds={left:item.area.left*sceneWidth+dx,top:item.area.top*sceneHeight+dy,right:item.area.right*sceneWidth+dx,bottom:item.area.bottom*sceneHeight+dy};
+    if(customRoomUrl||!item.present||!item.image?.complete||!item.image.naturalWidth)return;
+    const width=item.bounds.right-item.bounds.left,height=item.bounds.bottom-item.bounds.top;
+    if(item.id!=="tv"){builtInContext.save();builtInContext.globalAlpha=.18;builtInContext.filter="blur(7px)";builtInContext.fillStyle="#17201c";builtInContext.beginPath();builtInContext.ellipse(item.bounds.left+width*.52,item.bounds.bottom-height*.012,width*.39,Math.max(4,height*.035),0,0,Math.PI*2);builtInContext.fill();builtInContext.restore();}
+    builtInContext.drawImage(item.image,item.bounds.left,item.bounds.top,width,height);
+  });
+}
 
 function drawOverlay(){
   overlayContext.clearRect(0,0,sceneWidth,sceneHeight);
   builtInItems.forEach(item=>{
-    const dx=(item.offsetX||0)*sceneWidth,dy=(item.offsetY||0)*sceneHeight;
-    item.bounds={left:item.area.left*sceneWidth+dx,top:item.area.top*sceneHeight+dy,right:item.area.right*sceneWidth+dx,bottom:item.area.bottom*sceneHeight+dy};
-    if(customRoomUrl)return;
-    const restoration=restorationImages[item.id];
-    if((!item.present||dx||dy)&&restoration?.complete){overlayContext.save();overlayContext.beginPath();item.polygon.forEach(([x,y],index)=>index?overlayContext.lineTo(x*sceneWidth,y*sceneHeight):overlayContext.moveTo(x*sceneWidth,y*sceneHeight));overlayContext.closePath();overlayContext.clip();overlayContext.drawImage(restoration,0,0,sceneWidth,sceneHeight);overlayContext.restore();}
-    if(!item.present)return;
-    if((dx||dy)&&roomImage.complete){overlayContext.save();overlayContext.beginPath();item.polygon.forEach(([x,y],index)=>index?overlayContext.lineTo(x*sceneWidth+dx,y*sceneHeight+dy):overlayContext.moveTo(x*sceneWidth+dx,y*sceneHeight+dy));overlayContext.closePath();overlayContext.clip();overlayContext.drawImage(roomImage,dx,dy,sceneWidth,sceneHeight);overlayContext.restore();}
+    if(customRoomUrl||!item.present||!item.bounds)return;
     if(selectedItem===item){overlayContext.save();overlayContext.strokeStyle="#d7ff76";overlayContext.lineWidth=3;overlayContext.setLineDash([7,5]);overlayContext.strokeRect(item.bounds.left,item.bounds.top,item.bounds.right-item.bounds.left,item.bounds.bottom-item.bounds.top);overlayContext.restore();}
   });
   if(selectedItem&&!selectedItem.isBuiltIn&&selectedItem.object){const box=new THREE.Box3().setFromObject(selectedItem.object),corners=[];for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=new THREE.Vector3(x,y,z).project(camera3d);corners.push({x:(p.x+1)*sceneWidth/2,y:(1-p.y)*sceneHeight/2});}const left=Math.min(...corners.map(p=>p.x)),right=Math.max(...corners.map(p=>p.x)),top=Math.min(...corners.map(p=>p.y)),bottom=Math.max(...corners.map(p=>p.y));selectedItem.bounds={left,top,right,bottom};overlayContext.strokeStyle="#d7ff76";overlayContext.lineWidth=3;overlayContext.setLineDash([7,5]);overlayContext.strokeRect(left-5,top-5,right-left+10,bottom-top+10);overlayContext.setLineDash([]);}
 }
-function render(){resize();updateCalibrationOverlay();worldGroup.visible=!placementHidden;updateCameraObjects();renderer.render(scene,camera3d);drawOverlay();}
+function render(){updateRoomBackground();resize();updateCalibrationOverlay();drawBuiltIns();worldGroup.visible=!placementHidden;updateCameraObjects();renderer.render(scene,camera3d);drawOverlay();}
 function updateCameraObjects(){placedItems.forEach(updateModel);}
+function hitTestBuiltIn(item,x,y){if(!item.bounds||x<item.bounds.left||x>item.bounds.right||y<item.bounds.top||y>item.bounds.bottom)return false;if(!item.hitMap)return true;const u=(x-item.bounds.left)/(item.bounds.right-item.bounds.left),v=(y-item.bounds.top)/(item.bounds.bottom-item.bounds.top),px=Math.max(0,Math.min(item.hitMap.width-1,Math.floor(u*item.hitMap.width))),py=Math.max(0,Math.min(item.hitMap.height-1,Math.floor(v*item.hitMap.height)));return item.hitMap.data[(py*item.hitMap.width+px)*4+3]>36;}
 
 overlay.onpointerdown=event=>{
   if(calibrationActive)return;const bounds=room.getBoundingClientRect(),x=event.clientX-bounds.left,y=event.clientY-bounds.top;
-  const built=[...builtInItems].reverse().find(i=>i.present&&i.bounds&&x>=i.bounds.left&&x<=i.bounds.right&&y>=i.bounds.top&&y<=i.bounds.bottom);
+  const built=!customRoomUrl&&[...builtInItems].reverse().find(i=>i.present&&hitTestBuiltIn(i,x,y));
   if(built){selectItem(built);overlay.setPointerCapture(event.pointerId);dragState={item:built,startX:event.clientX,startY:event.clientY,offsetX:built.offsetX||0,offsetY:built.offsetY||0};announce(`${built.name}을 선택했습니다. 드래그해서 이동할 수 있습니다.`);return;}
   pointer.x=x/sceneWidth*2-1;pointer.y=-(y/sceneHeight)*2+1;raycaster.setFromCamera(pointer,camera3d);const hits=raycaster.intersectObjects(worldGroup.children,true);const item=hits.find(h=>h.object.userData.item)?.object.userData.item||null;selectItem(item);if(item){overlay.setPointerCapture(event.pointerId);dragState={item};}
 };
@@ -236,17 +254,17 @@ function scaleSelected(factor){if(!selectedItem||selectedItem.isBuiltIn)return;c
 function flipSelected(){if(!selectedItem||selectedItem.isBuiltIn)return;selectedItem.flipX=!selectedItem.flipX;updateModel(selectedItem);updateSelectedInfo();saveState();render();announce(selectedItem.flipX?"가구를 좌우 반전했습니다.":"가구 반전을 해제했습니다.");}
 overlay.onkeydown=event=>{let handled=true;if(event.key==="ArrowLeft")moveSelected(-.012,0);else if(event.key==="ArrowRight")moveSelected(.012,0);else if(event.key==="ArrowUp")moveSelected(0,-.012);else if(event.key==="ArrowDown")moveSelected(0,.012);else if(event.key.toLowerCase()==="q")rotateSelected(-Math.PI/12);else if(event.key.toLowerCase()==="e")rotateSelected(Math.PI/12);else if(event.key.toLowerCase()==="h")flipSelected();else if(event.key==="+"||event.key==="=")scaleSelected(1.05);else if(event.key==="-"||event.key==="_")scaleSelected(1/1.05);else if(event.key==="Delete"||event.key==="Backspace")removeSelected();else handled=false;if(handled)event.preventDefault();};
 
-applyButton.onclick=()=>chosenProduct&&placeProduct(chosenProduct);
+applyButton.onclick=async()=>{if(!chosenProduct||applyButton.dataset.busy==="true")return;const label=applyButton.textContent;applyButton.dataset.busy="true";applyButton.disabled=true;applyButton.setAttribute("aria-busy","true");applyButton.textContent="공간에 적용 중…";try{await placeProduct(chosenProduct);}catch(error){console.error(error);announce("가구 적용 중 문제가 생겼습니다. 다시 눌러 주세요.");}finally{applyButton.dataset.busy="false";applyButton.disabled=false;applyButton.removeAttribute("aria-busy");applyButton.textContent=label;}};
 $(".controls").onclick=event=>{const action=event.target.dataset.action;if(!action)return;if(action==="calibrate"){toggleCalibration();return;}if(!selectedItem){announce("먼저 가구를 선택하세요.");return;}if(action==="remove"){removeSelected();return;}if(action==="back")moveSelected(0,-.035);if(action==="front")moveSelected(0,.035);if(action==="move-left")moveSelected(-.035,0);if(action==="move-right")moveSelected(.035,0);if(selectedItem.isBuiltIn){if(["left","right","smaller","larger","flip","auto-orient"].includes(action))announce("사진 속 가구는 이동하거나 삭제할 수 있습니다.");return;}if(action==="left")rotateSelected(-Math.PI/12);if(action==="right")rotateSelected(Math.PI/12);if(action==="smaller")scaleSelected(1/1.05);if(action==="larger")scaleSelected(1.05);if(action==="flip")flipSelected();if(action==="auto-orient"){selectedItem.rotation=Math.round(selectedItem.rotation/(Math.PI/2))*Math.PI/2;updateModel(selectedItem);saveState();render();announce("가까운 벽 방향에 맞췄습니다.");}};
 function toggleCalibration(){calibrationActive=!calibrationActive;updateCalibrationOverlay();announce(calibrationActive?"이 공간에 고정된 바닥 영역과 소실점입니다.":"바닥 영역 표시를 닫았습니다.");}
 $("#autoCalibrate").onclick=toggleCalibration;
 fovControl.oninput=()=>{cameraState.fov=Number(fovControl.value);updateCamera();};
 floorControl.oninput=()=>{const target=Number(floorControl.value)/100,delta=target-(calibration.backLeft.y+calibration.backRight.y)/2;calibration.backLeft.y=Math.max(.35,Math.min(.84,calibration.backLeft.y+delta));calibration.backRight.y=Math.max(.35,Math.min(.84,calibration.backRight.y+delta));updateCamera();};
 $("#togglePlacement").onclick=event=>{placementHidden=!placementHidden;event.target.textContent=placementHidden?"배치 보기":"배치 숨기기";render();};
-$("#reset").onclick=()=>{placedItems.forEach(i=>worldGroup.remove(i.object));placedItems=[];selectedItem=null;chosenProduct=null;builtInItems.forEach(i=>{i.present=true;i.offsetX=0;i.offsetY=0;localStorage.setItem(`roomfit-builtin-${i.id}`,"true");localStorage.removeItem(`roomfit-builtin-${i.id}-transform`);});localStorage.removeItem("roomfit-real-placement-v2");selectionSummary.classList.remove("show");applyButton.disabled=true;applyButton.textContent="제품을 먼저 선택하세요";renderCatalog();updateSelectedInfo();render();announce("배치 상태를 초기화했습니다.");};
+$("#reset").onclick=()=>{placedItems.forEach(i=>worldGroup.remove(i.object));placedItems=[];selectedItem=null;chosenProduct=null;builtInItems.forEach(i=>{i.present=true;i.offsetX=0;i.offsetY=0;localStorage.setItem(builtInPresenceKey(i.id),"true");localStorage.removeItem(builtInTransformKey(i.id));});localStorage.removeItem(PLACEMENT_STATE_KEY);emptyState.hidden=true;selectionSummary.classList.remove("show");applyButton.disabled=true;applyButton.textContent="제품을 먼저 선택하세요";renderCatalog();updateSelectedInfo();render();announce("배치 상태를 초기화했습니다.");};
 roomPhoto.onchange=event=>{const file=event.target.files?.[0];if(!file?.type.startsWith("image/")){announce("이미지 파일을 선택해 주세요.");return;}const url=URL.createObjectURL(file),image=new Image();image.onload=()=>{if(customRoomUrl)URL.revokeObjectURL(customRoomUrl);customRoomUrl=url;roomAspect=Math.max(.75,Math.min(2.4,image.naturalWidth/image.naturalHeight));placedItems.forEach(i=>worldGroup.remove(i.object));placedItems=[];selectedItem=null;updateRoomSizing();updateRoomBackground();spaceMeta.textContent=`사용자 사진 · ${image.naturalWidth}×${image.naturalHeight} · 5점 보정 필요`;calibrationActive=true;updateCamera();announce("사진을 불러왔습니다. 바닥 5점을 맞춰 주세요.");};image.src=url;};
 window.addEventListener("resize",()=>{updateRoomSizing();updateCalibrationOverlay();render();});
 
 updateRoomSizing();updateRoomBackground();renderFilters();renderCatalog();updateCamera();spaceMeta.textContent="업로드 거실 · 720×482 · 5점 원근·깊이 가림 적용";
-try{const saved=JSON.parse(localStorage.getItem("roomfit-real-placement-v2")||"[]");for(const state of saved){const product=products.find(p=>p.id===state.id);if(product)await placeProduct(product,state);}}catch{localStorage.removeItem("roomfit-real-placement-v2");}
-emptyState.hidden=placedItems.length>0||builtInItems.some(i=>i.present);render();
+try{const saved=JSON.parse(localStorage.getItem(PLACEMENT_STATE_KEY)||"[]");for(const state of saved){const product=products.find(p=>p.id===state.id);if(product)await placeProduct(product,state);}}catch{localStorage.removeItem(PLACEMENT_STATE_KEY);}
+emptyState.hidden=hasVisibleFurniture();render();
