@@ -144,6 +144,7 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 2. 서버를 `--host 0.0.0.0` 로 띄우고 실기기에서 캡처→전송→응답→화면 적용을 관통한다(P1-11).
 3. 배치 전 반투명 ghost preview, 바닥 접촉 그림자와 모델 occlusion을 제품 UX 후보로 검토한다.
 4. 서버 저장 pose를 영구 Spatial Anchor 또는 재정합 기준으로 교체한다.
+5. 후속 AI 편집 실험에서는 Hugging Face Space에 의존하지 않고 노트북에서 `Qwen/Qwen-Image-2.1`을 직접 실행해, 가구 이동·크기 조절·원래 자리 복원 품질과 실행 시간을 검증한다. GGUF 적용이나 실제 연동 구현은 노트북 GPU 사양과 검증 결과를 확인한 뒤 결정한다.
 
 ## Relevant Commits
 
@@ -152,4 +153,4 @@ ARCore + SceneView 조합의 카메라·평면 인식·탭 배치·드래그 이
 
 ## Updated
 
-2026-09-08
+2026-10-02
