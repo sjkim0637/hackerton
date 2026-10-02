@@ -167,6 +167,8 @@ P1-10 실결과 검증: `scripts/e2e_check_custom.py --image testdata/real_livin
 - PHASE 4: 기존 가구 떼어내기(원위치 저장) → 이동/회전/크기, undo/redo
 - PHASE 5: 새 가구 카탈로그 배치, 바닥/벽 자동 맞춤, 벽지/색상 변경
 - PHASE 6/7: B(경량 모델) / C(자체 엔진) 실험 — 별도 `experiment/*` 브랜치
+- PHASE 6 후보: 노트북에서 `Qwen/Qwen-Image-2.1` 로컬 편집 검증. 구현 전 범위·입출력·평가 기준은
+  `qwen-image-2.1-evaluation.md`를 따른다.
 - PHASE 8: AI 호출 최소화, 이미지 용량/영역 최적화, 사용량 상한
 - PHASE 9: 거실 시연 완성, 발표 순서, 실패 대비 녹화
 
